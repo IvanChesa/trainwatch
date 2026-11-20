@@ -1,18 +1,21 @@
-# TrainWatch · integración continua: pruebas y build del backend y del frontend en cada push y pull request.
+# TrainWatch · integración continua: pruebas y build del backend y del frontend, y comprobación de la
+# infraestructura (Terraform, scripts, Caddy y compose), en cada push a una rama de fase y en cada pull request.
+# En main la ejecuta el despliegue (despliegue.yml) antes de publicar nada.
 name: CI
 
 on:
   push:
-    branches: [main, 'fase-*']
+    branches: ['fase-*']
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_call' && github.ref != 'refs/heads/main' }}
 
 jobs:
   backend:
@@ -72,3 +75,43 @@ jobs:
 
       - name: Build (tsc y Vite)
         run: npm run build
+
+  infraestructura:
+    name: Infraestructura (Terraform, scripts, Caddy y compose)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Terraform 1.17
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: '1.17.1'
+
+      # Sin backend ni credenciales: solo formato y validez (proveedores, tipos y referencias).
+      - name: Terraform fmt y validate
+        run: |
+          terraform fmt -check -recursive infra/terraform
+          for dir in infra/terraform/estado infra/terraform/produccion; do
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+          done
+
+      - name: ShellCheck de los scripts
+        run: shellcheck infra/produccion/*.sh infra/vigilancia/*.sh infra/medicion/*.sh
+
+      # Caddy carga el certificado al validar: uno autofirmado de usar y tirar.
+      - name: Caddyfile y compose de producción
+        working-directory: infra/produccion
+        run: |
+          mkdir -p /tmp/tls
+          openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 1 -subj /CN=prueba \
+            -keyout /tmp/tls/origen.key -out /tmp/tls/origen.pem
+          caddy=$(sed -n 's/^ *image: \(caddy:.*\)$/\1/p' compose.yaml)
+          docker run --rm -e HOST_API=trainwatch-api.ivanchesa.com \
+            -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -v "$PWD/cloudflare-origin-pull-ca.pem:/etc/caddy/cloudflare-origin-pull-ca.pem:ro" \
+            -v /tmp/tls:/etc/caddy/tls:ro \
+            "$caddy" caddy validate --config /etc/caddy/Caddyfile
+          sudo mkdir -p /etc/trainwatch && sudo touch /etc/trainwatch/backend.env
+          TRAINWATCH_IMAGEN=ghcr.io/prueba/backend:1 HOST_API=prueba docker compose -f compose.yaml config --quiet
