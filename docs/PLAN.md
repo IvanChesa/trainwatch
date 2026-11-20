@@ -2,6 +2,28 @@
 
 Estado: **aprobado para empezar** (20-nov-2026). Lo ha escrito la sesión de estrategia. Nombre y dirección decididos por Iván: **TrainWatch**, en **`trainwatch.ivanchesa.com`**. Las demás decisiones del §9 (D2-D5) se cierran tras la fase 0.
 
+## Cambios tras la fase 0 (20-11, `docs/informes/fase-0.md` §7; prevalecen sobre el resto del plan)
+
+1. **Movimiento:** la posición del feed salta de estación en estación (el 78 % está a menos de 50 m de una). La posición en el mapa se **estima** con la última parada, la siguiente, sus horas programadas más el retraso y `shapes.txt`, y el feed la corrige. Por eso la fase 2 proyecta las paradas sobre el recorrido.
+2. **Trenes en origen** (el 38,5 % del feed): se pintan aparte («sale a las 10:25») y no cuentan como en marcha.
+3. **Puntualidad:** solo con trenes vistos en directo. Un tren que no aparece no cuenta como cancelado; solo los `CANCELED` explícitos.
+4. **Núcleos:** todos, con un estado por núcleo. «Sin datos en directo» hoy para Bilbao y Cádiz, y cobertura visible (Sevilla, 31 %). Nada de prometer «todos los trenes de España».
+5. **Importación:** los autobuses de sustitución (`route_type` 3) se importan, pero quedan fuera del directo y de la puntualidad. Los campos vienen rellenos de espacios y hay que recortarlos.
+6. **Ingesta:**
+   - peticiones condicionales con `ETag` cada 5-10 s;
+   - un tren no desaparece hasta faltar en 2-3 muestras seguidas;
+   - el `stop_id` de las posiciones es la parada actual o la última, no la próxima;
+   - retraso final por parada = último retraso conocido cuando `trip_updates` pasa a la siguiente parada;
+   - una captura de 24 h antes de dar los volúmenes por buenos.
+7. **Datos:**
+   - posiciones guardadas **solo cuando cambian** (unas 0,26 M filas al día) y 48 h, en particiones diarias;
+   - retrasos (unas 51.000 filas al día) en particiones mensuales.
+8. **Estadísticas:**
+   - el retraso llega en minutos enteros, así que se publican medias y porcentajes («% con menos de 3 min»);
+   - nada público hasta tener semanas de datos.
+9. **Riesgos:** baja el de los «huecos en Cataluña» (Rodalies, 100 %). Entra uno nuevo, núcleos que no emiten en directo.
+10. **Créditos de la API** (Iván, 20-11): las fases 1 y 2 se programan con el Agent SDK, para gastar los créditos promocionales antes del 26-11. Los encargos están en `docs/prompts/`.
+
 ## 0. Qué es y para qué
 
 **Un mapa con los trenes de Cercanías y Rodalies moviéndose en directo**, con su retraso, y estadísticas propias de puntualidad por línea, por hora y por día. Se abre en el navegador y se entiende en 5 segundos.
