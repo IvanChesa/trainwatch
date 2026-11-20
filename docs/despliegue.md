@@ -64,10 +64,10 @@ En el panel de Cloudflare, **My Profile → API Tokens → Create Token → Cust
 
 | Token | Permisos | Recursos | Caducidad | Dónde va |
 |---|---|---|---|---|
-| `trainwatch-terraform` | Zone · DNS · Edit; Zone · SSL and Certificates · Edit; Account · Cloudflare Pages · Edit | Zona `ivanchesa.com`; la cuenta de Iván | **1 día** | Variable de entorno `CLOUDFLARE_API_TOKEN` en la terminal de la sesión. Nunca en un fichero |
+| `trainwatch-terraform` | Zone · DNS · Edit; Zone · SSL and Certificates · Edit (certificado de origen y Authenticated Origin Pulls por nombre de host); Account · Cloudflare Pages · Edit | Zona `ivanchesa.com`; la cuenta de Iván | **1 día** | Variable de entorno `CLOUDFLARE_API_TOKEN` en la terminal de la sesión. Nunca en un fichero |
 | `trainwatch-pages-ci` | Account · Cloudflare Pages · Edit | La cuenta de Iván | Sin caducidad (se puede rotar) | Secreto `CLOUDFLARE_API_TOKEN` del entorno `produccion` de GitHub (paso 6) |
 
-Iván copia también, de la página de la zona `ivanchesa.com` (columna derecha, «API»), el **Zone ID** y el **Account ID**. No son secretos.
+El **Zone ID** de `ivanchesa.com` y el **Account ID** ya están en `infra/terraform/produccion/terraform.tfvars.example` (los leyó la sesión de control; no son secretos).
 
 ## 3 · Estado remoto de Terraform (sesión, con el «sí» de Iván)
 
@@ -87,7 +87,7 @@ terraform output                               # nombres para backend.hcl
 ```bash
 cd ../produccion
 cp backend.hcl.example backend.hcl             # con la cuenta de almacenamiento del paso 3
-cp terraform.tfvars.example terraform.tfvars   # suscripción, IP pública del portátil, Zone ID y Account ID
+cp terraform.tfvars.example terraform.tfvars   # suscripción e IP pública del portátil (Zone ID y Account ID ya vienen)
 export CLOUDFLARE_API_TOKEN=...                # el token trainwatch-terraform (lo pega Iván)
 terraform init -backend-config=backend.hcl
 terraform plan -out produccion.tfplan
@@ -102,14 +102,15 @@ terraform output
 
 Si el `apply` falla con un 403 de Key Vault (los permisos de Azure tardan en propagarse), se repite `terraform plan` y `apply`: Terraform sigue donde lo dejó.
 
-## 5 · Cloudflare: modo SSL y comprobaciones (Iván, con la sesión)
+## 5 · Cloudflare: «Full (strict)» solo para `trainwatch-api` (Iván, con la sesión)
 
-Terraform ya ha creado el DNS de `trainwatch-api` (con proxy), el de `trainwatch` (Pages), el certificado de origen y Authenticated Origin Pulls. Falta el **modo SSL**, que es de toda la zona `ivanchesa.com`:
+**La zona `ivanchesa.com` es compartida:** tiene la web principal, `torno` y `tierra-luna-sol` (Pages), el correo (A, MX, SPF, DKIM y DMARC) y una verificación de Google. **Nadie cambia ajustes de toda la zona**, tampoco Terraform, que solo crea los registros `trainwatch` y `trainwatch-api`, el certificado de origen y Authenticated Origin Pulls **por nombre de host** (`trainwatch-api`).
 
-1. **SSL/TLS → Overview.** Si ya está en **Full (strict)**, no se toca. Si no, en vez de cambiar toda la zona: **Rules → Configuration Rules → Create rule**, «Hostname equals `trainwatch-api.ivanchesa.com`» → **SSL: Full (strict)**.
-2. **SSL/TLS → Edge Certificates:** «Always Use HTTPS» activado.
-3. **Security → Bots:** si «Bot Fight Mode» está activado, la vigilancia de GitHub Actions (un `curl`) puede recibir un desafío. Se comprueba en el paso 8 y, si pasa, se desactiva para `trainwatch-api` o se añade una regla de omisión.
-4. (Opcional) **Security → WAF → Rate limiting rules:** una regla gratuita para `trainwatch-api` (por ejemplo, 100 peticiones cada 10 s por IP), como propuso la fase 4.
+Estado de la zona (leído por la sesión de control el 20-11): SSL **Full** (no strict), Always Use HTTPS activado, TLS mínimo 1.2, Authenticated Origin Pulls de zona desactivado y Bot Fight Mode desactivado. Así que:
+
+1. **Iván:** **Rules → Configuration Rules → Create rule**: «Hostname equals `trainwatch-api.ivanchesa.com`» → **SSL: Full (strict)**. La zona sigue en «Full» para lo demás. Se hace a mano porque una zona solo admite un conjunto de reglas de configuración y Terraform se adueñaría de él.
+2. **Sesión:** comprueba que Authenticated Origin Pulls de `trainwatch-api` está activo (`terraform state show cloudflare_authenticated_origin_pulls.api`) y, después del primer despliegue, que `https://trainwatch-api.ivanchesa.com/api/estado` responde (si fallan la regla o el certificado de cliente, Cloudflare da 525 o 526).
+3. (Opcional) **Security → WAF → Rate limiting rules:** una regla gratuita solo para `trainwatch-api` (por ejemplo, 100 peticiones cada 10 s por IP), como propuso la fase 4. Es una regla por nombre de host; no cambia la zona.
 
 ## 6 · GitHub: entorno, variables y secreto (sesión, con `gh`)
 
@@ -125,7 +126,7 @@ gh variable set AZURE_TENANT_ID --body "$(terraform output -raw tenant_id)"
 gh variable set AZURE_SUBSCRIPTION_ID --body "$(terraform output -raw suscripcion)"
 gh variable set AZURE_GRUPO --body "$(terraform output -raw grupo_de_recursos)"
 gh variable set AZURE_MAQUINA --body "$(terraform output -raw maquina)"
-gh variable set CLOUDFLARE_ACCOUNT_ID --body "<Account ID>"
+gh variable set CLOUDFLARE_ACCOUNT_ID --body "b35ef6008684721a57bda8f8be2df30b"
 
 # El token trainwatch-pages-ci, como secreto del entorno (lo pega Iván en el aviso de gh)
 gh secret set CLOUDFLARE_API_TOKEN --env produccion
@@ -233,7 +234,7 @@ az lock delete --name no-borrar-estado --resource-group rg-trainwatch-estado
 cd ../estado && terraform destroy
 ```
 
-Quedan: el presupuesto `trainwatch-gasto-mensual`, el entorno y las variables de GitHub, el paquete de GHCR y Authenticated Origin Pulls en la zona (inofensivo para las demás webs; se desactiva en **SSL/TLS → Origin Server**).
+Quedan: el presupuesto `trainwatch-gasto-mensual`, el entorno y las variables de GitHub, el paquete de GHCR y la regla de configuración de `trainwatch-api` (se borra a mano en **Rules → Configuration Rules**).
 
 ## Cuando se acabe el crédito (20-11-2027)
 

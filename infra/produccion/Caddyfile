@@ -9,11 +9,12 @@
 
 {$HOST_API}:443 {
 	tls /etc/caddy/tls/origen.pem /etc/caddy/tls/origen.key {
-		# Authenticated Origin Pulls: solo se acepta la conexión si el cliente presenta el certificado de Cloudflare.
-		# Quien llegue a la IP sin pasar por Cloudflare no completa ni el TLS.
+		# Authenticated Origin Pulls de trainwatch-api: solo se acepta la conexión si el cliente presenta el certificado
+		# que Cloudflare tiene para este nombre, firmado por la CA propia de TrainWatch (Terraform, en Key Vault).
+		# Quien llegue a la IP sin pasar por Cloudflare, o desde otra zona de Cloudflare, no completa ni el TLS.
 		client_auth {
 			mode require_and_verify
-			trust_pool file /etc/caddy/cloudflare-origin-pull-ca.pem
+			trust_pool file /etc/caddy/tls/clientes-ca.pem
 		}
 	}
 

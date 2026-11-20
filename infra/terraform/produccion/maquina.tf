@@ -69,6 +69,7 @@ resource "azurerm_linux_virtual_machine" "trainwatch" {
     azurerm_key_vault_secret.token_admin,
     azurerm_key_vault_secret.certificado_origen,
     azurerm_key_vault_secret.clave_origen,
+    azurerm_key_vault_secret.ca_clientes,
   ]
 
   lifecycle {

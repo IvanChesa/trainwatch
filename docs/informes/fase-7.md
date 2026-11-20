@@ -36,9 +36,9 @@ La aceptación del plan (**7 días seguidos en marcha**) es de la parte B.
 | **Imagen** | `backend/Dockerfile`: tres etapas (JDK 25 para compilar, capas de Spring Boot, **JRE 25** para ejecutar), usuario `trainwatch` (uid 10001) sin privilegios, `MaxRAMPercentage=60`, Serial GC, `ExitOnOutOfMemoryError`. Se construye desde la raíz (el `pom.xml` copia `docs/api/`); `.dockerignore` deja fuera todo menos `backend/` y `docs/api/`. 532 MB |
 | **Perfil `prod`** | `application-prod.properties`: conexión por variables (`TRAINWATCH_DB_*`, con `sslmode=verify-full`), pool de 6, `forward-headers-strategy=native` (detrás de Caddy), apagado ordenado de 20 s y **Actuator en el puerto 8081**, que no se publica, con `health`, `info` y `metrics` y la sonda `readiness` |
 | **SSE** | `DirectoSseController` manda `Cache-Control: no-cache, no-transform` y `X-Accel-Buffering: no`; Caddy, `flush_interval -1`; latido de 15 s frente a los 100 s de Cloudflare |
-| **Producción** (`infra/produccion/`) | `compose.yaml` (Caddy 2.11.9 y el backend por digest, con límites de memoria, sistema de ficheros de solo lectura, sin capacidades, `no-new-privileges` y registros rotados), `Caddyfile` (certificado de origen, **Authenticated Origin Pulls**, cabeceras de seguridad, solo `GET`/`HEAD`/`OPTIONS` y solo `/api/*`), `desplegar.sh` (secretos de Key Vault, arranque, espera a la sonda y **vuelta a la imagen anterior** si falla), `copia.sh` con su temporizador y `revisar.sh` (lo que hay que mirar cada día) |
+| **Producción** (`infra/produccion/`) | `compose.yaml` (Caddy 2.11.9 y el backend por digest, con límites de memoria, sistema de ficheros de solo lectura, sin capacidades, `no-new-privileges` y registros rotados), `Caddyfile` (certificado de origen, **Authenticated Origin Pulls** de `trainwatch-api` con CA propia, cabeceras de seguridad, solo `GET`/`HEAD`/`OPTIONS` y solo `/api/*`), `desplegar.sh` (secretos de Key Vault, arranque, espera a la sonda y **vuelta a la imagen anterior** si falla), `copia.sh` con su temporizador y `revisar.sh` (lo que hay que mirar cada día) |
 | **Terraform** (`infra/terraform/`) | `estado/` (cuenta de almacenamiento del estado, sin claves compartidas, con versionado y cerrojo) y `produccion/` (43 recursos: red, grupo de seguridad, IP, máquina con cloud-init, PostgreSQL, Key Vault, dos identidades administradas, credencial federada, rol propio, cuenta de copias y Cloudflare). `azurerm` 5.14, `cloudflare` 5.29, `.terraform.lock.hcl` en el repo. Claves de PostgreSQL y del token de administración **efímeras** y de solo escritura: no pasan por el estado. [ADR 0019](../adr/0019-terraform-con-estado-remoto-en-azure.md) |
-| **HTTPS** | [ADR 0018](../adr/0018-https-con-cloudflare-y-caddy.md): certificado de origen de Cloudflare (15 años) pedido por Terraform y guardado en Key Vault; grupo de seguridad con el 443 solo desde los rangos de Cloudflare (leídos de su API); sin SSH (puerto cerrado y servicio apagado) |
+| **HTTPS** | [ADR 0018](../adr/0018-https-con-cloudflare-y-caddy.md): certificado de origen de Cloudflare (15 años) pedido por Terraform y guardado en Key Vault; certificado de cliente de Authenticated Origin Pulls solo para `trainwatch-api`, firmado por una CA propia; grupo de seguridad con el 443 solo desde los rangos de Cloudflare (leídos de su API); sin SSH (puerto cerrado y servicio apagado) |
 | **Despliegue** | [ADR 0020](../adr/0020-despliegue-con-oidc-y-run-command.md): `despliegue.yml` en cada push a `main`: `ci.yml` (reutilizado), imagen a GHCR, la API por **OIDC con identidad administrada federada** y `az vm run-command`, y la web con **wrangler** a Cloudflare Pages. Los trabajos de Azure y Pages se saltan mientras no haya variables |
 | **CI** | `ci.yml` añade el trabajo «Infraestructura»: `terraform fmt -check` y `validate` de las dos raíces, ShellCheck de los scripts, `caddy validate` con un certificado de usar y tirar y `docker compose config`. Ya no corre en push a `main` (lo hace el despliegue) |
 | **Vigilancia** | `vigilancia.yml` cada 15 min con `infra/vigilancia/comprobar.sh`: falla si la API no responde, si la ingesta lleva más de 5 min sin terminar un ciclo o si el último dato tiene más de 5 min (de 01:00 a 05:00 solo avisa). Se activa con `VIGILANCIA_ACTIVA=true` |
@@ -114,7 +114,7 @@ Treinta copias de ~15 MB más lo que crezca `retrasos` caben en los 5 GB gratis 
 
 | Prueba | Resultado |
 |---|---|
-| TLS sin certificado de cliente · con uno que no es de la CA | **Sin conexión** en los dos (curl 56) |
+| TLS sin certificado de cliente · con uno que no es de la CA | **Sin conexión** en los dos (curl 56). Repetido tras pasar a la CA propia por nombre de host (en `/etc/caddy/tls/clientes-ca.pem`): igual, y con el certificado de la CA el TLS pasa |
 | Con el certificado de la CA | `200` en `/api/estado` |
 | Cabeceras de `/api/nucleos` | HSTS, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, CSP `default-src 'none'`; sin `Server` |
 | `POST /api/horario/importaciones` · `/actuator/health` | **405** · **404** |
@@ -149,9 +149,9 @@ PENDIENTE
 - **B2ats_v2**: de las tres máquinas gratuitas es la única disponible para esta suscripción en `spaincentral` (B1s da `NotAvailableForSubscription` y B2pts_v2 no existe allí), y tiene 2 vCPU. Se crea **sin zona**, porque la zona 1 no la admite.
 - **PostgreSQL 18** también en Azure (versión estable allí, con PostGIS 3.6.4), para no tener dos versiones mayores entre local, pruebas y producción.
 - **El presupuesto, fuera de Terraform** ([ADR 0019](../adr/0019-terraform-con-estado-remoto-en-azure.md)): que un `destroy` no lo borre.
-- **El modo SSL de la zona, fuera de Terraform**: es de toda la zona `ivanchesa.com`. En la parte B se comprueba y, si hace falta, se pone «Full (strict)» solo para `trainwatch-api` con una regla de configuración.
+- **«Full (strict)» con una regla de configuración solo para `trainwatch-api`**, creada a mano en la parte B: la zona está en «Full» y es compartida, y una zona solo admite un conjunto de reglas de configuración (si lo creara Terraform, se adueñaría del de toda la zona).
 - **Cloudflare en Terraform** (DNS, certificado de origen, Authenticated Origin Pulls y el proyecto de Pages), además de Azure: el encargo lo deja abierto y así el montaje y el desmontaje son un solo `apply` y un solo `destroy`.
-- **Authenticated Origin Pulls**, que el encargo no pedía: con el grupo de seguridad solo se sabe que la conexión viene de *alguna* cuenta de Cloudflare.
+- **Authenticated Origin Pulls por nombre de host, con una CA propia** que crea Terraform (el encargo no lo pedía): con el grupo de seguridad solo se sabe que la conexión viene de *alguna* cuenta de Cloudflare. Primero se hizo con el ajuste de zona y el certificado compartido de Cloudflare; la sesión de control avisó de que la zona `ivanchesa.com` es compartida y no se pueden tocar ajustes de toda la zona, así que se cambió a uno por nombre de host, que además distingue nuestra zona de las de los demás.
 - **Sin SSH**: ni regla en el grupo de seguridad ni servicio. Administración con `az vm run-command` y la consola serie.
 - **Swagger UI sigue público** (la fase 4 lo dejó para esta fase): la API es pública y su documentación también. Caddy le da una CSP propia.
 - **Caddy no deja pasar `POST`**: la importación manual del horario se hace desde la máquina (`curl -X POST 127.0.0.1:8080/...` con el token de Key Vault).
@@ -173,7 +173,8 @@ Se hace con Iván delante, siguiendo [`docs/despliegue.md`](../despliegue.md). L
 5. **Hacer público el paquete de GHCR** después del primer despliegue (un clic en GitHub).
 6. **A las 24-48 h, mirar con la sesión el coste real** en Cost Management: la máquina y PostgreSQL deben salir a 0 $.
 
-Pendiente de comprobar en la parte B, porque solo se ve con Azure de verdad:
+Pendiente de comprobar en la parte B, porque solo se ve con Azure y Cloudflare de verdad:
+- que Authenticated Origin Pulls por nombre de host funciona en el plan Free con el certificado de cliente propio (si no, Cloudflare da 525 o 526 y se quita `client_auth` de Caddy hasta resolverlo);
 - que `B2ats_v2` y `B1ms` estén disponibles en `spaincentral` con cuota, y la lista completa de regiones permitidas;
 - que la identidad de GitHub pueda hacer `run-command` con el rol propio (si falta una acción, se añade al rol);
 - que el `pg_dump` de la máquina llegue a Blob Storage por el punto de conexión de servicio;

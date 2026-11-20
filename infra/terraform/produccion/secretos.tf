@@ -80,3 +80,13 @@ resource "azurerm_key_vault_secret" "clave_origen" {
   content_type = "application/x-pem-file"
   depends_on   = [time_sleep.propagacion_permisos]
 }
+
+# CA de los certificados de cliente de Cloudflare (cloudflare.tf): Caddy solo acepta conexiones firmadas por ella. No es
+# secreta, pero así llega a la máquina por el mismo camino que el resto.
+resource "azurerm_key_vault_secret" "ca_clientes" {
+  name         = "origen-ca-clientes"
+  key_vault_id = azurerm_key_vault.trainwatch.id
+  value        = tls_self_signed_cert.aop_ca.cert_pem
+  content_type = "application/x-pem-file"
+  depends_on   = [time_sleep.propagacion_permisos]
+}

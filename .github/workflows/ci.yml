@@ -108,10 +108,11 @@ jobs:
           mkdir -p /tmp/tls
           openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 1 -subj /CN=prueba \
             -keyout /tmp/tls/origen.key -out /tmp/tls/origen.pem
+          cp /tmp/tls/origen.pem /tmp/tls/clientes-ca.pem
           caddy=$(sed -n 's/^ *image: \(caddy:.*\)$/\1/p' compose.yaml)
           docker run --rm -e HOST_API=trainwatch-api.ivanchesa.com \
             -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
-            -v "$PWD/cloudflare-origin-pull-ca.pem:/etc/caddy/cloudflare-origin-pull-ca.pem:ro" \
+\
             -v /tmp/tls:/etc/caddy/tls:ro \
             "$caddy" caddy validate --config /etc/caddy/Caddyfile
           sudo mkdir -p /etc/trainwatch && sudo touch /etc/trainwatch/backend.env

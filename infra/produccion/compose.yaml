@@ -22,7 +22,6 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./cloudflare-origin-pull-ca.pem:/etc/caddy/cloudflare-origin-pull-ca.pem:ro
       - /etc/trainwatch/tls:/etc/caddy/tls:ro
       - caddy-datos:/data
       - caddy-config:/config

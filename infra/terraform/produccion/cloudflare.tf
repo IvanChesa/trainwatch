@@ -1,6 +1,8 @@
 # Cloudflare (ADR 0018): DNS de la API con proxy, certificado de origen para el modo «Full (strict)»,
-# Authenticated Origin Pulls y el proyecto de Pages de la web. El modo SSL de la zona no se toca aquí: es de toda la
-# zona ivanchesa.com (docs/despliegue.md, paso 5).
+# Authenticated Origin Pulls por nombre de host y el proyecto de Pages de la web.
+# La zona ivanchesa.com es COMPARTIDA (la web principal, otros proyectos y el correo): aquí solo se tocan los
+# registros trainwatch y trainwatch-api y ajustes por nombre de host, nunca ajustes de toda la zona. El modo SSL
+# «Full (strict)» solo para trainwatch-api va en una regla de configuración (docs/despliegue.md, paso 5).
 
 # API: registro A con proxy. Los navegadores ven las IP de Cloudflare, nunca la de la máquina.
 resource "cloudflare_dns_record" "api" {
@@ -34,12 +36,61 @@ resource "cloudflare_origin_ca_certificate" "api" {
   requested_validity = 5475
 }
 
-# Authenticated Origin Pulls: Cloudflare presenta un certificado de cliente al conectar con el origen y Caddy lo
-# exige. Así, aunque alguien conozca la IP y venga desde otra cuenta de Cloudflare, no pasa. Las otras webs de la
-# zona (Pages) no se ven afectadas: no comprueban el certificado de cliente.
-resource "cloudflare_authenticated_origin_pulls_settings" "zona" {
+# Authenticated Origin Pulls **solo para trainwatch-api** (la zona es compartida: nada de ajustes de toda la zona).
+# Cloudflare presenta un certificado de cliente al conectar con el origen y Caddy solo acepta los firmados por una CA
+# propia de TrainWatch. Con el certificado compartido de Cloudflare, cualquier otra zona de Cloudflare lo presentaría
+# igual; con uno propio, solo la conexión de esta zona y este nombre pasa.
+resource "tls_private_key" "aop_ca" {
+  algorithm   = "ECDSA"
+  ecdsa_curve = "P256"
+}
+
+resource "tls_self_signed_cert" "aop_ca" {
+  private_key_pem       = tls_private_key.aop_ca.private_key_pem
+  is_ca_certificate     = true
+  validity_period_hours = 87600 # 10 años
+  allowed_uses          = ["cert_signing", "crl_signing"]
+  subject {
+    common_name  = "TrainWatch origin pull CA"
+    organization = "TrainWatch"
+  }
+}
+
+resource "tls_private_key" "aop_cliente" {
+  algorithm   = "ECDSA"
+  ecdsa_curve = "P256"
+}
+
+resource "tls_cert_request" "aop_cliente" {
+  private_key_pem = tls_private_key.aop_cliente.private_key_pem
+  subject {
+    common_name  = "Cloudflare origin pull ${local.host_api}"
+    organization = "TrainWatch"
+  }
+}
+
+resource "tls_locally_signed_cert" "aop_cliente" {
+  cert_request_pem      = tls_cert_request.aop_cliente.cert_request_pem
+  ca_private_key_pem    = tls_private_key.aop_ca.private_key_pem
+  ca_cert_pem           = tls_self_signed_cert.aop_ca.cert_pem
+  validity_period_hours = 43800 # 5 años; Terraform lo renueva 30 días antes
+  early_renewal_hours   = 720
+  allowed_uses          = ["digital_signature", "client_auth"]
+}
+
+resource "cloudflare_authenticated_origin_pulls_hostname_certificate" "api" {
+  zone_id     = var.cloudflare_zone_id
+  certificate = tls_locally_signed_cert.aop_cliente.cert_pem
+  private_key = tls_private_key.aop_cliente.private_key_pem
+}
+
+resource "cloudflare_authenticated_origin_pulls" "api" {
   zone_id = var.cloudflare_zone_id
-  enabled = true
+  config = [{
+    hostname = local.host_api
+    cert_id  = cloudflare_authenticated_origin_pulls_hostname_certificate.api.id
+    enabled  = true
+  }]
 }
 
 # Web: proyecto de Pages de subida directa (sin integración con Git): lo publica GitHub Actions con wrangler

@@ -39,8 +39,11 @@ EOF
 mv /etc/trainwatch/backend.env.nuevo /etc/trainwatch/backend.env
 secreto origen-certificado > /etc/trainwatch/tls/origen.pem.nuevo
 secreto origen-clave > /etc/trainwatch/tls/origen.key.nuevo
+# La CA de los certificados de cliente que presenta Cloudflare (Authenticated Origin Pulls de trainwatch-api).
+secreto origen-ca-clientes > /etc/trainwatch/tls/clientes-ca.pem.nuevo
 mv /etc/trainwatch/tls/origen.pem.nuevo /etc/trainwatch/tls/origen.pem
 mv /etc/trainwatch/tls/origen.key.nuevo /etc/trainwatch/tls/origen.key
+mv /etc/trainwatch/tls/clientes-ca.pem.nuevo /etc/trainwatch/tls/clientes-ca.pem
 unset token clave_bd token_admin
 umask 022
 echo "Secretos leídos de Key Vault ${KEY_VAULT}"
