@@ -6,6 +6,13 @@ Estado: **aprobado para empezar** (20-nov-2026). Lo ha escrito la sesión de est
 
 El frontend pasa de Angular a **React** (React 19, Vite y TypeScript). El backend sigue en Java 25 y Spring Boot. Lo ejecutó la tarea `docs/prompts/React.md` (fase 4r, [ADR 0011](adr/0011-react-en-lugar-de-angular.md)), antes de la fase 4. El §0 conserva «Angular» como registro de la idea original.
 
+## Orden de las fases (Iván, 20-11)
+
+Tras la fase 4: **7 (despliegue en Azure) → 5 (mapa) → 6 (estadísticas) → hito de portfolio**.
+- El despliegue va antes para que la ingesta empiece a recoger datos cuanto antes: las estadísticas necesitan semanas de datos.
+- La fase 7 tiene una parte A, que la sesión hace sola, y una parte B con Iván delante: inicios de sesión, push y su «sí» al gasto.
+- El hito de portfolio (README final, vídeo, ficha en ivanchesa.com y LinkedIn) sale de la fase 7 a un encargo propio, al final, después de revisar la aplicación en marcha.
+
 ## Cambios tras la fase 0 (20-11, `docs/informes/fase-0.md` §7; prevalecen sobre el resto del plan)
 
 1. **Movimiento:** la posición del feed salta de estación en estación (el 78 % está a menos de 50 m de una). La posición en el mapa se **estima** con la última parada, la siguiente, sus horas programadas más el retraso y `shapes.txt`, y el feed la corrige. Por eso la fase 2 proyecta las paradas sobre el recorrido.
