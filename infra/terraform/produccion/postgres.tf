@@ -2,9 +2,12 @@
 # 12 meses. Sin dirección pública: solo se llega desde la VNet (subred delegada y zona DNS privada). Copias
 # gestionadas con restauración a cualquier instante de los últimos 14 días.
 
-# La clave se genera en cada ejecución sin guardarse en el estado (recurso efímero) y se manda a PostgreSQL y a Key
-# Vault como valor de solo escritura. Solo se manda cuando cambia version_clave_bd: para rotarla, se sube en 1.
-ephemeral "random_password" "bd" {
+# La clave se genera una vez y se manda a PostgreSQL y a Key Vault como valor de solo escritura (no sale en el plan).
+# Es un random_password normal, que vive en el estado, y no uno efímero: un efímero cambia en cada ejecución, y si un
+# apply fallara a medias (el secreto creado y el servidor no), el reintento dejaría claves distintas en los dos sitios
+# (revisión independiente, hallazgo 2). Para rotarla: terraform apply -replace=random_password.bd y subir
+# version_clave_bd en 1.
+resource "random_password" "bd" {
   length  = 40
   special = false
 }
@@ -28,7 +31,7 @@ resource "azurerm_postgresql_flexible_server" "trainwatch" {
   public_network_access_enabled = false
 
   administrator_login               = "trainwatch"
-  administrator_password_wo         = ephemeral.random_password.bd.result
+  administrator_password_wo         = random_password.bd.result
   administrator_password_wo_version = var.version_clave_bd
 
   authentication {

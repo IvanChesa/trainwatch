@@ -91,6 +91,8 @@ public class IngestaDirecto {
     /** Lo mismo para las posiciones (fase 3b): unas 340 filas por minuto a mediodía, así que caben unas 2 h. */
     private final List<Tren> posicionesPendientes = new ArrayList<>();
     private static final int MAXIMO_POSICIONES_PENDIENTES = 50_000;
+    /** Fase 7: el final del último ciclo que terminó sin nada pendiente de escribir (ver {@link ResumenDirecto}). */
+    private volatile Instant guardadoAlDia;
 
     public IngestaDirecto(ClienteFeeds cliente, EstadoDirecto estado, HorarioDirectoJdbc horario,
             RepositorioDirecto repositorio, DirectoProperties propiedades, Clock reloj, MeterRegistry metricas,
@@ -161,6 +163,9 @@ public class IngestaDirecto {
         descargar(Feed.AVISOS).ifPresent(this::procesarAvisos);
 
         Instant fin = reloj.instant();
+        if (retrasosPendientes.isEmpty() && posicionesPendientes.isEmpty()) {
+            guardadoAlDia = fin;
+        }
         try {
             estado.reestimar(fin);
             resumen.set(calcularResumen(fin));
@@ -181,7 +186,16 @@ public class IngestaDirecto {
      */
     public ResumenDirecto resumen() {
         // El último dato, del estado (no del resumen): si el resumen no se pudo calcular, el dato sigue al día.
-        return resumen.get().alInstante(reloj.instant(), estado.ultimaMuestraPosiciones());
+        return resumen.get().alInstante(reloj.instant(), estado.ultimaMuestraPosiciones(), guardadoAlDia,
+                pendientesPorTabla());
+    }
+
+    /**
+     * Filas que esperan a que la base de datos vuelva, por tabla. Lo lee el hilo de la API mientras la ingesta escribe
+     * en las listas: el tamaño puede estar a medias de un ciclo, que para un indicador basta (como los gauges).
+     */
+    private Map<String, Integer> pendientesPorTabla() {
+        return Map.of("retrasos", retrasosPendientes.size(), "posiciones", posicionesPendientes.size());
     }
 
     /** Filas que esperan a que la base de datos vuelva (para las pruebas). */
@@ -351,7 +365,7 @@ public class IngestaDirecto {
         Instant ultimo = estado.ultimaMuestraPosiciones();
         Long antiguedad = ultimo == null ? null : Duration.between(ultimo, ahora).toSeconds();
         return new ResumenDirecto(ahora, ultimo, antiguedad, trenes.size(), estado.trenesPorEstado(), sinHorario,
-                porNucleo, circuitos);
+                porNucleo, circuitos, guardadoAlDia, pendientesPorTabla());
     }
 
     /** Una fila por aviso y entidad afectada (línea o estación). El texto, en español si viene. */

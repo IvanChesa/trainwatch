@@ -6,6 +6,8 @@ set -uo pipefail
 
 # shellcheck source=/dev/null
 source /etc/trainwatch/maquina.env
+# shellcheck source=/dev/null
+source /opt/trainwatch/versiones.env
 m() { curl -sf "http://127.0.0.1:8081/actuator/metrics/$1${2:-}" | jq -r '[.measurements[] | "\(.statistic)=\(.value)"] | join(" ")'; }
 
 echo "== Salud"
@@ -34,9 +36,10 @@ docker stats --no-stream --format '{{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}}'
 echo "Errores del backend en las últimas 24 h: $(docker compose -f /opt/trainwatch/compose.yaml logs --since 24h backend 2>&1 | grep -c ' ERROR ')"
 
 echo "== Base de datos"
-clave=$(sed -n 's/^TRAINWATCH_DB_PASSWORD=//p' /etc/trainwatch/backend.env)
-docker run --rm --network host -e PGPASSWORD="$clave" -e PGSSLMODE=verify-full -e PGSSLROOTCERT=system \
-  "postgres:${VERSION_CLIENTE_PG}-alpine" psql -h "$HOST_POSTGRES" -U "$USUARIO_BD" -d "$BASE_DE_DATOS" -XAt -F ' ' -c "
+PGPASSWORD=$(sed -n 's/^TRAINWATCH_DB_PASSWORD=//p' /etc/trainwatch/backend.env)
+export PGPASSWORD
+docker run --rm --network host -e PGPASSWORD -e PGSSLMODE=verify-full -e PGSSLROOTCERT=system \
+  "$IMAGEN_CLIENTE_PG" psql -h "$HOST_POSTGRES" -U "$USUARIO_BD" -d "$BASE_DE_DATOS" -XAt -F ' ' -c "
     select 'tamaño total', pg_size_pretty(pg_database_size(current_database()))
     union all select 'retrasos (filas de ayer)', count(*)::text from retrasos where fecha_servicio = current_date - 1
     union all select 'posiciones (filas de ayer)', count(*)::text from posiciones

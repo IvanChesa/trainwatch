@@ -42,7 +42,7 @@ resource "time_sleep" "propagacion_permisos" {
 resource "azurerm_key_vault_secret" "clave_bd" {
   name             = "bd-clave"
   key_vault_id     = azurerm_key_vault.trainwatch.id
-  value_wo         = ephemeral.random_password.bd.result
+  value_wo         = random_password.bd.result
   value_wo_version = var.version_clave_bd
   content_type     = "Clave de PostgreSQL (usuario trainwatch)"
   depends_on       = [time_sleep.propagacion_permisos]

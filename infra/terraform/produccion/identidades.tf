@@ -17,11 +17,29 @@ resource "azurerm_role_assignment" "maquina_secretos" {
   principal_type       = "ServicePrincipal"
 }
 
+# Solo crear y escribir blobs: ni borrar ni listar. Si alguien entra en la máquina, no puede borrar las copias (y
+# sobrescribir una la deja recuperable 7 días por el borrado temporal de la cuenta). Las borra la regla de ciclo de
+# vida, no la máquina.
+resource "azurerm_role_definition" "copias" {
+  name        = "TrainWatch copias (${local.sufijo})"
+  scope       = azurerm_resource_group.trainwatch.id
+  description = "La máquina de TrainWatch sube las copias de la base de datos, sin poder borrarlas"
+
+  permissions {
+    data_actions = [
+      "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/write",
+      "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/add/action",
+    ]
+  }
+
+  assignable_scopes = [azurerm_resource_group.trainwatch.id]
+}
+
 resource "azurerm_role_assignment" "maquina_copias" {
-  scope                = azurerm_storage_container.copias.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azurerm_user_assigned_identity.maquina.principal_id
-  principal_type       = "ServicePrincipal"
+  scope              = azurerm_storage_container.copias.id
+  role_definition_id = azurerm_role_definition.copias.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.maquina.principal_id
+  principal_type     = "ServicePrincipal"
 }
 
 # 2 · La de GitHub Actions: solo puede ejecutar el script de despliegue en la máquina.

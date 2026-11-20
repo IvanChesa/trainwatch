@@ -20,8 +20,9 @@ source /etc/trainwatch/maquina.env
 token=$(curl -sSf --retry 3 -H 'Metadata: true' \
   "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net&client_id=${IDENTIDAD}" \
   | jq -r .access_token)
+# La cabecera con el token se pasa por un descriptor (-H @...), no como argumento: así no sale en «ps».
 secreto() {
-  curl -sSf --retry 3 -H "Authorization: Bearer ${token}" \
+  curl -sSf --retry 3 -H @<(printf 'Authorization: Bearer %s\n' "$token") \
     "https://${KEY_VAULT}.vault.azure.net/secrets/$1?api-version=7.4" | jq -r .value
 }
 
@@ -61,8 +62,10 @@ listo() {
   return 1
 }
 
+# Primero se descarga (con la imagen nueva solo en el entorno): si falla, .env sigue apuntando a la que funciona y
+# la próxima vuelta atrás no irá a una imagen que nunca arrancó.
+TRAINWATCH_IMAGEN="$imagen" docker compose pull --quiet
 escribir_env "$imagen"
-docker compose pull --quiet
 docker compose up -d --remove-orphans
 # Caddy lee el certificado al arrancar: si ha cambiado, se reinicia (es un segundo, y el SSE se reconecta solo).
 docker compose restart caddy

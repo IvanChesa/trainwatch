@@ -45,15 +45,14 @@ resource "azurerm_linux_virtual_machine" "trainwatch" {
   }
 
   custom_data = base64encode(templatefile("${path.module}/cloud-init.yaml", {
-    key_vault       = azurerm_key_vault.trainwatch.name
-    identidad       = azurerm_user_assigned_identity.maquina.client_id
-    cuenta_copias   = azurerm_storage_account.copias.name
-    contenedor      = azurerm_storage_container.copias.name
-    host_postgres   = azurerm_postgresql_flexible_server.trainwatch.fqdn
-    usuario_bd      = azurerm_postgresql_flexible_server.trainwatch.administrator_login
-    base_de_datos   = azurerm_postgresql_flexible_server_database.trainwatch.name
-    host_api        = local.host_api
-    version_cliente = var.version_postgres
+    key_vault     = azurerm_key_vault.trainwatch.name
+    identidad     = azurerm_user_assigned_identity.maquina.client_id
+    cuenta_copias = azurerm_storage_account.copias.name
+    contenedor    = azurerm_storage_container.copias.name
+    host_postgres = azurerm_postgresql_flexible_server.trainwatch.fqdn
+    usuario_bd    = azurerm_postgresql_flexible_server.trainwatch.administrator_login
+    base_de_datos = azurerm_postgresql_flexible_server_database.trainwatch.name
+    host_api      = local.host_api
   }))
 
   # Diagnóstico de arranque con almacenamiento gestionado: habilita la consola serie del portal (sin SSH).

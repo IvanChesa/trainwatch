@@ -4,6 +4,7 @@
 # Falla si:
 #   - la API no responde (o no responde JSON) en 20 s;
 #   - la ingesta no ha terminado un ciclo en los últimos 5 min («calculado»);
+#   - hace más de 5 min que no se guarda todo en la base de datos («guardadoAlDia»: filas atascadas en la cola);
 #   - el último dato de Renfe tiene más de 5 min («antiguedadS»). De 01:00 a 05:00 (hora de Madrid) no hay trenes y
 #     Renfe puede no publicar muestras nuevas: esa comprobación solo avisa, sin fallar.
 set -uo pipefail
@@ -28,6 +29,16 @@ circuitos=$(echo "$cuerpo" | jq -c '.circuitos')
 edad_ciclo=$(( ahora - $(date -u -d "$calculado" +%s) ))
 [ "$edad_ciclo" -le "$maximo" ] || fallo "La ingesta lleva ${edad_ciclo} s sin terminar un ciclo (máximo ${maximo})"
 
+# Que lo que llega se guarda: si la base de datos falla, la ingesta sigue (el directo va al día) pero las filas se
+# quedan en una cola y «guardadoAlDia» deja de avanzar.
+guardado=$(echo "$cuerpo" | jq -r '.guardadoAlDia // empty')
+pendientes=$(echo "$cuerpo" | jq -c '.pendientes // {}')
+if [ -n "$guardado" ]; then
+  edad_guardado=$(( ahora - $(date -u -d "$guardado" +%s) ))
+  [ "$edad_guardado" -le "$maximo" ] \
+    || fallo "Hace ${edad_guardado} s que no se guarda todo en la base de datos (máximo ${maximo}). Pendientes: ${pendientes}"
+fi
+
 hora_madrid=$(TZ=Europe/Madrid date +%H)
 noche=false
 if [ "$hora_madrid" -ge 1 ] && [ "$hora_madrid" -lt 5 ]; then noche=true; fi
@@ -40,4 +51,4 @@ elif [ "$antiguedad" -gt "$maximo" ]; then
   echo "⚠️ De noche: el último dato de Renfe tiene ${antiguedad} s" | tee -a "$resumen"
 fi
 
-echo "✅ API en marcha: último ciclo hace ${edad_ciclo} s, último dato hace ${antiguedad:-?} s, ${trenes} trenes. Circuitos: ${circuitos}" | tee -a "$resumen"
+echo "✅ API en marcha: último ciclo hace ${edad_ciclo} s, último dato hace ${antiguedad:-?} s, ${trenes} trenes. Pendientes: ${pendientes}. Circuitos: ${circuitos}" | tee -a "$resumen"

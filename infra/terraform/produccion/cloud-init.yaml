@@ -39,7 +39,13 @@ write_files:
       USUARIO_BD=${usuario_bd}
       BASE_DE_DATOS=${base_de_datos}
       HOST_API=${host_api}
-      VERSION_CLIENTE_PG=${version_cliente}
+  # Actualizaciones de seguridad (unattended-upgrades) y, si una lo pide (el núcleo), reinicio a las 02:00 UTC
+  # (03:00 o 04:00 de Madrid): sin SSH, nadie reiniciaría a mano. Docker vuelve a arrancar los contenedores.
+  - path: /etc/apt/apt.conf.d/52trainwatch-reinicio
+    permissions: "0644"
+    content: |
+      Unattended-Upgrade::Automatic-Reboot "true";
+      Unattended-Upgrade::Automatic-Reboot-Time "02:00";
   - path: /etc/sysctl.d/90-trainwatch.conf
     permissions: "0644"
     content: |

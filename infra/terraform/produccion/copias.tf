@@ -1,5 +1,6 @@
 # Copias lógicas (ADR 0021): además de las copias gestionadas de PostgreSQL, un pg_dump cada noche a Blob Storage.
-# Sirven para restaurar en otro sitio (en local, o en otra nube cuando se acabe el crédito). 30 días de retención.
+# Sirven para restaurar en otro sitio (en local, o en otra nube cuando se acabe el crédito). 14 días de retención
+# (más 7 de borrado temporal): con retrasos creciendo, unos 21 ficheros caben en los 5 GB gratis (ADR 0021).
 
 resource "azurerm_storage_account" "copias" {
   name                     = "sttwcopias${local.sufijo}"
@@ -40,7 +41,7 @@ resource "azurerm_storage_management_policy" "copias" {
   storage_account_id = azurerm_storage_account.copias.id
 
   rule {
-    name    = "borrar-a-los-30-dias"
+    name    = "borrar-a-los-14-dias"
     enabled = true
     filters {
       blob_types   = ["blockBlob"]
@@ -48,7 +49,7 @@ resource "azurerm_storage_management_policy" "copias" {
     }
     actions {
       base_blob {
-        delete_after_days_since_creation_greater_than = 30
+        delete_after_days_since_creation_greater_than = 14
       }
     }
   }
