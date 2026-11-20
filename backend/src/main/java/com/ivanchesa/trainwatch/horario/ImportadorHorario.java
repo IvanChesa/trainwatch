@@ -200,7 +200,8 @@ public class ImportadorHorario {
             error = mensaje(e);
         }
 
-        if (resultado == Resultado.FALLIDA && cambioHecho(id)) {
+        boolean despuesDelCambio = resultado == Resultado.FALLIDA && cambioHecho(id);
+        if (despuesDelCambio) {
             // Algo falló después del paso «cambio» (la limpieza, el repositorio de Spring Batch): el horario nuevo
             // ya está en uso y apuntado como CORRECTO en la misma transacción. No se desdice (fase 3b).
             log.warn("Importación del horario {}: falló después del cambio ({}); el horario nuevo queda en uso", id,
@@ -221,11 +222,17 @@ public class ImportadorHorario {
         Map<String, Long> filas = resultado == Resultado.CORRECTA
                 ? (Map<String, Long>) contexto.get(ImportacionJobConfig.CLAVE_FILAS) : null;
         Duration duracion = Duration.ofNanos(System.nanoTime() - t0);
-        registro.terminar(id, OffsetDateTime.now(reloj), resultado,
-                contexto.getString(ImportacionJobConfig.CLAVE_ETAG, null),
-                contexto.getString(ImportacionJobConfig.CLAVE_LAST_MODIFIED, null),
-                fecha(contexto, ImportacionJobConfig.CLAVE_VIGENCIA_DESDE),
-                fecha(contexto, ImportacionJobConfig.CLAVE_VIGENCIA_HASTA), filas, error);
+        if (despuesDelCambio) {
+            // El paso «cambio» ya lo apuntó todo; el contexto del trabajo puede venir vacío. Solo falta la hora de fin.
+            registro.terminarDespuesDelCambio(id, OffsetDateTime.now(reloj));
+            filas = registro.ultimaCorrecta().map(RegistroImportaciones.Importacion::filas).orElse(filas);
+        } else {
+            registro.terminar(id, OffsetDateTime.now(reloj), resultado,
+                    contexto.getString(ImportacionJobConfig.CLAVE_ETAG, null),
+                    contexto.getString(ImportacionJobConfig.CLAVE_LAST_MODIFIED, null),
+                    fecha(contexto, ImportacionJobConfig.CLAVE_VIGENCIA_DESDE),
+                    fecha(contexto, ImportacionJobConfig.CLAVE_VIGENCIA_HASTA), filas, error);
+        }
         Timer.builder("trainwatch.horario.importacion").description("Duración de la importación del horario")
                 .tag("resultado", resultado.name()).register(metricas).record(duracion);
         if (filas != null) {

@@ -373,6 +373,41 @@ class DirectoIntegracionTests {
 
     @Test
     @Order(5)
+    void unaFilaSinParticionNoBloqueaLaColaNiDuplicaLasDemas() throws IOException {
+        // 501 posiciones buenas y una de 1999, que no cabe en ninguna partición, en la misma muestra.
+        particiones.mantener(Instant.parse("2026-11-20T09:30:00Z"));
+        Tren base = estado.tren("4023V24219C1");
+        List<Tren> cambios = new java.util.ArrayList<>();
+        for (int i = 0; i < 501; i++) {
+            cambios.add(new Tren("COLA" + i, "COLA" + i, null, "C1", 40, null, base.fechaServicio(), EstadoTren.EN_MARCHA,
+                    null, -1, null, 39.4, -0.4, Instant.parse("2026-11-20T09:30:00Z"), null, null, 0));
+        }
+        cambios.add(250, new Tren("COLA_MALA", "COLA_MALA", null, "C1", 40, null, base.fechaServicio(),
+                EstadoTren.EN_MARCHA, null, -1, null, 39.4, -0.4, Instant.parse("1999-01-01T00:00:00Z"), null, null, 0));
+        org.mockito.Mockito.doReturn(new EstadoDirecto.ResultadoPosiciones(true, true, cambios, 0, 0))
+                .doCallRealMethod().when(estado).procesarPosiciones(any(), any());
+        double descartadas = contador("trainwatch.directo.filas.descartadas", "tabla", "posiciones");
+        servirConCabecera("092855", 1_400);
+
+        ingesta.ciclo();
+
+        assertThat(ingesta.pendientes("posiciones")).isZero();
+        assertThat(contador("trainwatch.directo.filas.descartadas", "tabla", "posiciones")).isEqualTo(descartadas + 1);
+        // Cada buena, una sola vez: el intento con la cola entera iba en una transacción y no dejó nada a medias.
+        assertThat(jdbc.sql("SELECT count(*) FROM posiciones WHERE trip_id LIKE 'COLA%'").query(Long.class).single())
+                .isEqualTo(501);
+        assertThat(jdbc.sql("SELECT count(DISTINCT trip_id) FROM posiciones WHERE trip_id LIKE 'COLA%'")
+                .query(Long.class).single()).isEqualTo(501);
+    }
+
+    @Test
+    @Order(5)
+    void lasConexionesLlevanLosPlazosCortos() {
+        assertThat(jdbc.sql("SHOW statement_timeout").query(String.class).single()).isEqualTo("15s");
+    }
+
+    @Test
+    @Order(5)
     void unCierreInferidoNoPisaUnoVisto() {
         LocalDate dia = LocalDate.of(2026, 11, 20);
         Instant t = Instant.parse("2026-11-20T10:00:00Z");

@@ -196,6 +196,9 @@ public class ClienteFeeds {
             throw new FeedException("Tiempo agotado (" + propiedades.tiempoRespuesta().toMillis() + " ms)");
         } catch (ExecutionException e) {
             Throwable causa = e.getCause();
+            if (causa instanceof Error error) {
+                throw error; // un OutOfMemoryError en el hilo del HttpClient no es un fallo de red
+            }
             if (causa instanceof CuerpoLimitado.CuerpoDemasiadoGrande grande) {
                 throw new FeedException("Feed demasiado grande: " + grande.getMessage());
             }

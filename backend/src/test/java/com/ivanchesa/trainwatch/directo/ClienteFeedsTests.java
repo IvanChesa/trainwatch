@@ -103,8 +103,10 @@ class ClienteFeedsTests {
         // La espera se dobla: 200 ms antes del segundo intento y 400 ms antes del tercero.
         Duration primera = Duration.ofNanos(renfe.llegadas.get(1) - renfe.llegadas.get(0));
         Duration segunda = Duration.ofNanos(renfe.llegadas.get(2) - renfe.llegadas.get(1));
-        assertThat(primera).isBetween(Duration.ofMillis(200), Duration.ofMillis(390));
-        assertThat(segunda).isBetween(Duration.ofMillis(400), Duration.ofMillis(790));
+        // Cotas superiores holgadas: en una máquina cargada el planificador puede tardar algo más.
+        assertThat(primera).isBetween(Duration.ofMillis(200), Duration.ofMillis(1_000));
+        assertThat(segunda).isBetween(Duration.ofMillis(400), Duration.ofMillis(1_500));
+        assertThat(segunda).isGreaterThan(primera);
     }
 
     @Test

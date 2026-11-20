@@ -166,3 +166,48 @@ Ver el [ADR 0009](../adr/0009-particiones-diarias-y-mensuales.md). Lo que hay qu
 | Horario y cachés | `directo/HorarioDirectoJdbc.java` |
 | Particiones | `directo/GestorParticiones.java`, `db/migration/V3__…sql` |
 | Pruebas | `EstadoDirectoTests` (unitarias), `ClienteFeedsTests` (HTTP), `DirectoIntegracionTests` (Testcontainers) |
+
+## 6. Lo que se corrigió tras la revisión y por qué (fase 3b)
+
+Una revisión independiente del backend (20-11) encontró fallos que **sesgarían las estadísticas** o **congelarían la ingesta**. Se corrigieron antes de construir la API. Es buen material para una entrevista: «encontré este fallo y lo arreglé así». Informe: [`docs/informes/fase-3b.md`](../informes/fase-3b.md); decisiones: [ADR 0012](../adr/0012-paradas-saltadas-y-viajes-que-vuelven.md), [ADR 0013](../adr/0013-calcular-primero-aplicar-al-final.md) y el cambio del [ADR 0009](../adr/0009-particiones-diarias-y-mensuales.md).
+
+### Una muestra que falla a mitad dejaba el estado a medias
+
+- **El fallo.** `horario.viaje()` lee la base de datos dentro del bucle de cada muestra. Si fallaba a mitad, la cabecera y el `ETag` ya habían avanzado (la muestra no se volvía a pedir), el seguimiento de los viajes anteriores ya se había movido y los retrasos cerrados en esa muestra se perdían para siempre.
+- **El arreglo.** Tres pasos: *resolver* (las lecturas, con un `try` por viaje: el que falla se salta y se cuenta), *calcular* sobre copias y *aplicar* de golpe al final. El `ETag` ya no lo guarda el cliente al descargar: la ingesta lo **confirma** después de procesar (`ClienteFeeds.confirmar`). Si algo falla, nada ha cambiado y la siguiente petición trae la misma muestra.
+- **Por qué saltar un viaje y no rechazar la muestra.** Con la base de datos caída, casi todos los viajes están en caché. Rechazar la muestra entera congelaría el mapa en directo justo cuando más se nota. Saltar uno no pierde nada: en la muestra siguiente se pone al día y las paradas que pasó se cierran (siguiente apartado).
+- **Lo de alrededor.** Las filas que no se pueden escribir esperan en una **cola acotada** (antes solo los retrasos; ahora también las posiciones). **Tiempos máximos cortos** en Hikari (5 s), en el driver (`socketTimeout` 30 s) y en PostgreSQL (`statement_timeout` 15 s), en todos los perfiles. La importación del horario los amplía solo en sus pasos pesados. Y `/api/directo/estado` calcula la antigüedad **al responder**: si la ingesta se para, se ve.
+- **Si te preguntan «¿cómo lo probaste?».** Con un horario falso que falla para un viaje concreto (prueba unitaria), con un error inesperado a mitad (el estado no cambia y la misma muestra se puede repetir) y en la de integración renombrando la tabla `posiciones` y el esquema `horario` a mitad de la ingesta: el mapa sigue, las filas esperan y, al volver, se escriben todas.
+
+### Paradas saltadas que se perdían sin dejar rastro
+
+- **El fallo.** Si entre dos muestras la próxima parada pasaba de la *i* a la *i+2*, solo se cerraba la *i*; la intermedia no dejaba fila ni se contaba. Lo mismo si un viaje desaparecía a mitad y volvía más adelante. Las estadísticas se sesgaban hacia los tramos fáciles de seguir, sin que nada lo avisara.
+- **El arreglo.** Se cierran todas las paradas de la *i* a la *j−1*; las intermedias, con el último retraso conocido y **marcadas como `inferido`** (columna nueva, migración V4) para poder filtrarlas. Un viaje que desaparece a mitad se recuerda **3 h** por si vuelve. Una métrica cuenta las inferidas.
+- **Alternativas que puedes nombrar.** No cerrarlas y solo contarlas (no inventa nada, pero deja huecos); interpolar el retraso (precisión aparente: Renfe da minutos enteros); conservar el tren visible más tiempo (mezcla dos reglas que tienen que ser distintas).
+- **Detalle fino.** Un cierre inferido **no pisa** uno visto: `ON CONFLICT … DO UPDATE … WHERE retrasos.inferido OR NOT EXCLUDED.inferido`.
+
+### Borrar particiones podía congelar la ingesta
+
+- **El fallo.** `DROP TABLE` de una partición pide un cerrojo exclusivo sobre `posiciones` entera y se hacía desde el hilo de la ingesta, sin límite de espera. Con un lector largo (la API), el `DROP` espera… y detrás de él, todos los `INSERT`. La prueba lo reproduce: con el código antiguo, una escritura se quedó **14,7 s bloqueada**.
+- **El arreglo.** Tarea programada aparte, `SET lock_timeout`, y `DETACH PARTITION … CONCURRENTLY` (compatible con los `INSERT`) antes del `DROP`, que ya solo bloquea la tabla separada. Si falla, la pasada siguiente lo termina (`DETACH … FINALIZE`).
+- **Lo que tienes que saber explicar.** Por qué los cerrojos se encolan (un `INSERT` no adelanta a un `ACCESS EXCLUSIVE` que espera), qué hace `CONCURRENTLY` (dos transacciones, espera a que acaben las consultas que podían ver la partición) y por qué no puede ir dentro de una transacción.
+
+### Lo demás
+
+- **Pruebas que no probaban lo que decían.** Las de muestras incompletas hacían una sola ausencia, pero hacen falta 3 para que un tren desaparezca: habrían pasado igual con una muestra completa. Ahora demuestran que 3 incompletas no borran ni cierran y que 3 completas sí. La del tiempo máximo dormía *antes* de las cabeceras; ahora el servidor se para **a mitad del cuerpo**. La del reintento mide la espera (200 y 400 ms). Nuevas: circuito semiabierto → cerrado (y → abierto si falla la prueba), lectores concurrentes y las de los puntos anteriores.
+- **El registro de la importación.** Se escribía fuera de la transacción del cambio de esquema: si fallaba después, el horario nuevo estaba en uso pero la ingesta (que vacía sus cachés al ver una importación correcta nueva) no se enteraba. Ahora va **dentro**. Y `cargarViaje` hace **una sola consulta**, así que un viaje no puede mezclar el horario viejo y el nuevo.
+- **Tamaños máximos.** Antes se miraban después de bajarlo todo. Ahora un `BodySubscriber` propio (`CuerpoLimitado`) mira `Content-Length` y **corta la lectura** al pasar el límite.
+- **Errores.** El cliente convertía cualquier `Throwable` en `IOException`, `OutOfMemoryError` incluido; ahora los `Error` suben. Y los avisos de error de la ingesta llevan la traza entera.
+
+### Lo que encontró la revisión de la propia corrección
+
+Revisar también la corrección sirvió. Lo más interesante para contar:
+
+- **El plazo multiplicado.** Con un `try` por viaje y plazos cortos, una base de datos *colgada* (no caída) hacía esperar 5-30 s **por viaje**: tras vaciar las cachés, minutos por muestra. Arreglo: tras el primer fallo, en esa muestra solo se usan los viajes en caché. Lección: un plazo corto por llamada no basta si hay muchas llamadas seguidas; hay que acotar el total.
+- **La muestra envenenada.** «Si algo falla, no apliques nada y repite» es correcto hasta que el fallo se repite siempre: entonces el feed se congela. Arreglo: un `try` por viaje también al calcular, que salta y cuenta.
+- **La fila envenenada.** Una cola que reintenta entera se bloquea con una sola fila imposible (sin partición), y `batchUpdate` en *autocommit* duplicaba lotes al reintentar. Arreglo: transacción y, si el error es «sin partición» (SQLSTATE 23514), apartar esas filas.
+
+### Preguntas que pueden hacerte sobre esto
+
+- **¿Por qué no lo viste en la fase 3?** La revisión de la fase 3 ya señaló el `ETag` (y se dejó documentado como riesgo aceptado). Al mirarlo con la API de la fase 4 en mente, el riesgo cambió: lectores largos y estadísticas públicas. Por eso se corrigió antes de seguir.
+- **¿Qué queda?** El estado (y las colas) se pierde al reiniciar; tras un reinicio no se infieren paradas; las consultas de la aplicación tienen 15 s como máximo, y si la fase 6 necesita más, tendrá que ampliarlo en su transacción.

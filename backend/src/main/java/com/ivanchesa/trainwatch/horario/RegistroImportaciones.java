@@ -75,6 +75,12 @@ public class RegistroImportaciones {
                 .update();
     }
 
+    /** Cierra una importación ya marcada como correcta en el paso «cambio»: solo la hora de fin. */
+    public void terminarDespuesDelCambio(long id, OffsetDateTime fin) {
+        jdbc.sql("UPDATE importacion_horario SET fin = :fin, error = NULL WHERE id = :id")
+                .param("fin", fin).param("id", id).update();
+    }
+
     /** El resultado apuntado para una importación. */
     public Optional<Resultado> resultado(long id) {
         return jdbc.sql("SELECT resultado FROM importacion_horario WHERE id = :id").param("id", id)

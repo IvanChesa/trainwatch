@@ -89,6 +89,9 @@ public class DescargaHorario {
                 throw new IOException("La descarga del horario no terminó en " + propiedades.tiempoMaximoDescarga());
             } catch (ExecutionException e) {
                 Throwable causa = e.getCause();
+                if (causa instanceof Error error) {
+                    throw error;
+                }
                 if (causa instanceof CuerpoLimitado.CuerpoDemasiadoGrande
                         || causa instanceof IOException && causa.getCause() instanceof CuerpoLimitado.CuerpoDemasiadoGrande) {
                     throw new IOException("El horario pasa del tamaño máximo (" + bytesMaximos + " bytes): "

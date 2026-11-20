@@ -62,10 +62,18 @@ class EstadoDirectoTests {
         final Map<String, Viaje> viajes = new ConcurrentHashMap<>();
         final Set<String> fallan = ConcurrentHashMap.newKeySet();
         final Set<String> revientan = ConcurrentHashMap.newKeySet();
+        final AtomicInteger llamadasFallidas = new AtomicInteger();
+
+        @Override
+        public boolean enCache(String tripId) {
+            // Como la caché de verdad, que guarda también los que no existen (SPECIAL_...): todo menos los que fallan.
+            return !fallan.contains(tripId) && !revientan.contains(tripId);
+        }
 
         @Override
         public Viaje viaje(String tripId) {
             if (fallan.contains(tripId)) {
+                llamadasFallidas.incrementAndGet();
                 throw new IllegalStateException("La base de datos no contesta (" + tripId + ")");
             }
             if (revientan.contains(tripId)) {
@@ -607,6 +615,10 @@ class EstadoDirectoTests {
         void unViajeQueNoSePuedeBuscarSeSaltaSinCambiosNiAusencias() {
             estado.procesarPosiciones(posiciones(hora(10, 5), con(relleno(9), vp("51T1", "A", 41.6, 0.60))),
                     hora(10, 5));
+            // Falta en dos muestras completas: lleva 2 ausencias, a una de desaparecer.
+            estado.procesarPosiciones(posiciones(hora(10, 6), relleno(9)), hora(10, 6));
+            estado.procesarPosiciones(posiciones(hora(10, 7), relleno(9)), hora(10, 7));
+            assertThat(estado.tren("51T1").ausencias()).isEqualTo(2);
             horario.fallan.add("51T1");
             for (int i = 1; i <= 3; i++) {
                 ResultadoPosiciones r = estado.procesarPosiciones(
@@ -630,6 +642,65 @@ class EstadoDirectoTests {
         }
 
         @Test
+        void trasElPrimerFalloNoSeVuelveAPreguntarALaBaseDeDatosEnEsaMuestra() {
+            // Con la base de datos colgada, cada pregunta esperaría su plazo (5-30 s). Tras la primera, los viajes que
+            // no están en caché se dan por no resueltos sin preguntar; los que están en caché, se procesan.
+            List<VehiclePosition> vps = new ArrayList<>(List.of(vp("51T1", "A", 41.6, 0.60)));
+            for (int i = 0; i < 20; i++) {
+                horario.fallan.add("NUEVO" + i);
+                vps.add(vp("NUEVO" + i, "A", 41.6, 0.60));
+            }
+            ResultadoPosiciones r = estado.procesarPosiciones(posiciones(hora(10, 5), vps), hora(10, 5));
+            assertThat(horario.llamadasFallidas.get()).isEqualTo(1);
+            assertThat(r.sinResolver()).isEqualTo(20);
+            assertThat(estado.tren("51T1")).isNotNull();
+        }
+
+        @Test
+        void unTrenQueNoSePuedeCalcularSeSaltaSinCongelarElFeed() {
+            // Un viaje con datos rotos (una parada sin stop_id) hace fallar el cálculo de ese tren.
+            horario.viajes.put("51T9", new Viaje("51T9", "51T0004R4", "R4", 51, "C", DIA, List.of(
+                    new ParadaViaje(1, null, "?", 41.6, 0.60, s(10, 0), s(10, 0), null),
+                    new ParadaViaje(2, "A", "A", 41.6, 0.61, s(10, 10), s(10, 10), null)), null, 1));
+            ResultadoPosiciones r = estado.procesarPosiciones(posiciones(hora(10, 5),
+                    List.of(vp("51T1", "A", 41.6, 0.60), vp("51T9", "A", 41.6, 0.60))), hora(10, 5));
+            assertThat(r.nueva()).isTrue();
+            assertThat(r.sinResolver()).isEqualTo(1);
+            assertThat(estado.tren("51T1")).isNotNull();
+            assertThat(estado.tren("51T9")).isNull();
+        }
+
+        @Test
+        void unViajeQueCambiaDeVersionEnElHorarioSeVuelveABuscarPorParada() {
+            // Seguimiento en B (índice 1 del viaje viejo, A-B-C). El horario nuevo alarga el viaje: X-A-Y-B-Z-C.
+            estado.procesarRetrasos(retrasos(hora(10, 8), List.of(tu("51T1", "B", 120))), hora(10, 8));
+            horario.viajes.put("51T1", new Viaje("51T1", "51T0004R4", "R4", 51, "C", DIA, List.of(
+                    new ParadaViaje(1, "X", "X", 41.6, 0.59, s(9, 50), s(9, 50), null),
+                    new ParadaViaje(2, "A", "A", 41.6, 0.60, s(10, 0), s(10, 0), null),
+                    new ParadaViaje(3, "Y", "Y", 41.6, 0.605, s(10, 5), s(10, 5), null),
+                    new ParadaViaje(4, "B", "B", 41.6, 0.61, s(10, 10), s(10, 11), null),
+                    new ParadaViaje(5, "Z", "Z", 41.6, 0.615, s(10, 15), s(10, 15), null),
+                    new ParadaViaje(6, "C", "C", 41.6, 0.62, s(10, 20), s(10, 20), null)), null, 1));
+            // Va a C (índice 5 del nuevo). Con los índices del viejo, cerraría paradas que no son (o se saldría).
+            ResultadoRetrasos r = estado.procesarRetrasos(retrasos(hora(10, 18), List.of(tu("51T1", "C", 180))),
+                    hora(10, 18));
+            assertThat(r.cerrados()).extracting(RetrasoFinal::stopId, RetrasoFinal::stopSequence, RetrasoFinal::inferido)
+                    .containsExactly(org.assertj.core.groups.Tuple.tuple("B", 4, false),
+                            org.assertj.core.groups.Tuple.tuple("Z", 5, true));
+            assertThat(r.sinResolver()).isZero();
+        }
+
+        @Test
+        void unaMarcaAbsurdaConLaCabeceraSinMarcaSeAcotaConLaHora() {
+            // Cabecera 0 y tren sin marca: antes, 1970, fuera de toda partición.
+            FeedMessage m = FeedMessage.newBuilder()
+                    .setHeader(FeedHeader.newBuilder().setGtfsRealtimeVersion("2.0").setTimestamp(0))
+                    .addEntity(FeedEntity.newBuilder().setId("1").setVehicle(vp("51T1", "A", 41.6, 0.60))).build();
+            estado.procesarPosiciones(m, hora(10, 5));
+            assertThat(estado.tren("51T1").marca()).isEqualTo(hora(10, 5));
+        }
+
+        @Test
         void elCierreDeUnaParadaNoSePierdeSiElHorarioFallaJustoAlPasarla() {
             estado.procesarRetrasos(retrasos(hora(10, 8), List.of(tu("51T1", "B", 120))), hora(10, 8));
             horario.fallan.add("51T1");
@@ -641,11 +712,12 @@ class EstadoDirectoTests {
             horario.fallan.clear();
             ResultadoRetrasos r = estado.procesarRetrasos(retrasos(hora(10, 14), List.of(tu("51T1", "C", 180))),
                     hora(10, 14));
-            // La muestra siguiente lo pone al día: B se cierra con su último retraso (2 min), visto, no inferido.
+            // La muestra siguiente lo pone al día: B se cierra con su último retraso (2 min). Como ese retraso es de
+            // hace dos muestras (la de en medio se saltó), se marca como inferido.
             assertThat(r.cerrados()).singleElement().satisfies(f -> {
                 assertThat(f.stopId()).isEqualTo("B");
                 assertThat(f.minutos()).isEqualTo(2);
-                assertThat(f.inferido()).isFalse();
+                assertThat(f.inferido()).isTrue();
             });
         }
 
@@ -752,6 +824,8 @@ class EstadoDirectoTests {
                     hora(10, 15));
             assertThat(r.cerrados()).isEmpty();
             assertThat(corto.retirados()).isZero();
+            // Su parada pendiente (A) no se pierde sin rastro: cuenta como sin cerrar al caducar.
+            assertThat(r.sinCerrar()).isEqualTo(1);
         }
     }
 

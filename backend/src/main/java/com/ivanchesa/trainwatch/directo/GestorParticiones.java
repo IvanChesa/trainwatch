@@ -91,9 +91,11 @@ public class GestorParticiones {
         pasada("al arrancar");
     }
 
-    /** Cada hora, en su propio hilo del programador: la ingesta no lo espera. */
-    @Scheduled(fixedDelayString = "${trainwatch.directo.mantenimiento-particiones:PT1H}",
-            initialDelayString = "${trainwatch.directo.mantenimiento-particiones:PT1H}")
+    /**
+     * Cada hora, en su propio hilo del programador: la ingesta no lo espera. La primera, a los 5 min de arrancar: si
+     * la del arranque falló (la base de datos aún no estaba), no hay que esperar una hora a tener la partición de hoy.
+     */
+    @Scheduled(fixedDelayString = "${trainwatch.directo.mantenimiento-particiones:PT1H}", initialDelayString = "PT5M")
     void programado() {
         pasada("programada");
     }

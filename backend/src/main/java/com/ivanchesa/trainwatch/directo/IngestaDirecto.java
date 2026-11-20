@@ -169,7 +169,8 @@ public class IngestaDirecto {
      * se queda parada, la antigüedad sigue creciendo y se nota.
      */
     public ResumenDirecto resumen() {
-        return resumen.get().alInstante(reloj.instant());
+        // El último dato, del estado (no del resumen): si el resumen no se pudo calcular, el dato sigue al día.
+        return resumen.get().alInstante(reloj.instant(), estado.ultimaMuestraPosiciones());
     }
 
     /** Filas que esperan a que la base de datos vuelva (para las pruebas). */
@@ -247,7 +248,11 @@ public class IngestaDirecto {
         }
     }
 
-    /** Escribe lo pendiente de una tabla. Si falla, se queda en la cola para el ciclo siguiente. */
+    /**
+     * Escribe lo pendiente de una tabla, en una transacción. Si falla, se queda en la cola para el ciclo siguiente.
+     * Si falla porque alguna fila no cabe en ninguna partición (no se arreglará sola reintentando), se escriben de una
+     * en una para apartar esas filas y contarlas: si no, una sola fila imposible bloquearía la cola entera.
+     */
     private <T> void guardarPendientes(String tabla, List<T> cola, ToIntFunction<List<T>> escritura) {
         if (cola.isEmpty()) {
             return;
@@ -257,8 +262,43 @@ public class IngestaDirecto {
             metricas.counter("trainwatch.directo.filas", "tabla", tabla).increment(filas);
             cola.clear();
         } catch (RuntimeException e) {
-            error(null, "base_de_datos", e);
+            if (!sinParticion(e)) {
+                error(null, "base_de_datos", e);
+                return;
+            }
+            log.warn("Ingesta en directo: filas de {} sin particion; se apartan de una en una", tabla, e);
+            List<T> quedan = new ArrayList<>();
+            int escritas = 0;
+            int apartadas = 0;
+            for (int i = 0; i < cola.size(); i++) {
+                T fila = cola.get(i);
+                try {
+                    escritas += escritura.applyAsInt(List.of(fila));
+                } catch (RuntimeException otra) {
+                    if (sinParticion(otra)) {
+                        apartadas++;
+                    } else {
+                        error(null, "base_de_datos", otra);
+                        quedan.addAll(cola.subList(i, cola.size()));
+                        break;
+                    }
+                }
+            }
+            cola.clear();
+            cola.addAll(quedan);
+            metricas.counter("trainwatch.directo.filas", "tabla", tabla).increment(escritas);
+            metricas.counter("trainwatch.directo.filas.descartadas", "tabla", tabla).increment(apartadas);
         }
+    }
+
+    /** La fila no cabe en ninguna particion: SQLSTATE 23514. */
+    private static boolean sinParticion(Throwable e) {
+        for (Throwable c = e; c != null; c = c.getCause()) {
+            if (c instanceof java.sql.SQLException sql && "23514".equals(sql.getSQLState())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     ResumenDirecto calcularResumen(Instant ahora) {

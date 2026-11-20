@@ -20,7 +20,8 @@ import com.ivanchesa.trainwatch.RelojConfig;
 /**
  * El horario importado (esquema {@code horario}, fase 2) visto desde la ingesta, con cachés en memoria:
  * <ul>
- * <li>cada viaje se lee la primera vez que aparece (una consulta, con sus paradas y su recorrido) y se guarda,
+ * <li>cada viaje se lee la primera vez que aparece (una consulta, con sus paradas y la geometría de su recorrido,
+ * aunque el recorrido ya esté en caché: es una vez por viaje y día) y se guarda,
  * también si no existe, para no preguntar en cada muestra por los {@code SPECIAL_…}. Si la consulta falla, no se
  * guarda nada y se vuelve a intentar en la muestra siguiente;</li>
  * <li>los recorridos (144 en total), que comparten muchos viajes;</li>
@@ -74,6 +75,11 @@ public class HorarioDirectoJdbc implements FuenteHorario {
             viajes.put(tripId, v);
         }
         return v.orElse(null);
+    }
+
+    @Override
+    public boolean enCache(String tripId) {
+        return viajes.containsKey(tripId);
     }
 
     @Override

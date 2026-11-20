@@ -36,10 +36,14 @@ public record ResumenDirecto(Instant calculado, Instant ultimoDato, Long antigue
             int enMarchaVistos, Double coberturaPct) {
     }
 
-    /** El mismo resumen con la antigüedad del último dato contada hasta {@code ahora}. */
-    public ResumenDirecto alInstante(Instant ahora) {
-        Long antiguedad = ultimoDato == null ? null : Duration.between(ultimoDato, ahora).toSeconds();
-        return new ResumenDirecto(calculado, ultimoDato, antiguedad, trenes, porEstado, sinHorario, nucleos, circuitos);
+    /**
+     * El mismo resumen con el último dato que hay ahora (el del estado en memoria, que puede ser más nuevo que el del
+     * resumen si este no se pudo calcular) y su antigüedad contada hasta {@code ahora}.
+     */
+    public ResumenDirecto alInstante(Instant ahora, Instant ultimoAhora) {
+        Instant ultimo = ultimoAhora != null ? ultimoAhora : ultimoDato;
+        Long antiguedad = ultimo == null ? null : Duration.between(ultimo, ahora).toSeconds();
+        return new ResumenDirecto(calculado, ultimo, antiguedad, trenes, porEstado, sinHorario, nucleos, circuitos);
     }
 
     public static ResumenDirecto vacio(Instant ahora) {

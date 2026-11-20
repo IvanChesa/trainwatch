@@ -26,7 +26,11 @@ public class RepositorioDirecto {
         this.jdbc = jdbc;
     }
 
-    /** Una fila por tren que ha cambiado. Devuelve las filas escritas. */
+    /**
+     * Una fila por tren que ha cambiado. Devuelve las filas escritas. En una transacción (fase 3b): la cola de
+     * pendientes se escribe entera o nada, así que un reintento no duplica los lotes que ya habían entrado.
+     */
+    @Transactional
     public int guardarPosiciones(List<Tren> trenes) {
         if (trenes.isEmpty()) {
             return 0;
@@ -62,6 +66,7 @@ public class RepositorioDirecto {
      * en el feed), manda la última, salvo que la nueva sea inferida y la que había no: un cierre visto no lo pisa uno
      * deducido (ADR 0012).
      */
+    @Transactional
     public int guardarRetrasos(List<RetrasoFinal> retrasos) {
         if (retrasos.isEmpty()) {
             return 0;

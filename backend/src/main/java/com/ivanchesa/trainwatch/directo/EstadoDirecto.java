@@ -43,8 +43,10 @@ import com.google.transit.realtime.GtfsRealtime.VehiclePosition;
  * <p><b>Primero calcular, luego aplicar (fase 3b).</b> Cada muestra se procesa en tres pasos:
  * <ol>
  * <li><i>resolver</i> los viajes en el horario, la única parte que lee la base de datos, con un {@code try} por
- * viaje: el que falla se salta (cuenta como visto, sin cambios) y se cuenta en {@code sinResolver};</li>
- * <li><i>calcular</i> el estado nuevo sobre copias, sin tocar nada;</li>
+ * viaje: el que falla se salta (cuenta como visto, sin cambios) y se cuenta en {@code sinResolver}; tras el primer
+ * fallo ya no se pregunta a la base de datos en esa muestra;</li>
+ * <li><i>calcular</i> el estado nuevo sobre copias, sin tocar nada, también con un {@code try} por viaje: uno con
+ * datos raros se salta y se cuenta, en vez de bloquear el feed muestra tras muestra;</li>
  * <li><i>aplicar</i>: sustituir el seguimiento, los trenes, el detector y la cabecera.</li>
  * </ol>
  * Si algo falla antes del tercer paso, el estado queda como estaba y la muestra se puede volver a procesar (la
@@ -62,12 +64,23 @@ public class EstadoDirecto {
 
     private static final Logger log = LoggerFactory.getLogger(EstadoDirecto.class);
 
-    /** Lo que se sabe de un viaje por {@code trip_updates}. Solo lo usa el escritor. */
+    /**
+     * Lo que se sabe de un viaje por {@code trip_updates}. Solo lo usa el escritor.
+     *
+     * @param muestra cabecera de la última muestra que lo puso al día (si no es la anterior, su retraso es viejo)
+     */
     private record SeguimientoViaje(String tripId, Viaje viaje, LocalDate fecha, String stopId, int indice,
-            Integer retrasoS, boolean cancelado, int ausencias) {
+            Integer retrasoS, boolean cancelado, int ausencias, long muestra) {
 
         SeguimientoViaje conAusencias(int n) {
-            return new SeguimientoViaje(tripId, viaje, fecha, stopId, indice, retrasoS, cancelado, n);
+            return new SeguimientoViaje(tripId, viaje, fecha, stopId, indice, retrasoS, cancelado, n, muestra);
+        }
+
+        /** El mismo seguimiento sobre otra versión del viaje (horario nuevo): el índice se busca por la parada. */
+        SeguimientoViaje conViaje(Viaje otro) {
+            int i = stopId == null ? -1 : otro.indiceDe(stopId, 0);
+            return new SeguimientoViaje(tripId, otro, fecha, i < 0 ? null : stopId, i, retrasoS, cancelado, ausencias,
+                    muestra);
         }
     }
 
@@ -78,7 +91,7 @@ public class EstadoDirecto {
     /**
      * Resultado de procesar {@code vehicle_positions}: los trenes nuevos o que han cambiado van a {@code posiciones}.
      *
-     * @param sinResolver viajes que no se pudieron buscar en el horario (la base de datos falló): se saltan
+     * @param sinResolver viajes que no se pudieron buscar en el horario (la base de datos falló) o calcular: se saltan
      */
     public record ResultadoPosiciones(boolean nueva, boolean completa, List<Tren> cambios, int desaparecidos,
             int sinResolver) {
@@ -88,9 +101,10 @@ public class EstadoDirecto {
      * Resultado de procesar {@code trip_updates}.
      *
      * @param sinCerrar   paradas que se dejaron atrás pero no se pueden guardar: el viaje no está en el horario (no hay
-     *                    {@code stop_sequence}), la parada nueva no va después de la anterior o no había retraso
+     *                    {@code stop_sequence}), la parada nueva no va después de la anterior, no había retraso o el
+     *                    viaje desapareció a mitad y no volvió en {@code retencionRetirados}
      * @param inferidos   de los cerrados, los que se cerraron sin verlos como próxima parada
-     * @param sinResolver viajes que no se pudieron buscar en el horario (la base de datos falló): se saltan
+     * @param sinResolver viajes que no se pudieron buscar en el horario (la base de datos falló) o calcular: se saltan
      */
     public record ResultadoRetrasos(boolean nueva, boolean completa, List<RetrasoFinal> cerrados, int sinCerrar,
             int inferidos, int sinResolver) {
@@ -191,52 +205,38 @@ public class EstadoDirecto {
         DetectorMuestrasIncompletas.Evaluacion evaluacion = detectorRetrasos.evaluar(muestra.getEntityCount());
         Map<String, SeguimientoViaje> nuevo = new HashMap<>(seguimiento);
         Map<String, Retirado> retiradosNuevo = new HashMap<>(retirados);
-        retiradosNuevo.values().removeIf(r -> r.cuando().plus(retencionRetirados).isBefore(ahora));
         List<RetrasoFinal> cerrados = new ArrayList<>();
-        int[] cuentas = new int[2]; // sinCerrar, inferidos
+        int[] cuentas = new int[3]; // sinCerrar, inferidos, viajes que fallan al calcular
+        // Los retirados que no vuelven a tiempo dejan su parada sin cerrar: se cuenta (no se pierde sin rastro).
+        for (Iterator<Retirado> it = retiradosNuevo.values().iterator(); it.hasNext();) {
+            if (it.next().cuando().plus(retencionRetirados).isBefore(ahora)) {
+                it.remove();
+                cuentas[0]++;
+            }
+        }
 
         for (Map.Entry<String, TripUpdate> e : porViaje.entrySet()) {
             String tripId = e.getKey();
             if (sinResolver.contains(tripId)) {
-                continue; // se queda como estaba; la próxima muestra lo pondrá al día
-            }
-            TripUpdate tu = e.getValue();
-            Viaje viaje = viajes.get(tripId);
-            SeguimientoViaje previo = nuevo.get(tripId);
-            boolean vuelve = false;
-            if (previo == null) {
-                Retirado r = retiradosNuevo.remove(tripId);
-                if (r != null) {
-                    previo = r.seguimiento();
-                    vuelve = true;
+                // Se queda como estaba (la próxima muestra lo pondrá al día), pero estaba en el feed: sin ausencias.
+                SeguimientoViaje visto = nuevo.get(tripId);
+                if (visto != null && visto.ausencias() > 0) {
+                    nuevo.put(tripId, visto.conAusencias(0));
                 }
-            }
-            // La fecha se fija con el viaje; si antes no se encontraba en el horario y ahora si, se recalcula.
-            LocalDate fecha = previo != null && (previo.viaje() != null || viaje == null) ? previo.fecha()
-                    : viaje != null ? viaje.fechaServicio(ahora, zona) : LocalDate.ofInstant(ahora, zona);
-
-            if (tu.getTrip().getScheduleRelationship() == TripDescriptor.ScheduleRelationship.CANCELED) {
-                // Lo pendiente de un cancelado se descarta: no ha pasado por esa parada.
-                nuevo.put(tripId, new SeguimientoViaje(tripId, viaje, fecha, null, -1, null, true, 0));
                 continue;
             }
-            if (tu.getStopTimeUpdateCount() == 0) {
-                Integer retraso = tu.hasDelay() ? Integer.valueOf(tu.getDelay()) : previo == null ? null : previo.retrasoS();
-                nuevo.put(tripId, previo == null || previo.cancelado()
-                        ? new SeguimientoViaje(tripId, viaje, fecha, null, -1, retraso, false, 0)
-                        : new SeguimientoViaje(tripId, viaje, fecha, previo.stopId(), previo.indice(), retraso, false, 0));
-                continue;
+            int cerradosAntes = cerrados.size();
+            int[] cuentasAntes = cuentas.clone();
+            try {
+                seguirViaje(tripId, e.getValue(), viajes.get(tripId), cabecera, ahora, nuevo, retiradosNuevo, cerrados,
+                        cuentas);
+            } catch (RuntimeException fallo) {
+                // Un viaje que no se puede calcular (datos raros) no congela el feed: se salta y se cuenta.
+                cerrados.subList(cerradosAntes, cerrados.size()).clear();
+                System.arraycopy(cuentasAntes, 0, cuentas, 0, cuentas.length);
+                cuentas[2]++;
+                log.warn("No se pudo procesar el viaje {} en trip_updates; se salta", tripId, fallo);
             }
-            StopTimeUpdate proxima = tu.getStopTimeUpdate(0);
-            Integer retraso = retrasoDe(tu, proxima);
-            String stopId = proxima.getStopId().trim();
-            int indice = indiceProxima(viaje, proxima, stopId, previo);
-
-            if (previo != null && !previo.cancelado() && previo.stopId() != null && !previo.stopId().equals(stopId)) {
-                cerrarHasta(previo, indice, vuelve, ahora, cerrados, cuentas);
-            }
-            nuevo.put(tripId, new SeguimientoViaje(tripId, viaje, fecha, stopId.isEmpty() ? null : stopId,
-                    indice, retraso, false, 0));
         }
 
         if (evaluacion.completa()) {
@@ -277,7 +277,8 @@ public class EstadoDirecto {
         cabeceraRetrasos = cabecera;
         ultimaMuestraRetrasos = Instant.ofEpochSecond(cabecera);
         cancelados = Set.copyOf(todos);
-        return new ResultadoRetrasos(true, evaluacion.completa(), cerrados, cuentas[0], cuentas[1], sinResolver.size());
+        return new ResultadoRetrasos(true, evaluacion.completa(), cerrados, cuentas[0], cuentas[1],
+                sinResolver.size() + cuentas[2]);
     }
 
     public synchronized ResultadoPosiciones procesarPosiciones(FeedMessage muestra, Instant ahora) {
@@ -306,6 +307,7 @@ public class EstadoDirecto {
         Set<String> vistos = new HashSet<>();
         Map<String, Tren> nuevos = new LinkedHashMap<>();
         List<Tren> cambios = new ArrayList<>();
+        int fallidos = 0;
 
         for (FeedEntity entidad : muestra.getEntityList()) {
             if (!entidad.hasVehicle()) {
@@ -315,55 +317,32 @@ public class EstadoDirecto {
             String tripId = v.getTrip().getTripId().trim();
             String vehiculo = v.getVehicle().getId().isBlank() ? null : v.getVehicle().getId().trim();
             String id = !tripId.isEmpty() ? tripId : vehiculo != null ? "vehiculo:" + vehiculo : "entidad:" + entidad.getId();
-            if (!vistos.add(id) || sinResolver.contains(tripId)) {
-                continue; // repetido, o sin horario por un fallo: sigue como estaba y no suma ausencias
+            if (!vistos.add(id)) {
+                continue; // repetido
             }
             Tren anterior = trenes.get(id);
-            Viaje viaje = tripId.isEmpty() ? null : viajes.get(tripId);
-            SeguimientoViaje seg = seguimiento.get(tripId);
-
-            String stopId = v.getStopId().trim();
-            if (stopId.isEmpty() || SIN_COORDENADAS.equals(stopId)) {
-                stopId = null;
-            }
-            Double lat = null;
-            Double lon = null;
-            if (v.hasPosition() && (v.getPosition().getLatitude() != 0 || v.getPosition().getLongitude() != 0)) {
-                lat = (double) v.getPosition().getLatitude();
-                lon = (double) v.getPosition().getLongitude();
-            }
-            Instant marca = v.hasTimestamp() ? Instant.ofEpochSecond(v.getTimestamp()) : instanteCabecera;
-            if (cabecera > 0 && Math.abs(marca.getEpochSecond() - cabecera) > MARGEN_MARCA_S) {
-                marca = instanteCabecera; // una marca absurda no puede caer fuera de las particiones
-            }
-            LocalDate fecha = seg != null && seg.viaje() != null ? seg.fecha()
-                    : anterior != null && anterior.viaje() != null ? anterior.fechaServicio()
-                    : viaje != null ? viaje.fechaServicio(ahora, zona) : LocalDate.ofInstant(ahora, zona);
-            if (stopId == null && anterior != null) {
-                stopId = anterior.stopId(); // sin parada en esta muestra (00000): sigue en la ultima conocida
-            }
-            int indice = -1;
-            if (viaje != null && stopId != null) {
-                int desde = anterior != null && anterior.indiceParada() >= 0 ? anterior.indiceParada() : 0;
-                indice = viaje.indiceDe(stopId, desde);
-                if (indice < 0) {
-                    indice = viaje.indiceDe(stopId, 0);
+            if (sinResolver.contains(tripId)) {
+                // Sin horario por un fallo: sigue como estaba, pero estaba en el feed (ausencias a cero).
+                if (anterior != null && anterior.ausencias() > 0) {
+                    nuevos.put(id, anterior.conAusencias(0));
                 }
+                continue;
             }
-            Integer retraso = seg == null ? null : seg.retrasoS();
-            boolean cancelado = seg != null && seg.cancelado();
-            EstadoTren estado = clasificar(viaje, indice, fecha, retraso, cancelado, ahora);
-            String linea = viaje != null ? viaje.linea() : lineaDeEtiqueta(v.getVehicle().getLabel());
-            Integer nucleo = viaje != null && viaje.nucleo() != null ? viaje.nucleo() : Nucleos.deIdentificador(tripId);
-            String estadoFeed = v.hasCurrentStatus() ? v.getCurrentStatus().name() : null;
-
-            Tren nuevo = new Tren(id, tripId.isEmpty() ? null : tripId, vehiculo, linea, nucleo, viaje, fecha, estado,
-                    stopId, indice, estadoFeed, lat, lon, marca, retraso, null, 0);
-            nuevo = nuevo.conEstimada(EstimadorPosicion.estimar(nuevo, anterior, ahora, zona));
-            if (nuevo.cambiaRespectoA(anterior)) {
-                cambios.add(nuevo);
+            try {
+                Tren nuevo = calcularTren(v, id, tripId, anterior, viajes.get(tripId), cabecera,
+                        instanteCabecera, ahora);
+                if (nuevo.cambiaRespectoA(anterior)) {
+                    cambios.add(nuevo);
+                }
+                nuevos.put(id, nuevo);
+            } catch (RuntimeException fallo) {
+                // Un tren que no se puede calcular no congela el feed: sigue como estaba y se cuenta.
+                fallidos++;
+                if (anterior != null && anterior.ausencias() > 0) {
+                    nuevos.put(id, anterior.conAusencias(0));
+                }
+                log.warn("No se pudo procesar el tren {} en vehicle_positions; se salta", id, fallo);
             }
-            nuevos.put(id, nuevo);
         }
 
         Map<String, Tren> ausentes = new HashMap<>();
@@ -392,7 +371,57 @@ public class EstadoDirecto {
         retrocesosPosiciones = 0;
         cabeceraPosiciones = cabecera;
         ultimaMuestraPosiciones = instanteCabecera;
-        return new ResultadoPosiciones(true, evaluacion.completa(), cambios, desaparecen.size(), sinResolver.size());
+        return new ResultadoPosiciones(true, evaluacion.completa(), cambios, desaparecen.size(),
+                sinResolver.size() + fallidos);
+    }
+
+    /** El tren nuevo a partir de su {@code vehicle_position}, sin tocar el estado. */
+    private Tren calcularTren(VehiclePosition v, String id, String tripId, Tren anterior,
+            Viaje viaje, long cabecera, Instant instanteCabecera, Instant ahora) {
+        String vehiculo = v.getVehicle().getId().isBlank() ? null : v.getVehicle().getId().trim();
+        SeguimientoViaje seg = seguimiento.get(tripId);
+
+        String stopId = v.getStopId().trim();
+        if (stopId.isEmpty() || SIN_COORDENADAS.equals(stopId)) {
+            stopId = null;
+        }
+        Double lat = null;
+        Double lon = null;
+        if (v.hasPosition() && (v.getPosition().getLatitude() != 0 || v.getPosition().getLongitude() != 0)) {
+            lat = (double) v.getPosition().getLatitude();
+            lon = (double) v.getPosition().getLongitude();
+        }
+        Instant marca = v.hasTimestamp() ? Instant.ofEpochSecond(v.getTimestamp()) : instanteCabecera;
+        // Una marca absurda no puede caer fuera de las particiones: se acota con la cabecera o, si la cabecera
+        // no trae marca (0), con la hora de la ingesta.
+        Instant referencia = cabecera > 0 ? instanteCabecera : ahora;
+        if (Math.abs(marca.getEpochSecond() - referencia.getEpochSecond()) > MARGEN_MARCA_S) {
+            marca = referencia;
+        }
+        LocalDate fecha = seg != null && seg.viaje() != null ? seg.fecha()
+                : anterior != null && anterior.viaje() != null ? anterior.fechaServicio()
+                : viaje != null ? viaje.fechaServicio(ahora, zona) : LocalDate.ofInstant(ahora, zona);
+        if (stopId == null && anterior != null) {
+            stopId = anterior.stopId(); // sin parada en esta muestra (00000): sigue en la ultima conocida
+        }
+        int indice = -1;
+        if (viaje != null && stopId != null) {
+            int desde = anterior != null && anterior.indiceParada() >= 0 ? anterior.indiceParada() : 0;
+            indice = viaje.indiceDe(stopId, desde);
+            if (indice < 0) {
+                indice = viaje.indiceDe(stopId, 0);
+            }
+        }
+        Integer retraso = seg == null ? null : seg.retrasoS();
+        boolean cancelado = seg != null && seg.cancelado();
+        EstadoTren estado = clasificar(viaje, indice, fecha, retraso, cancelado, ahora);
+        String linea = viaje != null ? viaje.linea() : lineaDeEtiqueta(v.getVehicle().getLabel());
+        Integer nucleo = viaje != null && viaje.nucleo() != null ? viaje.nucleo() : Nucleos.deIdentificador(tripId);
+        String estadoFeed = v.hasCurrentStatus() ? v.getCurrentStatus().name() : null;
+
+        Tren nuevo = new Tren(id, tripId.isEmpty() ? null : tripId, vehiculo, linea, nucleo, viaje, fecha, estado,
+                stopId, indice, estadoFeed, lat, lon, marca, retraso, null, 0);
+        return nuevo.conEstimada(EstimadorPosicion.estimar(nuevo, anterior, ahora, zona));
     }
 
     /** Recalcula la posición estimada de todos los trenes para {@code ahora} (entre muestras, el tren avanza). */
@@ -406,16 +435,80 @@ public class EstadoDirecto {
         }
     }
 
+    /**
+     * Pone al día el seguimiento de un viaje con su {@code trip_update}. Solo escribe en {@code nuevo},
+     * {@code retiradosNuevo} y {@code cerrados} al final de cada camino: si algo falla antes, no ha tocado nada (salvo
+     * {@code cerrados} y {@code cuentas}, que quien llama deshace).
+     */
+    private void seguirViaje(String tripId, TripUpdate tu, Viaje viaje, long cabecera, Instant ahora,
+            Map<String, SeguimientoViaje> nuevo, Map<String, Retirado> retiradosNuevo, List<RetrasoFinal> cerrados,
+            int[] cuentas) {
+        SeguimientoViaje previo = nuevo.get(tripId);
+        boolean vuelve = false;
+        if (previo == null) {
+            Retirado r = retiradosNuevo.get(tripId);
+            if (r != null) {
+                previo = r.seguimiento();
+                vuelve = true;
+            }
+        }
+        // Otra versión del viaje (las cachés se vaciaron con un horario nuevo): los índices del seguimiento son de la
+        // versión vieja. Se vuelven a buscar por parada en la nueva antes de cerrar nada.
+        if (previo != null && previo.viaje() != null && viaje != null && previo.viaje() != viaje
+                && !previo.viaje().paradas().equals(viaje.paradas())) {
+            previo = previo.conViaje(viaje);
+        }
+        // El retraso de previo es viejo si no se puso al día en la muestra anterior (fallos, ausencias).
+        boolean viejo = vuelve || previo != null && previo.muestra() != cabeceraRetrasos;
+        // La fecha se fija con el viaje; si antes no se encontraba en el horario y ahora si, se recalcula.
+        LocalDate fecha = previo != null && (previo.viaje() != null || viaje == null) ? previo.fecha()
+                : viaje != null ? viaje.fechaServicio(ahora, zona) : LocalDate.ofInstant(ahora, zona);
+
+        if (tu.getTrip().getScheduleRelationship() == TripDescriptor.ScheduleRelationship.CANCELED) {
+            // Lo pendiente de un cancelado se descarta: no ha pasado por esa parada.
+            retiradosNuevo.remove(tripId);
+            nuevo.put(tripId, new SeguimientoViaje(tripId, viaje, fecha, null, -1, null, true, 0, cabecera));
+            return;
+        }
+        if (tu.getStopTimeUpdateCount() == 0) {
+            Integer retraso = tu.hasDelay() ? Integer.valueOf(tu.getDelay()) : previo == null ? null : previo.retrasoS();
+            retiradosNuevo.remove(tripId);
+            nuevo.put(tripId, previo == null || previo.cancelado()
+                    ? new SeguimientoViaje(tripId, viaje, fecha, null, -1, retraso, false, 0, cabecera)
+                    : new SeguimientoViaje(tripId, viaje, fecha, previo.stopId(), previo.indice(), retraso, false, 0,
+                            cabecera));
+            return;
+        }
+        StopTimeUpdate proxima = tu.getStopTimeUpdate(0);
+        Integer retraso = retrasoDe(tu, proxima);
+        String stopId = proxima.getStopId().trim();
+        int indice = indiceProxima(viaje, proxima, stopId, previo);
+
+        if (previo != null && !previo.cancelado() && previo.stopId() != null && !previo.stopId().equals(stopId)) {
+            cerrarHasta(previo, indice, vuelve, viejo, ahora, cerrados, cuentas);
+        }
+        retiradosNuevo.remove(tripId);
+        nuevo.put(tripId, new SeguimientoViaje(tripId, viaje, fecha, stopId.isEmpty() ? null : stopId,
+                indice, retraso, false, 0, cabecera));
+    }
+
     // ---------------------------------------------------------------- reglas
 
     /**
      * Busca cada viaje en el horario, con un {@code try} por viaje. Devuelve los que fallaron (la base de datos no
-     * contesta): la muestra sigue sin ellos.
+     * contesta): la muestra sigue sin ellos. Tras el primer fallo ya no se pregunta a la base de datos en esta muestra:
+     * los viajes que están en la caché se resuelven y el resto se da por no resuelto. Si no, con la base de datos
+     * caída o colgada, cada viaje sin caché esperaría su plazo (5-30 s) y una muestra con cientos de viajes nuevos
+     * (tras vaciar las cachés) pararía la ingesta durante minutos.
      */
     private Set<String> resolver(Set<String> tripIds, Map<String, Viaje> viajes) {
         Set<String> fallidos = new HashSet<>();
         RuntimeException primero = null;
         for (String tripId : tripIds) {
+            if (primero != null && !horario.enCache(tripId)) {
+                fallidos.add(tripId);
+                continue;
+            }
             try {
                 viajes.put(tripId, horario.viaje(tripId));
             } catch (RuntimeException e) {
@@ -435,11 +528,13 @@ public class EstadoDirecto {
     /**
      * Cierra las paradas desde la de {@code previo} hasta la anterior a {@code hasta}: la de {@code previo} con su
      * último retraso; las intermedias (que el tren se saltó entre dos muestras), con el mismo retraso y como
-     * inferidas. Si el viaje vuelve tras desaparecer, todas son inferidas: el último retraso es de antes.
+     * inferidas. Si el viaje vuelve tras desaparecer, o su último retraso no es de la muestra anterior ({@code viejo}),
+     * todas son inferidas: ese retraso es de antes.
      */
-    private void cerrarHasta(SeguimientoViaje previo, int hasta, boolean vuelve, Instant ahora,
+    private void cerrarHasta(SeguimientoViaje previo, int hasta, boolean vuelve, boolean viejo, Instant ahora,
             List<RetrasoFinal> cerrados, int[] cuentas) {
-        boolean avanza = previo.viaje() != null && previo.indice() >= 0 && hasta > previo.indice();
+        boolean avanza = previo.viaje() != null && previo.indice() >= 0 && hasta > previo.indice()
+                && hasta <= previo.viaje().paradas().size();
         if (!avanza) {
             cuentas[0]++;
             return;
@@ -449,7 +544,7 @@ public class EstadoDirecto {
             return;
         }
         for (int i = previo.indice(); i < hasta; i++) {
-            boolean inferido = vuelve || i > previo.indice();
+            boolean inferido = vuelve || viejo || i > previo.indice();
             cerrados.add(cierre(previo, i, inferido, ahora));
             if (inferido) {
                 cuentas[1]++;
