@@ -62,7 +62,7 @@ public class ConsultasApi {
     private final JsonMapper json;
     private volatile long version = -1;
     private volatile List<Extension> extensiones;
-    private final Map<String, Optional<DatosLinea>> lineas = new ConcurrentHashMap<>();
+    private final Map<String, DatosLinea> lineas = new ConcurrentHashMap<>();
 
     public ConsultasApi(JdbcClient jdbc, JsonMapper json) {
         this.jdbc = jdbc;
@@ -182,8 +182,18 @@ public class ConsultasApi {
     /** La línea por núcleo y nombre corto (sin distinguir mayúsculas), sin autobuses. Se guarda hasta otro horario. */
     public Optional<DatosLinea> linea(int nucleo, String linea) {
         alDia();
-        return lineas.computeIfAbsent(nucleo + "/" + linea.toUpperCase(java.util.Locale.ROOT),
-                k -> Optional.ofNullable(cargarLinea(nucleo, linea)));
+        long v = version;
+        String clave = nucleo + "/" + linea.toUpperCase(java.util.Locale.ROOT);
+        DatosLinea d = lineas.get(clave);
+        if (d == null) {
+            // Fuera de computeIfAbsent (no se consulta la base de datos con el mapa bloqueado) y sin guardar las que
+            // no existen: la clave viene del cliente y el mapa crecería sin límite (revisión de la fase 4).
+            d = cargarLinea(nucleo, linea);
+            if (d != null && v == version) {
+                lineas.put(clave, d);
+            }
+        }
+        return Optional.ofNullable(d);
     }
 
     private DatosLinea cargarLinea(int nucleo, String linea) {

@@ -35,7 +35,7 @@ public final class VistaTrenes {
         Double lat = e != null ? Double.valueOf(e.lat()) : t.lat();
         Double lon = e != null ? Double.valueOf(e.lon()) : t.lon();
         String fuente = e != null ? e.fuente().name() : lat != null ? PosicionEstimada.Fuente.FEED.name() : null;
-        Integer rumbo = e == null || e.rumbo() == null ? null : (int) Math.round(e.rumbo()) % 360;
+        Integer rumbo = e == null || e.rumbo() == null ? null : (int) Math.floorMod(Math.round(e.rumbo()), 360);
         return new TrenMapa(t.id(), t.linea(), t.nucleo(), t.estado(), destino(viaje), t.sinHorario(), redondear(lat),
                 redondear(lon), fuente, rumbo, minutos(t.retrasoS()), proxima(t), salida(t), hora(t.marca()));
     }

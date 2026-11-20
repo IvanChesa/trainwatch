@@ -35,6 +35,21 @@ public class ErroresApi extends ResponseEntityExceptionHandler {
             500, "Error interno",
             503, "Servicio no disponible");
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ErroresApi.class);
+
+    /**
+     * Cualquier otro error (la base de datos caída, una consulta que pasa de 15 s...): un 500 como
+     * {@code ProblemDetail} sin detalles internos (ni SQL ni trazas), que van al registro.
+     */
+    @org.springframework.web.bind.annotation.ExceptionHandler(Exception.class)
+    ResponseEntity<Object> errorInterno(Exception ex, WebRequest request) {
+        log.error("Error interno en la API ({})", request.getDescription(false), ex);
+        ProblemDetail p = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
+                "No se ha podido atender la petición. Vuelve a probar en unos segundos.");
+        p.setTitle(TITULOS.get(500));
+        return handleExceptionInternal(ex, p, new HttpHeaders(), HttpStatus.INTERNAL_SERVER_ERROR, request);
+    }
+
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
             HttpStatusCode statusCode, WebRequest request) {

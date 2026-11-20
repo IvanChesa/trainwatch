@@ -52,8 +52,9 @@ public class LineasController {
 
     @GetMapping("/avisos")
     @Operation(operationId = "avisos", summary = "Avisos de Renfe",
-            description = "Los avisos en vigor según el último alerts.pb, cada uno con las líneas y estaciones a las"
-                    + " que afecta. Los filtros se combinan; sin filtros, todos.")
+            description = "Los avisos del último alerts.pb de Renfe, tal cual (no se filtran por sus fechas de inicio"
+                    + " y fin, que van en cada aviso), con las líneas y estaciones a las que afectan. Los filtros se"
+                    + " combinan; sin filtros, todos.")
     @RespuestasDeError
     public ResponseEntity<java.util.List<Aviso>> avisos(
             @Parameter(description = "Código del núcleo", example = "51") @RequestParam(required = false) Integer nucleo,

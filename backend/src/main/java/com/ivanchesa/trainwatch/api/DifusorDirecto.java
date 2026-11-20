@@ -86,6 +86,10 @@ public class DifusorDirecto implements SmartLifecycle {
     private final AtomicLong numeroHilo = new AtomicLong();
     private ScheduledExecutorService latidos;
     private volatile boolean enMarcha;
+    /** Desde {@link #stop()}: no se aceptan conexiones nuevas (el apagado ordenado las esperaría). */
+    private volatile boolean apagando;
+    /** Crea el emisor de cada conexión (las pruebas ponen uno que simula un cliente que no lee). */
+    java.util.function.LongFunction<SseEmitter> fabricaEmisores = SseEmitter::new;
 
     /** Un núcleo: la última foto de sus trenes, su secuencia y quién lo escucha. Se usa con su propio cerrojo. */
     private static final class Canal {
@@ -148,10 +152,22 @@ public class DifusorDirecto implements SmartLifecycle {
                 log.debug("Directo: no se pudo enviar al núcleo {}: {}", canal.nucleo, e.toString());
             } finally {
                 cerrar();
+                // Solo este hilo cierra la respuesta: complete() espera al mismo cerrojo que un send() en curso, y si
+                // lo llamara la ingesta con un cliente que no lee, la ingesta se quedaría bloqueada (revisión de la
+                // fase 4). Aquí, como mucho, espera este hilo virtual.
+                try {
+                    emitter.complete();
+                } catch (RuntimeException e) {
+                    log.debug("Directo: al cerrar la conexión: {}", e.toString());
+                }
             }
         }
 
-        /** Se puede llamar varias veces y desde cualquier hilo: solo la primera hace algo. */
+        /**
+         * Da de baja la conexión. Se puede llamar varias veces y desde cualquier hilo (la ingesta, el latido, los
+         * avisos del contenedor) y <b>nunca bloquea</b>: no toca el socket. Deja la marca de fin en la cola para que
+         * el hilo de la conexión termine y cierre la respuesta.
+         */
         void cerrar() {
             if (!cerrado.compareAndSet(false, true)) {
                 return;
@@ -161,11 +177,6 @@ public class DifusorDirecto implements SmartLifecycle {
             conexiones.decrementAndGet();
             cola.clear();
             cola.offer(FIN); // despierta al hilo si espera en take(); no se le interrumpe a mitad de escribir
-            try {
-                emitter.complete();
-            } catch (RuntimeException e) {
-                log.debug("Directo: al cerrar la conexión: {}", e.toString());
-            }
         }
     }
 
@@ -187,9 +198,13 @@ public class DifusorDirecto implements SmartLifecycle {
      * podría crear canales sin fin).
      *
      * @param ultimoId el {@code Last-Event-ID} que manda el navegador al reconectarse, o {@code null}
-     * @throws org.springframework.web.ErrorResponseException 503 si ya hay {@code maximo-conexiones} abiertas
+     * @throws org.springframework.web.ErrorResponseException 503 si ya hay {@code maximo-conexiones} abiertas o la
+     *                                                        aplicación se está apagando
      */
     public SseEmitter suscribir(int nucleo, String ultimoId) {
+        if (apagando) {
+            throw Problemas.noDisponible("El directo se está apagando. Vuelve a probar en unos segundos.", 5);
+        }
         if (conexiones.incrementAndGet() > config.maximoConexiones()) {
             conexiones.decrementAndGet();
             metricas.counter("trainwatch.api.directo.rechazadas").increment();
@@ -199,16 +214,25 @@ public class DifusorDirecto implements SmartLifecycle {
             metricas.counter("trainwatch.api.directo.reconexiones").increment();
         }
         Canal canal = canales.computeIfAbsent(nucleo, Canal::new);
-        SseEmitter emitter = new SseEmitter(config.duracionMaxima().toMillis());
-        Suscriptor s = new Suscriptor(emitter, canal);
-        emitter.onCompletion(s::cerrar);
-        emitter.onTimeout(s::cerrar);
-        emitter.onError(e -> s.cerrar());
-        suscriptores.add(s);
-        synchronized (canal) {
-            s.cola.offer(eventoInstantanea(canal));
-            canal.suscriptores.add(s);
+        SseEmitter emitter;
+        Suscriptor s;
+        try {
+            emitter = fabricaEmisores.apply(config.duracionMaxima().toMillis());
+            s = new Suscriptor(emitter, canal);
+            Suscriptor nuevo = s;
+            emitter.onCompletion(nuevo::cerrar);
+            emitter.onTimeout(nuevo::cerrar);
+            emitter.onError(e -> nuevo.cerrar());
+            synchronized (canal) {
+                s.cola.offer(eventoInstantanea(canal));
+                canal.suscriptores.add(s);
+            }
+        } catch (RuntimeException e) {
+            conexiones.decrementAndGet(); // si algo falla antes de tener hilo, el alta no cuenta
+            throw e;
         }
+        // Después de la instantánea: así un latido no puede llegar antes que ella.
+        suscriptores.add(s);
         Thread.ofVirtual().name("sse-" + nucleo + "-" + numeroHilo.incrementAndGet()).start(s::enviarHastaCerrar);
         return emitter;
     }
@@ -349,6 +373,7 @@ public class DifusorDirecto implements SmartLifecycle {
      */
     @Override
     public void stop() {
+        apagando = true;
         enMarcha = false;
         if (latidos != null) {
             latidos.shutdownNow();

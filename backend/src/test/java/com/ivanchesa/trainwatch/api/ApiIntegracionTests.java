@@ -288,7 +288,7 @@ class ApiIntegracionTests {
         assertThat(c1.get("destino").asString()).isEqualTo("Castelló");
         assertThat(c1.get("fuentePosicion").asString()).isEqualTo("RECORRIDO");
         assertThat(c1.get("lon").asDouble()).isCloseTo(-0.40, within(1e-5));
-        assertThat(c1.get("rumbo").asInt()).isIn(0, 359, 360);
+        assertThat(c1.get("rumbo").asInt()).isIn(0, 359);
         int retraso = c1.get("retrasoMin").asInt();
         JsonNode proxima = c1.get("proximaParada");
         assertThat(proxima.get("id").asString()).isIn("69104", "69105");
@@ -438,6 +438,19 @@ class ApiIntegracionTests {
                 .asString())).contains("Madrid");
         // La interfaz de Swagger.
         http().get().uri("/api/docs/ui").exchange().expectStatus().is3xxRedirection();
+    }
+
+    @Test
+    @Order(4)
+    void unErrorInternoTambienEsProblemDetailSinDetallesInternos() {
+        jdbc.sql("ALTER TABLE avisos RENAME TO avisos_caida").update();
+        try {
+            JsonNode p = problema("/api/avisos", 500);
+            assertThat(p.get("title").asString()).isEqualTo("Error interno");
+            assertThat(p.toString()).doesNotContain("avisos_caida", "SQL", "Exception");
+        } finally {
+            jdbc.sql("ALTER TABLE avisos_caida RENAME TO avisos").update();
+        }
     }
 
     // ---------------------------------------------------------------- directo (SSE)

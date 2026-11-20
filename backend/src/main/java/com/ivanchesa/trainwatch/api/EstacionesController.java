@@ -87,8 +87,10 @@ public class EstacionesController {
 
     @GetMapping("/{id}")
     @Operation(operationId = "fichaEstacion", summary = "Ficha de una estación",
-            description = "Las líneas que paran, los próximos trenes (horario de hoy cruzado con el directo: hora"
-                    + " programada, estimada y retraso) y los avisos de la estación y de sus líneas.")
+            description = "Las líneas que paran, los próximos trenes (horario de ayer y de hoy cruzado con el directo:"
+                    + " hora programada, estimada y retraso; los que salen en la próxima hora y los que debían haber"
+                    + " salido hace menos de 30 min y aún no lo han hecho, así que un tren con más de 30 min de"
+                    + " retraso no sale) y los avisos de la estación y de sus líneas.")
     @RespuestasDeError
     public ResponseEntity<FichaEstacion> ficha(
             @Parameter(description = "stop_id de Renfe", example = "71801") @PathVariable String id) {
@@ -132,7 +134,10 @@ public class EstacionesController {
                     if (t.estado() != EstadoTren.CANCELADO) {
                         estimada = VistaTrenes.conRetraso(programada, t);
                     }
-                    boolean enLaEstacion = secuencia != null && secuencia == p.secuencia();
+                    // La parada del feed es la actual o la última que ha dejado atrás (fase 0): solo está en la
+                    // estación si el feed dice STOPPED_AT; si no, ya ha salido y cuenta la hora (revisión de la fase 4).
+                    boolean enLaEstacion = secuencia != null && secuencia == p.secuencia()
+                            && "STOPPED_AT".equals(t.estadoFeed());
                     if (!enLaEstacion && estimada.isBefore(ahora.minus(MARGEN))) {
                         continue;
                     }

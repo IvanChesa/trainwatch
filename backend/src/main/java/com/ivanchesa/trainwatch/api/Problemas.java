@@ -39,6 +39,14 @@ public final class Problemas {
         return e;
     }
 
+    /** Un 503 con {@code Retry-After}: no se puede atender ahora (por ejemplo, la aplicación se está apagando). */
+    public static ErrorResponseException noDisponible(String detalle, int reintentarEnS) {
+        ErrorResponseException e = new ErrorResponseException(HttpStatus.SERVICE_UNAVAILABLE,
+                problema(HttpStatus.SERVICE_UNAVAILABLE, "Servicio no disponible", detalle), null);
+        e.getHeaders().set("Retry-After", String.valueOf(reintentarEnS));
+        return e;
+    }
+
     private static ProblemDetail problema(HttpStatus estado, String titulo, String detalle) {
         ProblemDetail p = ProblemDetail.forStatusAndDetail(estado, detalle);
         p.setTitle(titulo);
