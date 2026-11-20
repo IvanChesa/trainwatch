@@ -1,0 +1,32 @@
+# TrainWatch · base de datos local: PostgreSQL 18 con PostGIS 3.7.
+# Uso, desde la raíz del repo:  docker compose --env-file .env -f infra/docker-compose.yml up -d
+# (.env es una copia de .env.example; no se sube al repo).
+name: trainwatch
+
+services:
+  postgis:
+    # Versión fijada: la misma que usan las pruebas (TestcontainersConfiguration.IMAGEN_POSTGIS).
+    image: postgis/postgis:18-3.7
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${TRAINWATCH_DB_NAME:-trainwatch}
+      POSTGRES_USER: ${TRAINWATCH_DB_USER:-trainwatch}
+      # Obligatoria: sin ella, Compose se para con este mensaje.
+      POSTGRES_PASSWORD: ${TRAINWATCH_DB_PASSWORD:?Falta TRAINWATCH_DB_PASSWORD (copia .env.example en .env)}
+    ports:
+      # Solo en localhost: la base de datos no queda abierta a la red.
+      - "127.0.0.1:${TRAINWATCH_DB_PORT:-5432}:5432"
+    volumes:
+      # Desde PostgreSQL 18 la imagen guarda los datos en /var/lib/postgresql/<versión>/, así que el volumen
+      # se monta en /var/lib/postgresql (no en .../data, como en las versiones anteriores).
+      - datos-postgis:/var/lib/postgresql
+      # Sustituye el script de arranque de la imagen: PostGIS lo activa la migración de Flyway, no la imagen.
+      - ./postgis/10_postgis.sh:/docker-entrypoint-initdb.d/10_postgis.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  datos-postgis:
