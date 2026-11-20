@@ -171,7 +171,7 @@ Mismo ciclo que en Torno y en ivanchesa.com: especificación, rama, pruebas, rev
 | # | Decisión | Recomendación |
 |---|---|---|
 | D1 | **Nombre y dirección** | ✅ **Decidido (Iván, 20-11): TrainWatch, en `trainwatch.ivanchesa.com`** (la API, en `trainwatch-api.ivanchesa.com`) |
-| D2 | **Dónde va el backend** (Java necesita un servidor encendido) | 1) **Azure for Students**, si tu correo de ILERNA o UNIR lo admite: unos 100 $ de crédito al año sin tarjeta, y suma Azure al CV. 2) Si no, **Oracle Cloud Always Free** (0 €; ojo, Oracle puede recuperar las máquinas que considera ociosas). 3) **AWS**, unos 12-15 €/mes con un servidor pequeño. Lo comprobamos en la fase 0 |
+| D2 | **Dónde va el backend** (Java necesita un servidor encendido) | ✅ **Decidido (Iván, 20-11): Azure for Students**, activado con el correo de UNIR: 100 $ de crédito sin tarjeta, que caducan el **20-11-2027**. Al acabar el crédito o los estudios, se migra a Oracle Always Free o AWS con Terraform y las copias de la base de datos. Opciones que se valoraron: 1) **Azure for Students**, si tu correo de ILERNA o UNIR lo admite: unos 100 $ de crédito al año sin tarjeta, y suma Azure al CV. 2) Si no, **Oracle Cloud Always Free** (0 €; ojo, Oracle puede recuperar las máquinas que considera ociosas). 3) **AWS**, unos 12-15 €/mes con un servidor pequeño. Lo comprobamos en la fase 0 |
 | D3 | **Alcance** | Todos los núcleos de Cercanías y Rodalies desde el principio: cuesta lo mismo y la demo luce más. La RL4 y Rodalies, destacadas |
 | D4 | **Modo tutor** | Que escribas tú, con la sesión como profesora, la ingesta (fase 3) y el cálculo de las estadísticas (fase 6). Es lo que más preguntarán en una entrevista de Java |
 | D5 | **Repo** | Público con licencia MIT, como los otros proyectos |
