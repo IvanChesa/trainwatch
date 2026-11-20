@@ -30,9 +30,11 @@ import com.ivanchesa.trainwatch.horario.RegistroImportaciones.Resultado;
  * importación completa, idempotencia, descarga condicional, fallos que no tocan el horario anterior, proyección de
  * las paradas sobre el recorrido y los endpoints.
  *
- * <p>El ejemplo: 4 paradas (A Lleida Pirineus, B y C sobre el recorrido {@code 51_RL4}, y una a 40 km), 3 líneas
- * (la tercera, un autobús), 5 viajes (T1 A→B→C; T2 C→B→A, que acaba a las 24:10; T3 en autobús; T4 A→C→B,
- * desordenado; T5 A→parada lejana) y 13 horas de paso. Todos los campos van rellenos de espacios, como en Renfe.
+ * <p>El ejemplo: 5 paradas (A Lleida Pirineus, B y C sobre el recorrido {@code 51_RL4}, D y una a 40 km), 3 líneas
+ * (la tercera, un autobús), 2 recorridos ({@code 51_RL4}, A-B-C, y {@code 51_CIRC}, circular A-B-C-D-A), 7 viajes
+ * (T1 A→B→C; T2 C→B→A, que acaba a las 24:10; T3 en autobús; T4 A→C→B, desordenado; T5 A→parada lejana; T6 C→D→A→B
+ * por el circular, pasando por el final y el principio del recorrido; T7, de una sola parada) y 18 horas de paso.
+ * Todos los campos van rellenos de espacios, como en Renfe.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(TestcontainersConfiguration.class)
@@ -80,8 +82,8 @@ class HorarioIntegracionTests {
     @Test
     void importaTodosLosFicherosConSusFilas() {
         assertThat(filas()).containsExactlyInAnyOrderEntriesOf(Map.of(
-                "stops", 4L, "routes", 3L, "calendar", 2L, "trips", 5L, "stop_times", 13L, "shapes", 1L,
-                "parada_forma", 4L, "transfers", 1L));
+                "stops", 5L, "routes", 3L, "calendar", 2L, "trips", 7L, "stop_times", 18L, "shapes", 2L,
+                "parada_forma", 8L, "transfers", 1L));
     }
 
     @Test
@@ -93,7 +95,7 @@ class HorarioIntegracionTests {
                 + " AND stop_sequence = 1").query(Integer.class).single()).isEqualTo(1);
         // Un campo solo con espacios es NULL, no una cadena vacía.
         assertThat(jdbc.sql("SELECT count(*) FROM horario.trips WHERE trip_headsign IS NULL").query(Integer.class)
-                .single()).isEqualTo(5);
+                .single()).isEqualTo(7);
     }
 
     @Test
@@ -121,11 +123,14 @@ class HorarioIntegracionTests {
 
     @Test
     void construyeElRecorridoComoLineString() {
-        var r = jdbc.sql("SELECT GeometryType(recorrido) AS tipo, ST_SRID(recorrido) AS srid, puntos, longitud_m"
+        var r = jdbc.sql("SELECT GeometryType(recorrido) AS tipo, ST_SRID(recorrido) AS srid, puntos, longitud_m, cerrado"
                 + " FROM horario.shapes WHERE shape_id = '51_RL4'").query().singleRow();
-        assertThat(r).containsEntry("tipo", "LINESTRING").containsEntry("srid", 4326).containsEntry("puntos", 3);
+        assertThat(r).containsEntry("tipo", "LINESTRING").containsEntry("srid", 4326).containsEntry("puntos", 3)
+                .containsEntry("cerrado", false);
         // Lleida-Parada C, en línea recta por B: unos 53 km.
         assertThat((Double) r.get("longitud_m")).isBetween(50_000.0, 56_000.0);
+        assertThat(jdbc.sql("SELECT cerrado FROM horario.shapes WHERE shape_id = '51_CIRC'").query(Boolean.class)
+                .single()).isTrue();
     }
 
     @Test
@@ -146,7 +151,9 @@ class HorarioIntegracionTests {
                 new Encaje("T2RL4", -1, true),    // C→B→A: al revés, pero en orden
                 new Encaje("T3BUS", null, false), // autobús sin recorrido
                 new Encaje("T4RL4", null, false), // A→C→B: no avanza siempre en el mismo sentido
-                new Encaje("T5RL4", 1, false));   // en orden, pero la parada lejana está a 40 km del recorrido
+                new Encaje("T5RL4", 1, false),    // en orden, pero la parada lejana está a 40 km del recorrido
+                new Encaje("T6CIR", 1, true),     // circular: de D (0,7) a A (0,0) es avanzar, dando la vuelta
+                new Encaje("T7UNA", null, false)); // una sola parada: no hay orden que comprobar
         assertThat(jdbc.sql("SELECT forma_distancia_max_m FROM horario.trips WHERE trip_id = 'T5RL4'")
                 .query(Double.class).single()).isGreaterThan(30_000.0);
     }
@@ -201,7 +208,7 @@ class HorarioIntegracionTests {
                 .expectBody()
                 .jsonPath("$.ultimoIntento.resultado").isEqualTo("FALLIDA")
                 .jsonPath("$.ultimoIntento.error").value(String.class, e -> assertThat(e).contains("no es una hora"))
-                .jsonPath("$.horario.filas.stop_times").isEqualTo(13);
+                .jsonPath("$.horario.filas.stop_times").isEqualTo(18);
 
         // El siguiente intento con el mismo fichero vuelve a probar: el fallido no cuenta como importado.
         RENFE.sirve(ServidorGtfs.zipDeEjemplo(), "\"v" + VERSION.get() + "\"");
@@ -211,7 +218,7 @@ class HorarioIntegracionTests {
     @Test
     void rechazaUnHorarioMuchoMasPequenoQueElActual() {
         var antes = filas();
-        // Solo un viaje de cinco: menos de la mitad, como si Renfe publicara un fichero cortado.
+        // Solo un viaje de siete: menos de la mitad, como si Renfe publicara un fichero cortado.
         RENFE.sirve(ServidorGtfs.zipDeEjemplo(Map.of(
                 "trips.txt", s -> s.lines().limit(2).reduce((a, b) -> a + "\n" + b).orElseThrow() + "\n")), etagNuevo());
 
@@ -230,7 +237,7 @@ class HorarioIntegracionTests {
 
         assertThat(informe.resultado()).isEqualTo(Resultado.FALLIDA);
         assertThat(informe.error()).contains("El ZIP no trae stops.txt");
-        assertThat(filas().get("stops")).isEqualTo(4L);
+        assertThat(filas().get("stops")).isEqualTo(5L);
     }
 
     @Test
@@ -241,9 +248,13 @@ class HorarioIntegracionTests {
                 .jsonPath("$.horario.publicadoPorRenfe").isEqualTo(ServidorGtfs.LAST_MODIFIED)
                 .jsonPath("$.horario.vigenciaDesde").isEqualTo("2026-11-20")
                 .jsonPath("$.horario.vigenciaHasta").isEqualTo("2026-12-19")
-                .jsonPath("$.horario.filas.trips").isEqualTo(5)
-                .jsonPath("$.horario.filas.viajes_tren_encajan").isEqualTo(2)
+                .jsonPath("$.horario.filas.trips").isEqualTo(7)
+                .jsonPath("$.horario.filas.viajes_tren_encajan").isEqualTo(3)
+                .jsonPath("$.horario.filas.viajes_tren_menos_de_2_paradas").isEqualTo(1)
                 .jsonPath("$.horario.filas.viajes_autobus").isEqualTo(1)
+                .jsonPath("$.horario.filas.viajes_tren_con_recorrido").isEqualTo(6)
+                .jsonPath("$.horario.filas.viajes_tren_sin_orden").isEqualTo(1)
+                .jsonPath("$.horario.filas.viajes_tren_lejos_del_recorrido").isEqualTo(1)
                 .jsonPath("$.ultimoIntento.resultado").isEqualTo("CORRECTA")
                 .jsonPath("$.ultimoIntento.duracionMs").isNotEmpty()
                 .jsonPath("$.importacionEnCurso").isEqualTo(false);

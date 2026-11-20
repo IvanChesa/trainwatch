@@ -58,9 +58,11 @@ CREATE TABLE horario.calendar (
 -- Viajes. es_autobus se copia de su línea; las columnas forma_* las calcula la importación al proyectar las
 -- paradas sobre el recorrido:
 --   forma_sentido          1 si las paradas avanzan en el sentido en que está dibujado el recorrido,
---                         -1 si van al revés, NULL si no avanzan siempre en el mismo sentido;
+--                         -1 si van al revés, NULL si no avanzan siempre en el mismo sentido o si el viaje
+--                         tiene menos de dos paradas;
 --   forma_distancia_max_m  distancia de la parada más alejada del recorrido;
 --   forma_encaja           sentido conocido, todas las paradas a 200 m o menos y todas proyectadas.
+-- En un recorrido cerrado, el avance entre dos paradas se cuenta módulo 1 (de 0,9 a 0,1 es avanzar 0,2).
 CREATE TABLE horario.trips (
     trip_id               TEXT      PRIMARY KEY,
     route_id              TEXT      NOT NULL,
@@ -91,12 +93,15 @@ CREATE TABLE horario.stop_times (
 -- Próximas salidas de una estación: WHERE stop_id = ? AND salida_s BETWEEN ? AND ? (y luego el calendario).
 CREATE INDEX stop_times_salidas_idx ON horario.stop_times (stop_id, salida_s) INCLUDE (trip_id);
 
--- Recorridos: un LineString por shape_id (van por línea y núcleo, como 10_C1 o 51_R4, no por variante).
+-- Recorridos: un LineString por shape_id (van por línea y núcleo, como 10_C1 o 51_R4, a veces con su
+-- inverso, 40_C6_INV; no por variante). cerrado: empieza y acaba en el mismo sitio (a menos de 100 m), como la
+-- C4 circular de Sevilla; ahí la posición sobre el recorrido da la vuelta de 1 a 0.
 CREATE TABLE horario.shapes (
     shape_id   TEXT                       PRIMARY KEY,
     recorrido  geometry(LineString, 4326) NOT NULL,
     puntos     INTEGER                    NOT NULL,
-    longitud_m DOUBLE PRECISION           NOT NULL
+    longitud_m DOUBLE PRECISION           NOT NULL,
+    cerrado    BOOLEAN                    NOT NULL
 );
 CREATE INDEX shapes_recorrido_idx ON horario.shapes USING gist (recorrido);
 

@@ -100,8 +100,9 @@ public class EsquemaCarga {
      */
     public void calcularDerivados(double distanciaMaximaM, double toleranciaRetrocesoM) {
         jdbc.sql("""
-                INSERT INTO %1$s.shapes (shape_id, recorrido, puntos, longitud_m)
-                SELECT shape_id, recorrido, ST_NPoints(recorrido), ST_Length(recorrido::geography)
+                INSERT INTO %1$s.shapes (shape_id, recorrido, puntos, longitud_m, cerrado)
+                SELECT shape_id, recorrido, ST_NPoints(recorrido), ST_Length(recorrido::geography),
+                       ST_Distance(ST_StartPoint(recorrido)::geography, ST_EndPoint(recorrido)::geography) < 100
                 FROM (SELECT shape_id,
                              ST_SetSRID(ST_MakeLine(ST_MakePoint(lon, lat) ORDER BY secuencia), 4326) AS recorrido
                       FROM %1$s.%2$s GROUP BY shape_id) l
@@ -128,29 +129,35 @@ public class EsquemaCarga {
                 """.formatted(CARGA)).update();
 
         // Para cada viaje: cuánto avanza (en metros sobre el recorrido) de cada parada a la siguiente.
-        // Sube = nunca retrocede más que la tolerancia; baja = nunca avanza más que la tolerancia.
+        // Sube = nunca retrocede más que la tolerancia; baja = nunca avanza más que la tolerancia. En un recorrido
+        // cerrado el avance se toma módulo 1, en (-0,5, 0,5]: pasar de 0,9 a 0,1 es avanzar 0,2, no retroceder 0,8.
         jdbc.sql("""
                 WITH pasos AS (
-                    SELECT st.trip_id, pf.distancia_m, pf.posicion IS NULL AS sin_proyectar,
-                           (pf.posicion - lag(pf.posicion) OVER (PARTITION BY st.trip_id ORDER BY st.stop_sequence))
-                               * f.longitud_m AS avance_m
+                    SELECT st.trip_id, pf.distancia_m, pf.posicion IS NULL AS sin_proyectar, f.cerrado, f.longitud_m,
+                           pf.posicion - lag(pf.posicion) OVER (PARTITION BY st.trip_id ORDER BY st.stop_sequence)
+                               AS avance
                     FROM %1$s.stop_times st
                     JOIN %1$s.trips t ON t.trip_id = st.trip_id
                     JOIN %1$s.shapes f ON f.shape_id = t.shape_id
                     LEFT JOIN %1$s.parada_forma pf ON pf.shape_id = t.shape_id AND pf.stop_id = st.stop_id
+                ), pasos_m AS (
+                    SELECT trip_id, distancia_m, sin_proyectar,
+                           CASE WHEN cerrado THEN avance - ceil(avance - 0.5) ELSE avance END * longitud_m AS avance_m
+                    FROM pasos
                 ), viajes AS (
-                    SELECT trip_id,
+                    SELECT trip_id, count(*) AS paradas,
                            bool_and(avance_m IS NULL OR avance_m >= -:tolerancia) AS sube,
                            bool_and(avance_m IS NULL OR avance_m <= :tolerancia) AS baja,
                            max(distancia_m) AS distancia_max,
                            bool_or(sin_proyectar) AS alguna_sin_proyectar
-                    FROM pasos GROUP BY trip_id
+                    FROM pasos_m GROUP BY trip_id
                 )
                 UPDATE %1$s.trips t SET
-                    forma_sentido = CASE WHEN v.sube AND NOT v.baja THEN 1
+                    forma_sentido = CASE WHEN v.paradas < 2 THEN NULL
+                                         WHEN v.sube AND NOT v.baja THEN 1
                                          WHEN v.baja AND NOT v.sube THEN -1 END,
                     forma_distancia_max_m = v.distancia_max,
-                    forma_encaja = (v.sube <> v.baja) AND NOT v.alguna_sin_proyectar
+                    forma_encaja = v.paradas >= 2 AND (v.sube <> v.baja) AND NOT v.alguna_sin_proyectar
                                    AND v.distancia_max <= :distancia
                 FROM viajes v WHERE v.trip_id = t.trip_id
                 """.formatted(CARGA))
@@ -168,15 +175,21 @@ public class EsquemaCarga {
         return filas;
     }
 
-    /** Cifras de calidad del horario cargado: viajes de tren, de autobús y cuántos encajan en su recorrido. */
+    /**
+     * Cifras de calidad del horario cargado: viajes de tren y de autobús; de los de tren, cuántos tienen su recorrido
+     * en shapes.txt, cuántos encajan en él, cuántos no avanzan en orden y cuántos tienen paradas lejos; y horas de
+     * paso cuyo viaje o parada no existe (no hay claves foráneas: se cuentan).
+     */
     public Map<String, Long> calidad(String esquema) {
         return jdbc.sql("""
                 SELECT count(*) FILTER (WHERE NOT es_autobus) AS viajes_tren,
                        count(*) FILTER (WHERE es_autobus) AS viajes_autobus,
-                       count(*) FILTER (WHERE NOT es_autobus AND shape_id IS NOT NULL) AS viajes_tren_con_recorrido,
+                       count(*) FILTER (WHERE NOT es_autobus AND f.shape_id IS NOT NULL) AS viajes_tren_con_recorrido,
+                       count(*) FILTER (WHERE NOT es_autobus AND f.shape_id IS NULL) AS viajes_tren_sin_recorrido,
                        count(*) FILTER (WHERE NOT es_autobus AND forma_encaja) AS viajes_tren_encajan,
-                       count(*) FILTER (WHERE NOT es_autobus AND forma_sentido IS NULL AND shape_id IS NOT NULL)
-                           AS viajes_tren_sin_orden,
+                       count(*) FILTER (WHERE NOT es_autobus AND coalesce(p.n, 0) < 2) AS viajes_tren_menos_de_2_paradas,
+                       count(*) FILTER (WHERE NOT es_autobus AND forma_sentido IS NULL AND f.shape_id IS NOT NULL
+                                        AND p.n >= 2) AS viajes_tren_sin_orden,
                        count(*) FILTER (WHERE NOT es_autobus AND forma_sentido IS NOT NULL AND NOT forma_encaja)
                            AS viajes_tren_lejos_del_recorrido,
                        (SELECT count(*) FROM %1$s.stop_times st
@@ -185,7 +198,9 @@ public class EsquemaCarga {
                        (SELECT count(*) FROM %1$s.stop_times st
                         WHERE NOT EXISTS (SELECT 1 FROM %1$s.stops x WHERE x.stop_id = st.stop_id))
                            AS horas_de_paso_sin_parada
-                FROM %1$s.trips
+                FROM %1$s.trips t
+                LEFT JOIN %1$s.shapes f ON f.shape_id = t.shape_id
+                LEFT JOIN (SELECT trip_id, count(*) AS n FROM %1$s.stop_times GROUP BY trip_id) p ON p.trip_id = t.trip_id
                 """.formatted(esquema)).query((rs, n) -> {
                     Map<String, Long> m = new LinkedHashMap<>();
                     for (int i = 1; i <= rs.getMetaData().getColumnCount(); i++) {
