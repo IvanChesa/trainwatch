@@ -15,3 +15,6 @@ Un fichero por decisión: `NNNN-titulo-corto.md`, con contexto, decisión, alter
 - [0011 · React en lugar de Angular](0011-react-en-lugar-de-angular.md) (sustituye a la elección de Angular del plan)
 - [0012 · Las paradas saltadas se cierran como inferidas, y un viaje que desaparece a mitad se recuerda 3 h](0012-paradas-saltadas-y-viajes-que-vuelven.md)
 - [0013 · Cada muestra se calcula primero y se aplica al final; las escrituras esperan en una cola](0013-calcular-primero-aplicar-al-final.md)
+- [0014 · `retrasos` guarda la hora programada de llegada a cada parada](0014-hora-programada-en-retrasos.md)
+- [0015 · El directo va por SSE: instantánea al conectarse y después solo los cambios](0015-sse-para-el-directo.md)
+- [0016 · La API lee el directo de memoria y el resto de PostGIS, con records propios, ProblemDetail y OpenAPI](0016-api-rest-desde-el-estado-en-memoria.md)

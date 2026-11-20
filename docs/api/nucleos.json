@@ -1,0 +1,347 @@
+[
+  {
+    "id": 10,
+    "nombre": "Madrid",
+    "centro": {
+      "lat": 40.4287,
+      "lon": -3.7257
+    },
+    "zoom": 8.5,
+    "limites": {
+      "latMin": 40.0350257,
+      "lonMin": -4.2691255,
+      "latMax": 40.8223419,
+      "lonMax": -3.1822602
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 123,
+    "cobertura": {
+      "enMarchaHorario": 72,
+      "enMarchaVistos": 65,
+      "porcentaje": 90.3
+    }
+  },
+  {
+    "id": 20,
+    "nombre": "Asturias",
+    "centro": {
+      "lat": 43.3306,
+      "lon": -5.7563
+    },
+    "zoom": 9.0,
+    "limites": {
+      "latMin": 43.0715986,
+      "lonMin": -6.1519305,
+      "latMax": 43.5895359,
+      "lonMax": -5.3606414
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 36,
+    "cobertura": {
+      "enMarchaHorario": 26,
+      "enMarchaVistos": 22,
+      "porcentaje": 84.6
+    }
+  },
+  {
+    "id": 30,
+    "nombre": "Sevilla",
+    "centro": {
+      "lat": 37.4223,
+      "lon": -5.8689
+    },
+    "zoom": 8.2,
+    "limites": {
+      "latMin": 36.9116378,
+      "lonMin": -6.2082011,
+      "latMax": 37.9328637,
+      "lonMax": -5.5295514
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 24,
+    "cobertura": {
+      "enMarchaHorario": 12,
+      "enMarchaVistos": 12,
+      "porcentaje": 100.0
+    }
+  },
+  {
+    "id": 31,
+    "nombre": "Cádiz",
+    "centro": {
+      "lat": 36.5802,
+      "lon": -6.177
+    },
+    "zoom": 9.7,
+    "limites": {
+      "latMin": 36.4087561,
+      "lonMin": -6.2879716,
+      "latMax": 36.7515886,
+      "lonMax": -6.0659384
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 15,
+    "cobertura": {
+      "enMarchaHorario": 7,
+      "enMarchaVistos": 6,
+      "porcentaje": 85.7
+    }
+  },
+  {
+    "id": 32,
+    "nombre": "Málaga",
+    "centro": {
+      "lat": 36.6809,
+      "lon": -4.5692
+    },
+    "zoom": 10.0,
+    "limites": {
+      "latMin": 36.5418947,
+      "lonMin": -4.7118313,
+      "latMax": 36.8198747,
+      "lonMax": -4.4265335
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 10,
+    "cobertura": {
+      "enMarchaHorario": 6,
+      "enMarchaVistos": 5,
+      "porcentaje": 83.3
+    }
+  },
+  {
+    "id": 40,
+    "nombre": "Valencia",
+    "centro": {
+      "lat": 39.7204,
+      "lon": -0.1658
+    },
+    "zoom": 7.6,
+    "limites": {
+      "latMin": 38.9690579,
+      "lonMin": -0.7873638,
+      "latMax": 40.471682,
+      "lonMax": 0.455727
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 48,
+    "cobertura": {
+      "enMarchaHorario": 27,
+      "enMarchaVistos": 23,
+      "porcentaje": 85.2
+    }
+  },
+  {
+    "id": 41,
+    "nombre": "Murcia/Alicante",
+    "centro": {
+      "lat": 38.1847,
+      "lon": -0.8135
+    },
+    "zoom": 9.4,
+    "limites": {
+      "latMin": 37.9748243,
+      "lonMin": -1.131508,
+      "latMax": 38.3946533,
+      "lonMax": -0.4955241
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 4,
+    "cobertura": {
+      "enMarchaHorario": 2,
+      "enMarchaVistos": 2,
+      "porcentaje": 100.0
+    }
+  },
+  {
+    "id": 45,
+    "nombre": "Cartagena",
+    "centro": {
+      "lat": 37.6277,
+      "lon": -0.8826
+    },
+    "zoom": 11.3,
+    "limites": {
+      "latMin": 37.6036154,
+      "lonMin": -0.9773265,
+      "latMax": 37.6518304,
+      "lonMax": -0.7878563
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 4,
+    "cobertura": {
+      "enMarchaHorario": 0,
+      "enMarchaVistos": 0,
+      "porcentaje": null
+    }
+  },
+  {
+    "id": 46,
+    "nombre": "Ferrol",
+    "centro": {
+      "lat": 43.5871,
+      "lon": -8.0403
+    },
+    "zoom": 10.3,
+    "limites": {
+      "latMin": 43.4880467,
+      "lonMin": -8.2310664,
+      "latMax": 43.6862217,
+      "lonMax": -7.8495738
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 5,
+    "cobertura": {
+      "enMarchaHorario": 1,
+      "enMarchaVistos": 1,
+      "porcentaje": 100.0
+    }
+  },
+  {
+    "id": 47,
+    "nombre": "León",
+    "centro": {
+      "lat": 42.7405,
+      "lon": -5.2056
+    },
+    "zoom": 9.4,
+    "limites": {
+      "latMin": 42.6160983,
+      "lonMin": -5.5660988,
+      "latMax": 42.8649635,
+      "lonMax": -4.845133
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 6,
+    "cobertura": {
+      "enMarchaHorario": 3,
+      "enMarchaVistos": 2,
+      "porcentaje": 66.7
+    }
+  },
+  {
+    "id": 51,
+    "nombre": "Rodalies de Catalunya",
+    "centro": {
+      "lat": 41.5275,
+      "lon": 1.1705
+    },
+    "zoom": 6.9,
+    "limites": {
+      "latMin": 40.5959267,
+      "lonMin": -0.822204,
+      "latMax": 42.4590288,
+      "lonMax": 3.16314935
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 122,
+    "cobertura": {
+      "enMarchaHorario": 77,
+      "enMarchaVistos": 67,
+      "porcentaje": 87.0
+    }
+  },
+  {
+    "id": 60,
+    "nombre": "Bilbao",
+    "centro": {
+      "lat": 42.9724,
+      "lon": -4.2242
+    },
+    "zoom": 7.5,
+    "limites": {
+      "latMin": 42.6160983,
+      "lonMin": -5.5660988,
+      "latMax": 43.3286605,
+      "lonMax": -2.8823858
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 36,
+    "cobertura": {
+      "enMarchaHorario": 13,
+      "enMarchaVistos": 13,
+      "porcentaje": 100.0
+    }
+  },
+  {
+    "id": 61,
+    "nombre": "San Sebastián",
+    "centro": {
+      "lat": 43.1793,
+      "lon": -2.068
+    },
+    "zoom": 9.7,
+    "limites": {
+      "latMin": 43.0189865,
+      "lonMin": -2.3346811,
+      "latMax": 43.3395365,
+      "lonMax": -1.8012519
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 11,
+    "cobertura": {
+      "enMarchaHorario": 9,
+      "enMarchaVistos": 7,
+      "porcentaje": 77.8
+    }
+  },
+  {
+    "id": 62,
+    "nombre": "Santander",
+    "centro": {
+      "lat": 43.2264,
+      "lon": -3.9676
+    },
+    "zoom": 8.8,
+    "limites": {
+      "latMin": 42.9944991,
+      "lonMin": -4.51434,
+      "latMax": 43.4583981,
+      "lonMax": -3.420918
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 24,
+    "cobertura": {
+      "enMarchaHorario": 11,
+      "enMarchaVistos": 11,
+      "porcentaje": 100.0
+    }
+  },
+  {
+    "id": 70,
+    "nombre": "Zaragoza",
+    "centro": {
+      "lat": 41.678,
+      "lon": -0.9442
+    },
+    "zoom": 11.6,
+    "limites": {
+      "latMin": 41.6334311,
+      "lonMin": -1.0201916,
+      "latMax": 41.7226479,
+      "lonMax": -0.8681653
+    },
+    "estado": "EN_DIRECTO",
+    "estadoTexto": "con directo",
+    "trenesEnDirecto": 3,
+    "cobertura": {
+      "enMarchaHorario": 2,
+      "enMarchaVistos": 2,
+      "porcentaje": 100.0
+    }
+  }
+]

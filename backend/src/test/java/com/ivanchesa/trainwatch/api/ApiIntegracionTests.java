@@ -432,6 +432,10 @@ class ApiIntegracionTests {
         assertThat(ficha.get("operationId").asString()).isEqualTo("fichaTren");
         assertThat(ficha.get("responses").get("404").get("content").propertyNames()).contains("application/problem+json");
         assertThat(docs.get("paths").get("/api/directo").get("get").get("responses").propertyNames()).contains("503");
+        // Los ejemplos de docs/api/ cuelgan del 200 de cada operación.
+        JsonNode ok = docs.get("paths").get("/api/nucleos").get("get").get("responses").get("200").get("content");
+        assertThat(ok.valueStream().map(tipo -> tipo.get("examples").get("ejemplo").get("value").get(0).get("nombre")
+                .asString())).contains("Madrid");
         // La interfaz de Swagger.
         http().get().uri("/api/docs/ui").exchange().expectStatus().is3xxRedirection();
     }
