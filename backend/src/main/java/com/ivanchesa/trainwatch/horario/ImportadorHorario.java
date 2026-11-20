@@ -200,6 +200,14 @@ public class ImportadorHorario {
             error = mensaje(e);
         }
 
+        if (resultado == Resultado.FALLIDA && cambioHecho(id)) {
+            // Algo falló después del paso «cambio» (la limpieza, el repositorio de Spring Batch): el horario nuevo
+            // ya está en uso y apuntado como CORRECTO en la misma transacción. No se desdice (fase 3b).
+            log.warn("Importación del horario {}: falló después del cambio ({}); el horario nuevo queda en uso", id,
+                    error);
+            resultado = Resultado.CORRECTA;
+            error = null;
+        }
         if (resultado == Resultado.FALLIDA) {
             try {
                 esquema.borrar(EsquemaCarga.CARGA);
@@ -232,6 +240,16 @@ public class ImportadorHorario {
                     filas == null ? "" : ": " + filas);
         }
         return new Informe(resultado, duracion, filas == null ? Map.of() : filas, error);
+    }
+
+    /** Si el paso «cambio» llegó a confirmarse: lo dice el propio registro, escrito en su transacción. */
+    private boolean cambioHecho(long id) {
+        try {
+            return registro.resultado(id).orElse(null) == Resultado.CORRECTA;
+        } catch (RuntimeException e) {
+            log.warn("No se pudo leer el resultado de la importación {}", id, e);
+            return false;
+        }
     }
 
     private void publicarFilas(Map<String, Long> filas) {

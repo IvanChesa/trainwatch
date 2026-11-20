@@ -3,6 +3,7 @@ package com.ivanchesa.trainwatch.directo;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -19,13 +20,16 @@ import com.ivanchesa.trainwatch.RelojConfig;
 /**
  * El horario importado (esquema {@code horario}, fase 2) visto desde la ingesta, con cachés en memoria:
  * <ul>
- * <li>cada viaje se lee la primera vez que aparece (dos consultas por clave primaria) y se guarda, también si no
- * existe, para no preguntar en cada muestra por los {@code SPECIAL_…};</li>
- * <li>los recorridos, igual (144 en total);</li>
+ * <li>cada viaje se lee la primera vez que aparece (una consulta, con sus paradas y su recorrido) y se guarda,
+ * también si no existe, para no preguntar en cada muestra por los {@code SPECIAL_…}. Si la consulta falla, no se
+ * guarda nada y se vuelve a intentar en la muestra siguiente;</li>
+ * <li>los recorridos (144 en total), que comparten muchos viajes;</li>
  * <li>los intervalos (primera salida, última llegada) de los viajes de cada día, para contar los que el horario da
  * en marcha.</li>
  * </ul>
- * Las cachés se vacían cuando hay una importación correcta nueva o cambia el día ({@link #refrescarSiCambia}).
+ * Las cachés se vacían cuando hay una importación correcta nueva o cambia el día ({@link #refrescarSiCambia}). La
+ * importación apunta su versión en la misma transacción que el cambio de esquema (fase 3b), así que una versión
+ * nueva siempre corresponde al horario que ya está en uso.
  * Son {@link ConcurrentHashMap} por si se leen desde otros hilos, pero hoy solo las llena el hilo de la ingesta.
  */
 @Component
@@ -104,58 +108,66 @@ public class HorarioDirectoJdbc implements FuenteHorario {
         return resultado;
     }
 
+    /**
+     * El viaje con sus paradas y, si no está ya en caché, su recorrido, en <b>una sola consulta</b> (fase 3b). Antes
+     * eran dos (la cabecera y luego las paradas): si el horario cambiaba de esquema entre las dos, el viaje mezclaba
+     * el horario viejo y el nuevo. Una sentencia ve una sola foto de la base de datos y resuelve {@code horario.x} una
+     * sola vez.
+     */
     private Viaje cargarViaje(String tripId) {
-        record Cabecera(String routeId, String linea, Integer nucleo, String destino, String shapeId, boolean encaja,
-                Integer sentido, LocalDate inicio, LocalDate fin) {
+        record Fila(String routeId, String linea, Integer nucleo, String destino, String shapeId, boolean encaja,
+                Integer sentido, LocalDate inicio, LocalDate fin, Integer secuencia, String stopId, String nombre,
+                double lat, double lon, int llegada, int salida, Double posicion, String wkt, Boolean cerrado) {
         }
-        Optional<Cabecera> cabecera = jdbc.sql("""
+        List<Fila> filas = jdbc.sql("""
                 SELECT t.route_id, r.route_short_name, r.nucleo, t.trip_headsign, t.shape_id, t.forma_encaja,
-                       t.forma_sentido, c.start_date, c.end_date
+                       t.forma_sentido, c.start_date, c.end_date,
+                       st.stop_sequence, st.stop_id, s.stop_name, s.stop_lat, s.stop_lon, st.llegada_s, st.salida_s,
+                       pf.posicion,
+                       CASE WHEN row_number() OVER (ORDER BY st.stop_sequence) = 1 THEN ST_AsText(f.recorrido) END,
+                       f.cerrado
                 FROM horario.trips t
                 JOIN horario.routes r ON r.route_id = t.route_id
                 LEFT JOIN horario.calendar c ON c.service_id = t.service_id
-                WHERE t.trip_id = ? AND NOT t.es_autobus""")
-                .param(tripId)
-                .query((rs, n) -> new Cabecera(rs.getString(1), rs.getString(2), (Integer) rs.getObject(3),
+                LEFT JOIN (horario.stop_times st JOIN horario.stops s ON s.stop_id = st.stop_id)
+                       ON st.trip_id = t.trip_id
+                LEFT JOIN horario.parada_forma pf ON pf.shape_id = t.shape_id AND pf.stop_id = st.stop_id
+                LEFT JOIN horario.shapes f ON f.shape_id = t.shape_id
+                WHERE t.trip_id = :trip AND NOT t.es_autobus
+                ORDER BY st.stop_sequence""")
+                .param("trip", tripId)
+                .query((rs, n) -> new Fila(rs.getString(1), rs.getString(2), (Integer) rs.getObject(3),
                         rs.getString(4), rs.getString(5), rs.getBoolean(6), (Integer) rs.getObject(7),
-                        rs.getObject(8, LocalDate.class), rs.getObject(9, LocalDate.class)))
-                .optional();
-        if (cabecera.isEmpty()) {
+                        rs.getObject(8, LocalDate.class), rs.getObject(9, LocalDate.class), (Integer) rs.getObject(10),
+                        rs.getString(11), rs.getString(12), rs.getDouble(13), rs.getDouble(14), rs.getInt(15),
+                        rs.getInt(16), (Double) rs.getObject(17), rs.getString(18), (Boolean) rs.getObject(19)))
+                .list();
+        if (filas.isEmpty()) {
             return null;
         }
-        Cabecera c = cabecera.get();
-        Recorrido recorrido = c.encaja() && c.shapeId() != null && c.sentido() != null ? recorrido(c.shapeId()) : null;
+        Fila c = filas.getFirst();
+        Recorrido recorrido = null;
+        if (c.encaja() && c.shapeId() != null && c.sentido() != null) {
+            Optional<Recorrido> r = recorridos.get(c.shapeId());
+            if (r == null) {
+                r = c.wkt() == null ? Optional.empty() : Optional.of(deWkt(c.shapeId(), c.wkt(), Boolean.TRUE.equals(c.cerrado())));
+                recorridos.put(c.shapeId(), r);
+            }
+            recorrido = r.orElse(null);
+        }
         int sentido = c.sentido() == null ? 1 : c.sentido();
-        List<ParadaViaje> paradas = jdbc.sql("""
-                SELECT st.stop_sequence, st.stop_id, s.stop_name, s.stop_lat, s.stop_lon, st.llegada_s, st.salida_s,
-                       pf.posicion
-                FROM horario.stop_times st
-                JOIN horario.stops s ON s.stop_id = st.stop_id
-                LEFT JOIN horario.parada_forma pf ON pf.shape_id = ? AND pf.stop_id = st.stop_id
-                WHERE st.trip_id = ?
-                ORDER BY st.stop_sequence""")
-                .param(c.shapeId()).param(tripId)
-                .query((rs, n) -> {
-                    Double posicion = (Double) rs.getObject(8);
-                    Double avance = recorrido == null || posicion == null ? null : sentido < 0 ? 1 - posicion : posicion;
-                    return new ParadaViaje(rs.getInt(1), rs.getString(2), rs.getString(3), rs.getDouble(4),
-                            rs.getDouble(5), rs.getInt(6), rs.getInt(7), avance);
-                })
-                .list();
+        List<ParadaViaje> paradas = new ArrayList<>();
+        for (Fila f : filas) {
+            if (f.secuencia() == null) {
+                continue; // viaje sin horas de paso (LEFT JOIN)
+            }
+            Double avance = recorrido == null || f.posicion() == null ? null
+                    : sentido < 0 ? 1 - f.posicion() : f.posicion();
+            paradas.add(new ParadaViaje(f.secuencia(), f.stopId(), f.nombre(), f.lat(), f.lon(), f.llegada(),
+                    f.salida(), avance));
+        }
         LocalDate fecha = c.inicio() != null && c.inicio().equals(c.fin()) ? c.inicio() : null;
         return new Viaje(tripId, c.routeId(), c.linea(), c.nucleo(), c.destino(), fecha, paradas, recorrido, sentido);
-    }
-
-    private Recorrido recorrido(String shapeId) {
-        Optional<Recorrido> r = recorridos.get(shapeId);
-        if (r == null) {
-            r = jdbc.sql("SELECT ST_AsText(recorrido), cerrado FROM horario.shapes WHERE shape_id = ?")
-                    .param(shapeId)
-                    .query((rs, n) -> deWkt(shapeId, rs.getString(1), rs.getBoolean(2)))
-                    .optional();
-            recorridos.put(shapeId, r);
-        }
-        return r.orElse(null);
     }
 
     /** {@code LINESTRING(lon lat,lon lat,…)} → {@link Recorrido}. */

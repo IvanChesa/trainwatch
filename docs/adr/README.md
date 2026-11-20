@@ -13,3 +13,5 @@ Un fichero por decisión: `NNNN-titulo-corto.md`, con contexto, decisión, alter
 - [0009 · Particiones diarias para `posiciones` y mensuales para `retrasos`, gestionadas por la aplicación](0009-particiones-diarias-y-mensuales.md)
 - [0010 · La posición del tren se estima con el horario, el retraso y el recorrido](0010-posicion-estimada-sobre-el-recorrido.md)
 - [0011 · React en lugar de Angular](0011-react-en-lugar-de-angular.md) (sustituye a la elección de Angular del plan)
+- [0012 · Las paradas saltadas se cierran como inferidas, y un viaje que desaparece a mitad se recuerda 3 h](0012-paradas-saltadas-y-viajes-que-vuelven.md)
+- [0013 · Cada muestra se calcula primero y se aplica al final; las escrituras esperan en una cola](0013-calcular-primero-aplicar-al-final.md)

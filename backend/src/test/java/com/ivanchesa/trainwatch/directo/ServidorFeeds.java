@@ -17,7 +17,8 @@ import com.sun.net.httpserver.HttpServer;
 
 /**
  * Un servidor HTTP local que hace de {@code gtfsrt.renfe.com}: sirve un fichero por ruta con su {@code ETag}, contesta
- * 304 a {@code If-None-Match} y puede fallar con 500 o tardar a propósito.
+ * 304 a {@code If-None-Match} y puede fallar con 500, tardar a propósito (antes de las cabeceras o a mitad del
+ * cuerpo), mandar el cuerpo sin {@code Content-Length} (por trozos) o anunciar un {@code Content-Length} falso.
  */
 final class ServidorFeeds implements AutoCloseable {
 
@@ -26,8 +27,14 @@ final class ServidorFeeds implements AutoCloseable {
     /** Fallos que quedan por dar (500); -1, siempre. */
     final AtomicInteger fallosPendientes = new AtomicInteger();
     volatile long esperaMs;
+    /** Pausa después de mandar las cabeceras y la mitad del cuerpo. */
+    volatile long pausaEnCuerpoMs;
+    /** Sin Content-Length: el cuerpo va por trozos ({@code Transfer-Encoding: chunked}). */
+    volatile boolean porTrozos;
     final AtomicInteger peticiones = new AtomicInteger();
     final List<String> ifNoneMatch = new CopyOnWriteArrayList<>();
+    /** {@code System.nanoTime()} de la llegada de cada petición. */
+    final List<Long> llegadas = new CopyOnWriteArrayList<>();
 
     ServidorFeeds() {
         try {
@@ -53,15 +60,12 @@ final class ServidorFeeds implements AutoCloseable {
 
     private void atender(HttpExchange intercambio) throws IOException {
         try (intercambio) {
+            llegadas.add(System.nanoTime());
             peticiones.incrementAndGet();
             String condicion = intercambio.getRequestHeaders().getFirst("If-None-Match");
             ifNoneMatch.add(condicion == null ? "" : condicion);
             if (esperaMs > 0) {
-                try {
-                    Thread.sleep(esperaMs);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
+                dormir(esperaMs);
             }
             int fallos = fallosPendientes.get();
             if (fallos != 0) {
@@ -83,10 +87,28 @@ final class ServidorFeeds implements AutoCloseable {
                 intercambio.sendResponseHeaders(304, -1);
                 return;
             }
-            intercambio.sendResponseHeaders(200, contenido.length);
+            intercambio.sendResponseHeaders(200, porTrozos ? 0 : contenido.length);
             try (OutputStream out = intercambio.getResponseBody()) {
-                out.write(contenido);
+                if (pausaEnCuerpoMs > 0) {
+                    int mitad = contenido.length / 2;
+                    out.write(contenido, 0, mitad);
+                    out.flush();
+                    dormir(pausaEnCuerpoMs);
+                    out.write(contenido, mitad, contenido.length - mitad);
+                } else {
+                    out.write(contenido);
+                }
+            } catch (IOException e) {
+                // el cliente cortó (tiempo agotado o demasiado grande): es lo que se prueba
             }
+        }
+    }
+
+    private static void dormir(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

@@ -58,6 +58,29 @@ public class RegistroImportaciones {
                 .update();
     }
 
+    /**
+     * Marca la importación como {@code CORRECTA} con sus cifras. Se llama dentro de la transacción del cambio de
+     * esquema (paso {@code cambio}): si el cambio se deshace, esto también (fase 3b).
+     */
+    public void marcarCorrecta(long id, String etag, String lastModified, LocalDate vigenciaDesde,
+            LocalDate vigenciaHasta, Map<String, Long> filas) {
+        jdbc.sql("""
+                UPDATE importacion_horario SET resultado = 'CORRECTA', etag = :etag, last_modified = :lastModified,
+                       vigencia_desde = :desde, vigencia_hasta = :hasta, filas = CAST(:filas AS jsonb)
+                WHERE id = :id
+                """)
+                .param("etag", etag).param("lastModified", lastModified).param("desde", vigenciaDesde)
+                .param("hasta", vigenciaHasta).param("filas", filas == null ? null : json.writeValueAsString(filas))
+                .param("id", id)
+                .update();
+    }
+
+    /** El resultado apuntado para una importación. */
+    public Optional<Resultado> resultado(long id) {
+        return jdbc.sql("SELECT resultado FROM importacion_horario WHERE id = :id").param("id", id)
+                .query((rs, n) -> Resultado.valueOf(rs.getString(1))).optional();
+    }
+
     /** La última importación que cambió el horario: la que está en uso. */
     public Optional<Importacion> ultimaCorrecta() {
         return jdbc.sql("SELECT * FROM importacion_horario WHERE resultado = 'CORRECTA' ORDER BY inicio DESC, id DESC LIMIT 1")

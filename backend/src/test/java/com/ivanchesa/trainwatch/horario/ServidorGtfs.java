@@ -37,6 +37,8 @@ public final class ServidorGtfs implements AutoCloseable {
     public volatile boolean ignoraCondicionales;
     /** Manda las cabeceras y 10 bytes, y se queda parado: un servidor atascado a mitad de la descarga. */
     public volatile boolean atascado;
+    /** Sin Content-Length: el cuerpo va por trozos. */
+    public volatile boolean porTrozos;
 
     public ServidorGtfs() {
         try {
@@ -66,9 +68,11 @@ public final class ServidorGtfs implements AutoCloseable {
             } else {
                 byte[] cuerpo = zip;
                 intercambio.getResponseHeaders().add("Content-Type", "application/zip");
-                intercambio.sendResponseHeaders(200, cuerpo.length);
+                intercambio.sendResponseHeaders(200, porTrozos ? 0 : cuerpo.length);
                 try (OutputStream salida = intercambio.getResponseBody()) {
                     salida.write(cuerpo);
+                } catch (IOException e) {
+                    // el cliente cortó la lectura (demasiado grande): es lo que se prueba
                 }
             }
             intercambio.close();

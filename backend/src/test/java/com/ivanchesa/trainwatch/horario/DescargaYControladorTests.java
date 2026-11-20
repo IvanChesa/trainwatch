@@ -40,6 +40,33 @@ class DescargaYControladorTests {
     }
 
     @Test
+    void unZipConContentLengthDemasiadoGrandeSeRechazaSinLeerlo() {
+        byte[] zip = ServidorGtfs.zipDeEjemplo();
+        RENFE.sirve(zip, "\"grande\"");
+        var props = new HorarioProperties(RENFE.url(), "-", false, "", 10_000, 0.5, 200, 25, Duration.ofSeconds(10));
+        assertThatThrownBy(() -> new DescargaHorario(props, zip.length - 1).descargar("", "", false))
+                .isInstanceOf(IOException.class).hasMessageContaining("tamaño máximo").hasMessageContaining("Content-Length");
+    }
+
+    @Test
+    void sinContentLengthSeCortaLaDescargaAlPasarDelMaximo() throws Exception {
+        byte[] zip = ServidorGtfs.zipDeEjemplo();
+        RENFE.sirve(zip, "\"trozos\"");
+        RENFE.porTrozos = true;
+        try {
+            var props = new HorarioProperties(RENFE.url(), "-", false, "", 10_000, 0.5, 200, 25, Duration.ofSeconds(10));
+            assertThatThrownBy(() -> new DescargaHorario(props, zip.length / 2).descargar("", "", false))
+                    .isInstanceOf(IOException.class).hasMessageContaining("se corta la lectura");
+            // Dentro del máximo, por trozos también se descarga entero.
+            var r = new DescargaHorario(props, zip.length).descargar("", "", false);
+            assertThat(r.bytes()).isEqualTo(zip.length);
+            java.nio.file.Files.delete(r.zip());
+        } finally {
+            RENFE.porTrozos = false;
+        }
+    }
+
+    @Test
     void un200ConElMismoEtagCuentaComoSinCambios() throws Exception {
         RENFE.sirve(ServidorGtfs.zipDeEjemplo(), "\"b\"");
         RENFE.ignoraCondicionales = true;

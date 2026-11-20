@@ -1,6 +1,6 @@
 # ADR 0009 · Particiones diarias para `posiciones` y mensuales para `retrasos`, gestionadas por la aplicación
 
-**Fecha:** 20-11-2026 · **Estado:** aceptada · **Fase:** 3
+**Fecha:** 20-11-2026 · **Estado:** aceptada, con un cambio en la fase 3b (al final) · **Fase:** 3
 
 ## Contexto
 
@@ -28,4 +28,14 @@
 - Borrar un día de posiciones es instantáneo y no deja nada que limpiar.
 - Las consultas que filtran por `instante` o por `fecha_servicio` leen solo sus particiones (*partition pruning*).
 - La clave primaria de `retrasos` tiene que incluir la columna de partición: `(fecha_servicio, trip_id, stop_sequence)`.
-- Si la aplicación ha estado parada más de dos días, al arrancar crea las particiones que faltan antes de escribir (la ingesta llama a `mantenerSiToca` al principio de cada ciclo).
+- Si la aplicación ha estado parada más de dos días, al arrancar crea las particiones que faltan antes de escribir.
+
+## Cambio en la fase 3b: el mantenimiento sale de la ingesta y no espera cerrojos
+
+La revisión de la fase 3 vio que el `DROP TABLE` de una partición pide un cerrojo exclusivo sobre `posiciones` entera y se hacía **desde el hilo de la ingesta**, sin `lock_timeout`. Con un lector largo (la API de la fase 4), el `DROP` esperaría, y detrás de él todos los `INSERT` de la ingesta. Una prueba lo confirma: con el `DROP` de antes y un lector abierto, una escritura de la ingesta se quedaba 14,7 s bloqueada (hasta el `statement_timeout`).
+
+- **Tarea programada aparte** (`GestorParticiones.programado`, cada hora, `trainwatch.directo.mantenimiento-particiones`), además de al arrancar. La ingesta ya no la llama. El programador tiene tres hilos.
+- **`SET lock_timeout`** (`trainwatch.directo.espera-cerrojo-particiones`, 5 s) en cada sentencia: si no consigue el cerrojo, falla en vez de quedarse en la cola.
+- **`ALTER TABLE posiciones DETACH PARTITION … CONCURRENTLY`** antes del `DROP TABLE`. Separa la partición sin bloquear las escrituras en `posiciones` (pide `SHARE UPDATE EXCLUSIVE`, compatible con los `INSERT`) y el `DROP` solo bloquea la tabla ya separada. No se puede ejecutar dentro de una transacción: va en una conexión en *autocommit*.
+- **Si algo falla, se retoma en la pasada siguiente:** un `DETACH` a medias se termina con `DETACH PARTITION … FINALIZE`, y una tabla separada que no llegó a borrarse se borra.
+- **Crear particiones** también lleva `lock_timeout`; se crean con días (o un mes) de adelanto, así que un fallo se reintenta a la hora siguiente.

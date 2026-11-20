@@ -25,6 +25,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param muestrasParaDesaparecer muestras nuevas y completas seguidas sin un tren para darlo por desaparecido
  * @param fraccionIncompleta     una muestra con menos entidades que esta fracción de la última completa es incompleta
  * @param retencionPosiciones    cuánto se guardan las posiciones
+ * @param mantenimientoParticiones cada cuánto se crean y borran particiones (tarea aparte de la ingesta)
+ * @param esperaCerrojoParticiones {@code lock_timeout} de cada sentencia del mantenimiento de particiones
  */
 @ConfigurationProperties("trainwatch.directo")
 public record DirectoProperties(
@@ -43,7 +45,9 @@ public record DirectoProperties(
         @DefaultValue("60s") Duration esperaCircuitoAbierto,
         @DefaultValue("3") int muestrasParaDesaparecer,
         @DefaultValue("0.8") double fraccionIncompleta,
-        @DefaultValue("48h") Duration retencionPosiciones) {
+        @DefaultValue("48h") Duration retencionPosiciones,
+        @DefaultValue("1h") Duration mantenimientoParticiones,
+        @DefaultValue("5s") Duration esperaCerrojoParticiones) {
 
     URI url(Feed feed) {
         return switch (feed) {

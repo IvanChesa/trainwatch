@@ -15,6 +15,7 @@ import java.util.concurrent.TimeoutException;
 import org.springframework.stereotype.Component;
 
 import com.google.transit.realtime.GtfsRealtime.FeedMessage;
+import com.ivanchesa.trainwatch.CuerpoLimitado;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -33,10 +34,13 @@ import io.micrometer.core.instrument.MeterRegistry;
  * Descarga los feeds GTFS Realtime de Renfe.
  *
  * <ul>
- * <li><b>Peticiones condicionales.</b> Se guarda el {@code ETag} y el {@code Last-Modified} de la última respuesta
- * buena de cada feed y se mandan como {@code If-None-Match} e {@code If-Modified-Since}. Si no hay nada nuevo, Renfe
- * contesta 304 sin cuerpo: se puede preguntar cada 5-10 s sin bajar ~30 KB cada vez. Un 200 con el mismo
- * {@code ETag} también cuenta como sin cambios.</li>
+ * <li><b>Peticiones condicionales.</b> Se guarda el {@code ETag} y el {@code Last-Modified} de la última muestra
+ * <i>procesada</i> de cada feed y se mandan como {@code If-None-Match} e {@code If-Modified-Since}. Si no hay nada
+ * nuevo, Renfe contesta 304 sin cuerpo: se puede preguntar cada 5-10 s sin bajar ~30 KB cada vez. Un 200 con el
+ * mismo {@code ETag} también cuenta como sin cambios. Los validadores no se guardan al descargar, sino cuando la
+ * ingesta llama a {@link #confirmar} tras procesar la muestra (fase 3b): si el procesado falla, la siguiente petición
+ * vuelve a traer la misma muestra.</li>
+ * <li><b>Tamaño máximo</b> mirando {@code Content-Length} y cortando la lectura al pasarlo ({@link CuerpoLimitado}).</li>
  * <li><b>Tiempos cortos.</b> 3 s para conectar y 5 s para toda la petición, cuerpo incluido ({@code sendAsync} con
  * {@code get(timeout)}: {@code HttpRequest.timeout} solo cubre las cabeceras, lección de la fase 2).</li>
  * <li><b>Resilience4j</b>, un circuito y un reintento por feed: el reintento envuelve al circuito. Cada intento
@@ -53,10 +57,12 @@ public class ClienteFeeds {
     /**
      * Una descarga.
      *
-     * @param muestra el feed decodificado, o {@code null} si no había nada nuevo (304 o el mismo ETag)
-     * @param estado  código HTTP
+     * @param muestra      el feed decodificado, o {@code null} si no había nada nuevo (304 o el mismo ETag)
+     * @param estado       código HTTP
+     * @param etag         {@code ETag} de la respuesta, para {@link #confirmar}
+     * @param lastModified {@code Last-Modified} de la respuesta, para {@link #confirmar}
      */
-    public record Descarga(Feed feed, FeedMessage muestra, int estado, int bytes) {
+    public record Descarga(Feed feed, FeedMessage muestra, int estado, int bytes, String etag, String lastModified) {
 
         public boolean nueva() {
             return muestra != null;
@@ -123,11 +129,25 @@ public class ClienteFeeds {
             return conReintento.get();
         } catch (IOException | RuntimeException e) {
             throw e;
-        } catch (Throwable e) {
+        } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt(); // el apagado de la aplicacion tiene que ver la interrupcion
             }
             throw new IOException(e);
+        } catch (Error e) {
+            throw e; // OutOfMemoryError y compañía no son un fallo de red: que suban (fase 3b)
+        } catch (Throwable e) {
+            throw new IllegalStateException(e); // ni Exception ni Error: no debería pasar
+        }
+    }
+
+    /**
+     * Guarda los validadores de una descarga ya procesada: la siguiente petición los manda y, si no hay nada nuevo,
+     * recibe un 304. Si no se llama (el procesado falló), la siguiente petición vuelve a traer la muestra.
+     */
+    public void confirmar(Descarga descarga) {
+        if (descarga.muestra() != null) {
+            validadores.put(descarga.feed(), new Validadores(descarga.etag(), descarga.lastModified()));
         }
     }
 
@@ -150,34 +170,39 @@ public class ClienteFeeds {
         HttpResponse<byte[]> respuesta = enviar(peticion.build());
         int estado = respuesta.statusCode();
         if (estado == 304) {
-            return new Descarga(feed, null, 304, 0);
+            return new Descarga(feed, null, 304, 0, null, null);
         }
         if (estado != 200) {
             throw new FeedException("El feed " + feed.etiqueta() + " ha contestado " + estado);
         }
         byte[] cuerpo = respuesta.body();
-        if (cuerpo.length > propiedades.tamanoMaximo()) {
-            throw new FeedException("El feed " + feed.etiqueta() + " pesa " + cuerpo.length + " bytes");
-        }
         String etag = respuesta.headers().firstValue("ETag").orElse(null);
         if (etag != null && previos != null && etag.equals(previos.etag())) {
-            return new Descarga(feed, null, 200, cuerpo.length);
+            return new Descarga(feed, null, 200, cuerpo.length, null, null);
         }
         FeedMessage muestra = FeedMessage.parseFrom(cuerpo); // InvalidProtocolBufferException es una IOException
-        validadores.put(feed, new Validadores(etag, respuesta.headers().firstValue("Last-Modified").orElse(null)));
-        return new Descarga(feed, muestra, 200, cuerpo.length);
+        return new Descarga(feed, muestra, 200, cuerpo.length, etag,
+                respuesta.headers().firstValue("Last-Modified").orElse(null));
     }
 
     /** Envía con un tiempo máximo para toda la respuesta, cuerpo incluido. */
     private HttpResponse<byte[]> enviar(HttpRequest peticion) throws IOException, InterruptedException {
-        CompletableFuture<HttpResponse<byte[]>> futura = http.sendAsync(peticion, HttpResponse.BodyHandlers.ofByteArray());
+        CompletableFuture<HttpResponse<byte[]>> futura = http.sendAsync(peticion,
+                CuerpoLimitado.de(HttpResponse.BodyHandlers.ofByteArray(), propiedades.tamanoMaximo()));
         try {
             return futura.get(propiedades.tiempoRespuesta().toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             futura.cancel(true);
             throw new FeedException("Tiempo agotado (" + propiedades.tiempoRespuesta().toMillis() + " ms)");
         } catch (ExecutionException e) {
-            throw e.getCause() instanceof IOException io ? io : new IOException(e.getCause());
+            Throwable causa = e.getCause();
+            if (causa instanceof CuerpoLimitado.CuerpoDemasiadoGrande grande) {
+                throw new FeedException("Feed demasiado grande: " + grande.getMessage());
+            }
+            if (causa instanceof IOException io && io.getCause() instanceof CuerpoLimitado.CuerpoDemasiadoGrande grande) {
+                throw new FeedException("Feed demasiado grande: " + grande.getMessage());
+            }
+            throw causa instanceof IOException io ? io : new IOException(causa);
         } catch (InterruptedException e) {
             futura.cancel(true);
             throw e;

@@ -1,5 +1,9 @@
 package com.ivanchesa.trainwatch.horario;
 
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -22,6 +26,7 @@ import org.springframework.batch.infrastructure.item.ExecutionContext;
 import org.springframework.batch.infrastructure.repeat.RepeatStatus;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
@@ -33,10 +38,16 @@ import org.springframework.transaction.PlatformTransactionManager;
  * <li>{@code indices}: claves e índices, y ANALYZE;</li>
  * <li>{@code derivados}: recorridos, autobuses y paradas proyectadas sobre el recorrido;</li>
  * <li>{@code validar}: cuenta filas y rechaza un horario vacío o mucho más pequeño que el actual;</li>
- * <li>{@code cambio}: el cambio de golpe, en una transacción;</li>
+ * <li>{@code cambio}: el cambio de golpe y el registro de la importación como {@code CORRECTA}, en la misma
+ * transacción (fase 3b): o pasan las dos cosas o ninguna. Antes, el registro se escribía después, fuera de la
+ * transacción; si fallaba, el horario nuevo ya estaba en uso pero la ingesta, que vacía sus cachés al ver una
+ * importación correcta nueva, no se enteraba;</li>
  * <li>{@code limpieza}: borra el horario anterior (si falla, no pasa nada: se borra en la siguiente importación).</li>
  * </ol>
- * Si cualquier paso falla, el trabajo para y el horario vivo no se ha tocado.
+ * Si cualquier paso anterior al cambio falla, el trabajo para y el horario vivo no se ha tocado.
+ *
+ * <p>Los pasos pesados amplían los tiempos máximos de la base de datos, que para el resto de la aplicación son cortos
+ * ({@link #sinPlazosCortos}).
  */
 @Configuration(proxyBeanMethods = false)
 public class ImportacionJobConfig {
@@ -60,9 +71,28 @@ public class ImportacionJobConfig {
 
     private static final Logger log = LoggerFactory.getLogger(ImportacionJobConfig.class);
 
+    /** Tiempo máximo de cada sentencia en los pasos pesados de la importación. */
+    static final Duration PLAZO_PASOS_PESADOS = Duration.ofMinutes(15);
+
+    /**
+     * Amplía, solo en la transacción del paso que lo llama, los tiempos máximos que la aplicación pone a la base de
+     * datos ({@code statement_timeout} de 15 s y {@code socketTimeout} de 30 s en {@code application.properties}):
+     * crear índices o proyectar paradas sobre 1,8 M horas de paso puede tardar más en un servidor pequeño.
+     * {@code SET LOCAL} se deshace al terminar la transacción, y Hikari devuelve el {@code networkTimeout} de la
+     * conexión a su valor al volver al pool.
+     */
+    static void sinPlazosCortos(DataSource dataSource) throws SQLException {
+        Connection conexion = DataSourceUtils.getConnection(dataSource); // la de la transacción del paso
+        try (Statement st = conexion.createStatement()) {
+            st.execute("SET LOCAL statement_timeout = '" + PLAZO_PASOS_PESADOS.toMillis() + "ms'");
+        }
+        conexion.setNetworkTimeout(Runnable::run, (int) PLAZO_PASOS_PESADOS.plusMinutes(1).toMillis());
+    }
+
     @Bean
     Job importacionHorario(JobRepository repositorio, PlatformTransactionManager transacciones, DataSource dataSource,
-            DescargaHorario descarga, EsquemaCarga esquema, HorarioProperties propiedades) {
+            DescargaHorario descarga, EsquemaCarga esquema, HorarioProperties propiedades,
+            RegistroImportaciones registro) {
 
         Step pasoDescarga = tarea("descarga", repositorio, transacciones, (contribucion, contexto) -> {
             JobParameters p = contexto.getStepContext().getStepExecution().getJobParameters();
@@ -96,18 +126,21 @@ public class ImportacionJobConfig {
         }
 
         Step pasoIndices = tarea("indices", repositorio, transacciones, (c, x) -> {
+            sinPlazosCortos(dataSource);
             esquema.crearIndices();
             esquema.analizar();
             return RepeatStatus.FINISHED;
         });
 
         Step pasoDerivados = tarea("derivados", repositorio, transacciones, (c, x) -> {
+            sinPlazosCortos(dataSource);
             esquema.calcularDerivados(propiedades.distanciaMaximaForma(), propiedades.toleranciaRetrocesoM());
             esquema.analizar();
             return RepeatStatus.FINISHED;
         });
 
         Step pasoValidar = tarea("validar", repositorio, transacciones, (c, x) -> {
+            sinPlazosCortos(dataSource);
             Map<String, Long> filas = new LinkedHashMap<>(esquema.contar(EsquemaCarga.CARGA));
             filas.putAll(esquema.calidad(EsquemaCarga.CARGA));
             for (String tabla : new String[] { "stops", "routes", "calendar", "trips", "stop_times" }) {
@@ -131,15 +164,25 @@ public class ImportacionJobConfig {
         });
 
         Step pasoCambio = tarea("cambio", repositorio, transacciones, (c, x) -> {
+            sinPlazosCortos(dataSource);
+            // Las dos cosas en la transacción del paso: el registro y el cambio de esquema se ven a la vez.
+            ExecutionContext trabajo = contextoDelTrabajo(x);
+            long id = x.getStepContext().getStepExecution().getJobParameters().getLong("registro");
+            @SuppressWarnings("unchecked")
+            Map<String, Long> filas = (Map<String, Long>) trabajo.get(CLAVE_FILAS);
+            registro.marcarCorrecta(id, trabajo.getString(CLAVE_ETAG, null), trabajo.getString(CLAVE_LAST_MODIFIED, null),
+                    LocalDate.parse(trabajo.getString(CLAVE_VIGENCIA_DESDE)),
+                    LocalDate.parse(trabajo.getString(CLAVE_VIGENCIA_HASTA)), filas);
             esquema.cambiar();
-            log.info("Horario cambiado: {} es ahora el vivo", EsquemaCarga.CARGA);
+            log.info("Horario cambiado: {} es ahora el vivo (importación {})", EsquemaCarga.CARGA, id);
             return RepeatStatus.FINISHED;
         });
 
         Step pasoLimpieza = tarea("limpieza", repositorio, transacciones, (c, x) -> {
             try {
+                sinPlazosCortos(dataSource);
                 esquema.borrar(EsquemaCarga.ANTERIOR);
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | SQLException e) {
                 log.warn("No se pudo borrar {} (se borrará en la siguiente importación): {}", EsquemaCarga.ANTERIOR,
                         e.getMessage());
             }

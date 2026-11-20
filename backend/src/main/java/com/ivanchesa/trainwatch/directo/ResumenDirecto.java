@@ -1,15 +1,19 @@
 package com.ivanchesa.trainwatch.directo;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Lo que responde {@code GET /api/directo/estado}. Se calcula al final de cada ciclo de la ingesta y se publica
- * entero (inmutable): quien lo lee no ve nunca uno a medias.
+ * entero (inmutable): quien lo lee no ve nunca uno a medias. La antigüedad se vuelve a calcular al responder
+ * ({@link #alInstante}).
  *
+ * @param calculado     cuándo se calculó (el final del último ciclo de la ingesta)
  * @param ultimoDato    marca de la cabecera de la última muestra nueva de posiciones
- * @param antiguedadS   segundos desde {@code ultimoDato} hasta {@code calculado}
+ * @param antiguedadS   segundos desde {@code ultimoDato} hasta el momento de responder (fase 3b: antes, hasta
+ *                      {@code calculado}, y una ingesta parada no se notaba)
  * @param trenes        trenes en el estado en memoria (sin los cancelados que solo están en trip_updates)
  * @param sinHorario    trenes cuyo viaje no está en el horario
  * @param circuitos     estado del circuit breaker de cada feed (CLOSED, OPEN, HALF_OPEN)
@@ -30,6 +34,12 @@ public record ResumenDirecto(Instant calculado, Instant ultimoDato, Long antigue
      */
     public record Nucleo(int nucleo, String nombre, String estado, int enDirecto, int enMarchaHorario,
             int enMarchaVistos, Double coberturaPct) {
+    }
+
+    /** El mismo resumen con la antigüedad del último dato contada hasta {@code ahora}. */
+    public ResumenDirecto alInstante(Instant ahora) {
+        Long antiguedad = ultimoDato == null ? null : Duration.between(ultimoDato, ahora).toSeconds();
+        return new ResumenDirecto(calculado, ultimoDato, antiguedad, trenes, porEstado, sinHorario, nucleos, circuitos);
     }
 
     public static ResumenDirecto vacio(Instant ahora) {
