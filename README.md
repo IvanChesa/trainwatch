@@ -64,6 +64,12 @@ Al arrancar con la base de datos vacía, el backend descarga e importa el horari
 - `http://localhost:8080/api/horario/estado` → fecha de publicación, días que cubre, filas por tabla y último intento.
 - Importación a mano, si `TRAINWATCH_ADMIN_TOKEN` tiene valor en el `.env`: `curl -X POST -H "X-Trainwatch-Token: <token>" "http://localhost:8080/api/horario/importaciones?forzar=true"`.
 
+La ingesta en directo empieza 10 s después de arrancar: cada 7 s pide a Renfe los tres feeds GTFS Realtime (posiciones, retrasos y avisos) con peticiones condicionales, guarda el estado de cada tren en memoria y escribe en `posiciones` (48 h), `retrasos` y `avisos`. Para verla:
+
+- `http://localhost:8080/api/directo/estado` → hora del último dato, trenes por estado y cobertura por núcleo.
+- `http://localhost:8080/actuator/metrics/trainwatch.directo.descargas` (y `.trenes`, `.filas`, `.errores`, `.antiguedad`), solo en el perfil `local`.
+- Para desactivarla: `TRAINWATCH_DIRECTO_ACTIVADA=false`.
+
 En Windows, usa `mvnw.cmd` en vez de `./mvnw` si no trabajas con Git Bash, y asegúrate de que `JAVA_HOME` apunta al JDK 25.
 
 ## Pruebas
