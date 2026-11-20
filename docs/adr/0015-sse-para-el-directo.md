@@ -26,8 +26,8 @@ El mapa (fase 5) tiene que ver moverse los trenes de un núcleo sin recargar. La
 5. **Control de la carga:**
    - el hilo de la ingesta **no escribe nunca en un socket**: calcula los cambios una vez por núcleo, los **serializa una vez** y los deja en la cola de cada cliente sin bloquear;
    - cada conexión tiene **un hilo virtual** (Java 25) que vacía su cola: un cliente lento solo se retrasa a sí mismo. Las conexiones son asíncronas en Tomcat: no ocupan un hilo del servidor mientras esperan;
-   - **cola acotada** (50 eventos, unos 6 min): si se llena, se desconecta al cliente, que vuelve con una instantánea nueva, en vez de acumular memoria;
-   - **máximo de conexiones** (`trainwatch.api.directo.maximo-conexiones`, 500): la siguiente recibe un **503** con `Retry-After: 30` y un `ProblemDetail`;
+   - **cola acotada** (50 eventos, unos 6 min): si se llena, se desconecta al cliente, que vuelve con una instantánea nueva, en vez de acumular memoria. **Solo el hilo de la conexión toca su socket:** quien la desconecta (la ingesta, el latido) solo le deja una marca de fin, porque en Spring 7.1 `complete()` espera al mismo cerrojo que un `send()` atascado (lo encontró la revisión de la fase 4);
+   - **máximo de conexiones** (`trainwatch.api.directo.maximo-conexiones`, 500): la siguiente recibe un **503** con `Retry-After: 30` y un `ProblemDetail`. `EventSource` no reintenta tras un 503: el frontend tiene que reabrir el directo pasado ese tiempo;
    - **duración máxima** de 30 min por conexión: el navegador se reconecta solo; limpia conexiones medio muertas y, con varias instancias, reparte la carga;
    - al apagar, las conexiones se cierran antes del apagado ordenado del servidor web (si no, esperaría a peticiones que no terminan).
 

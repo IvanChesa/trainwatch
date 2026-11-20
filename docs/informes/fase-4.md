@@ -1,6 +1,6 @@
 # Fase 4 · API y directo: informe
 
-**Fecha:** 20-11-2026. **Rama:** `fase-4-api`. **Resultado:** hecha. La API REST pública (núcleos, trenes, ficha del tren, estaciones, líneas y avisos) está documentada con OpenAPI en `/api/docs`, los errores son `ProblemDetail` y el directo va por SSE: una instantánea al conectarse y después solo los cambios. Con la aplicación leyendo los feeds reales de Renfe, **200 clientes SSE a la vez durante 90 s**: latencia p99 de 42 ms, heap entre 71 y 91 MB, CPU del proceso por debajo del 5 %, 0 errores y 0 huecos. Además, `retrasos` ya guarda la **hora programada** de cada parada (para la fase 6). **115 pruebas** en el backend: 114 pasan y 1 se omite (la manual de la fase 2).
+**Fecha:** 20-11-2026. **Rama:** `fase-4-api`. **Resultado:** hecha. La API REST pública (núcleos, trenes, ficha del tren, estaciones, líneas y avisos) está documentada con OpenAPI en `/api/docs`, los errores son `ProblemDetail` y el directo va por SSE: una instantánea al conectarse y después solo los cambios. Con la aplicación leyendo los feeds reales de Renfe, **200 clientes SSE a la vez durante 90 s**: latencia p99 de 42 ms, heap entre 71 y 91 MB, CPU del proceso por debajo del 5 %, 0 errores y 0 huecos. Además, `retrasos` ya guarda la **hora programada** de cada parada (para la fase 6). **121 pruebas** en el backend: 120 pasan y 1 se omite (la manual de la fase 2); 9 en el frontend.
 
 > Este fichero sustituye al informe de la parada anterior de la fase 4 («falta la fase 3»), que sigue en el historial de git (`f514d17`). Las fases 3, 3b y 4r ya están fusionadas y `./mvnw verify` estaba en verde en `main` (`42803a0`) al empezar.
 
@@ -65,7 +65,7 @@ Punto de partida: `docs/prompts/fase-4.md`, la fase 4 del §6 del plan y el §3 
 
 ### Pruebas
 
-`./mvnw verify`: **115 pruebas, 0 fallos, 1 omitida** (antes, 94). Nuevas:
+`./mvnw verify`: **121 pruebas, 0 fallos, 1 omitida** (antes, 94); `npm test` en el frontend, 9 de 9. Nuevas:
 
 - `EstadoDirectoTests.HoraProgramadaEnRetrasos` (5): cierre normal (la llegada de las 10:10, no la salida de las 10:11 ni la hora del cierre), cierre inferido, viaje que pasa la medianoche con calendario de varios días (fecha deducida: el 20, llegada el 21 a las 00:10), día del cambio de hora (29-03-2026) y tren sin horario (no cierra nada).
 - `DirectoIntegracionTests`: la fila real del C1 de Valencia guarda 10:24 (hora de Madrid) y una fila sin hora queda en `NULL`.
@@ -77,6 +77,7 @@ Punto de partida: `docs/prompts/fase-4.md`, la fase 4 del §6 del plan y el §3 
   - **SSE:** instantánea igual que la REST y con tildes bien (UTF-8), después un evento `cambios` con la secuencia siguiente y menos trenes que la instantánea, ningún evento si nada cambia, latido con la antigüedad, y reconexión con `Last-Event-ID` que recibe una instantánea al día;
   - **máximo de conexiones:** con 3, la cuarta recibe 503 + `Retry-After: 30` + `ProblemDetail`, y al cerrarse las conexiones se liberan.
 - `EjemplosApiTests` (10): cada ejemplo de `docs/api/` se lee con su record y se vuelve a escribir igual.
+- Tras la revisión (§4): `DifusorDirectoTests` (3: cliente atascado con la ingesta y con el latido, apagado), `ProximosTrenesTests` (2: tren que ya salió, viajes de ayer pasada la medianoche) y el 500 como `ProblemDetail` en `ApiIntegracionTests` (que pasa a 7).
 
 ### Prueba de carga (20-11-2026, de 14:54:54 a 14:56:24)
 
@@ -108,7 +109,26 @@ El servidor apenas nota los 200 clientes: lo que más crece es el ancho de banda
 
 ## 4. Revisión independiente
 
-*(Se completa con el resultado de la revisión.)*
+Un subagente sin contexto de la conversación revisó el diff (`main...fase-4-api`) contra el encargo, solo leyendo el código (y el bytecode de `spring-webmvc` 7.1 con `javap`), sin ejecutar nada. Dio por buenas la hora programada en `retrasos` (horas > 24:00, cambio de hora, `ON CONFLICT` con `coalesce`, inferidas) y el SQL (sin inyección, listas vacías protegidas, índices que encajan). **Todo lo de gravedad alta y media se corrigió**, con prueba, en `bcba121`.
+
+| # | Hallazgo | Qué se hizo |
+|---|---|---|
+| 1 (alta) | **Un cliente SSE que no lee podía bloquear la ingesta.** En Spring 7.1, `ResponseBodyEmitter.complete()` espera al mismo cerrojo que un `send()` en curso. Al llenarse la cola de un cliente atascado (ventana TCP llena), la ingesta llamaba a `cerrar()` → `complete()` dentro del cerrojo del canal y se quedaba esperando a que Tomcat agotara el tiempo de escritura: se paraban la ingesta, las altas al directo de ese núcleo y `GET /api/nucleos/{id}/trenes` | **Corregido.** `cerrar()` ya no toca el socket: da de baja la conexión, vacía la cola y deja la marca de fin; `complete()` lo hace solo el hilo virtual de la conexión al salir. Prueba: `DifusorDirectoTests` con un emisor cuyo `send` se atasca con el cerrojo cogido (como el de Spring): la ingesta publica más eventos de los que caben y termina en < 2 s, el cliente queda desconectado y la respuesta se cierra cuando el envío falla; lo mismo con el latido. **Con el código anterior, la prueba se queda bloqueada** |
+| 2 (media) | La ficha de estación enseñaba como próximo un tren que ya había salido: la parada del feed es la actual **o la última**, y con esa secuencia se saltaba el filtro de la hora | **Corregido:** solo está «en la estación» si el feed dice `STOPPED_AT`. Prueba: `ProximosTrenesTests` (`IN_TRANSIT_TO` a las 10:12 con salida estimada 10:07: no sale; `STOPPED_AT`: sí) |
+| 3 (media) | Caché de líneas sin límite: guardaba también las que no existen, con una clave que viene del cliente; y consultaba la base de datos dentro de `computeIfAbsent` | **Corregido:** no se guardan los fallos, la consulta va fuera del mapa y solo se guarda si la versión del horario no ha cambiado mientras tanto |
+| 4 (media) | Un error inesperado (base de datos caída, consulta de más de 15 s) salía con el JSON de error de Boot, no como `ProblemDetail` | **Corregido:** `ErroresApi` atrapa `Exception` y responde un 500 `ProblemDetail` sin detalles internos (van al registro). Prueba en `ApiIntegracionTests`: con la tabla `avisos` renombrada, `/api/avisos` da un 500 `problem+json` sin SQL ni nombres de tablas |
+| 5 (media) | El directo aceptaba conexiones durante el apagado, que el apagado ordenado esperaría | **Corregido:** después de `stop()`, 503 + `Retry-After: 5`. Prueba en `DifusorDirectoTests` |
+| 6 | Un latido podía llegar antes que la instantánea | **Corregido:** el suscriptor entra en la lista de los latidos después de encolar su instantánea |
+| 7 | Si algo fallaba tras contar la conexión (al serializar la instantánea), el contador no bajaba | **Corregido:** se deshace el alta |
+| 8 | `EventSource` no reintenta tras un 503 e ignora `Retry-After` | **Documentado** en `docs/api/README.md` y en el §5: el frontend (fase 5) tiene que reabrir el directo |
+| 9 | Un tren con más de 30 min de retraso no sale en los próximos de una estación | **Se deja y se documenta** en la descripción OpenAPI del endpoint: la ventana hacia atrás es una decisión (§2) |
+| 10 | `/api/avisos` decía «en vigor» sin filtrar por fechas | **Corregido el texto:** son los avisos del último `alerts.pb` tal cual, con su inicio y fin en cada uno |
+| 11 | Las cercanas no excluyen paradas de autobús | **Se deja:** `stops.txt` de Renfe solo trae estaciones (los autobuses de sustitución usan las mismas) |
+| 12 | El rumbo podía salir negativo; la prueba admitía 360 | **Corregido:** `Math.floorMod`; la prueba ya solo admite 0-359 |
+| 13 | springdoc 3.2.0 está compilado contra Boot 4.1 | **Se deja y se vigila:** todas las pruebas de OpenAPI pasan con Boot 4.2 (§2) |
+| T | Pruebas que faltaban: cliente lento, apagado, próximos pasada la medianoche, 500 | **Añadidas** las cuatro (filas 1, 2, 4 y 5, y `pasadaLaMedianocheSalenLosViajesDelDiaAnterior`). Quedan como deuda: la prueba del filtro `linea` de `/api/avisos`, que la de avisos por estación dependa de que la muestra traiga alguno, y que `EjemplosApiTests` use su propio `JsonMapper` (con la misma configuración que la aplicación hoy) |
+
+La prueba de carga (§3) se hizo antes de la corrección del hallazgo 1. La corrección no cambia el camino normal: solo quién llama a `complete()` al desconectar a un cliente.
 
 ## 5. Qué quedó fuera o pendiente
 

@@ -89,7 +89,7 @@ En orden, de lo más barato a lo más caro:
 ## 6. Preguntas que pueden hacerte
 
 - **¿Por qué SSE y no WebSocket?** Comunicación en un sentido, HTTP normal, reconexión automática con `Last-Event-ID`, nada nuevo que configurar en Cloudflare. WebSocket aporta el canal de vuelta, que no se usa.
-- **¿Qué pasa si un cliente va lento?** Se le acumulan eventos en su cola; a los 50 se le desconecta. Los demás no se enteran: cada uno tiene su hilo.
+- **¿Qué pasa si un cliente va lento?** Se le acumulan eventos en su cola; a los 50 se le desconecta. Los demás no se enteran: cada uno tiene su hilo. Y quien lo desconecta no toca su socket: solo le deja una marca de fin (§8, el fallo que encontró la revisión).
 - **¿Y si se reconecta?** Manda `Last-Event-ID`; recibe una instantánea nueva. ¿Por qué no lo que se perdió? Porque casi todos los trenes cambian en cada ciclo: ocuparía lo mismo y habría que guardar historial.
 - **¿Cómo evitas que un cliente vea la instantánea y luego cambios duplicados o con hueco?** El alta del suscriptor y la publicación de cambios van con el mismo cerrojo del canal; la prueba de carga comprueba que no hay huecos de secuencia.
 - **¿Qué es `ProblemDetail`?** El formato estándar de error HTTP (RFC 9457): `type`, `title`, `status`, `detail`, `instance` y propiedades propias.
@@ -112,4 +112,18 @@ En orden, de lo más barato a lo más caro:
 | CORS y `ETag` | `ApiConfig` |
 | OpenAPI | `OpenApiConfig` |
 | Hora programada | `EstadoDirecto.cierre`, `RepositorioDirecto.guardarRetrasos`, `V5__retrasos_llegada_programada.sql` |
-| Pruebas | `ApiIntegracionTests`, `EjemplosApiTests`, `EstadoDirectoTests.HoraProgramadaEnRetrasos`, `backend/carga/CargaSse.java` |
+| Pruebas | `ApiIntegracionTests`, `EjemplosApiTests`, `DifusorDirectoTests`, `ProximosTrenesTests`, `EstadoDirectoTests.HoraProgramadaEnRetrasos`, `backend/carga/CargaSse.java` |
+
+## 8. El fallo que encontró la revisión: un cliente lento bloqueaba la ingesta
+
+**Qué pasaba.** Cada conexión tiene su cola y su hilo virtual, precisamente para que un cliente lento no frene a nadie. Pero al llenarse la cola de un cliente, la ingesta lo desconectaba llamando a `cerrar()`, y `cerrar()` llamaba a `emitter.complete()`. En Spring 7.1, `complete()` espera al mismo cerrojo que `send()`, y el hilo del cliente atascado (con la ventana TCP llena) tenía ese cerrojo cogido, bloqueado escribiendo en el socket. Resultado: **la ingesta se quedaba esperando** hasta que Tomcat agotara el tiempo de escritura, dentro del cerrojo del canal; con ella se paraban la grabación en la base de datos, las altas al directo de ese núcleo y `GET /api/nucleos/{id}/trenes`. Justo el caso para el que estaba la cola.
+
+**Por qué no lo vieron las pruebas ni la de carga.** Los clientes de prueba leen siempre: la cola nunca se llena. Hace falta un cliente que deje de leer.
+
+**Cómo se corrigió.** Una regla: **solo el hilo de la conexión toca su socket.** `cerrar()` (que puede llamar cualquiera: la ingesta, el latido, Tomcat) ya no llama a `complete()`; solo da de baja la conexión, vacía la cola y deja una marca de fin. El hilo virtual de la conexión, al salir de su bucle (por la marca o porque el envío falla), llama él mismo a `complete()`. Si ese hilo está atascado, el único que espera es él.
+
+**La prueba.** `DifusorDirectoTests` usa un emisor cuyo `send` se queda atascado con un cerrojo cogido y cuyo `complete` espera ese cerrojo, como el de Spring. La ingesta publica más eventos de los que caben en la cola y tiene que terminar en menos de 2 s; el cliente queda desconectado; cuando el envío por fin falla, la respuesta se cierra. Con el código anterior, la prueba se queda bloqueada.
+
+**Lo que hay que saber decir.** «Separar la cola por cliente no basta: hay que mirar qué operaciones toman el mismo cerrojo que la escritura. En `ResponseBodyEmitter`, `send` y `complete` lo comparten. Por eso solo el hilo dueño de la conexión la cierra, y los demás solo le dejan un mensaje.»
+
+**Lo demás que corrigió la revisión:** un tren que ya había salido seguía como próximo en su estación (ahora solo cuenta «en la estación» con `STOPPED_AT`); la caché de líneas guardaba también las inexistentes con una clave del cliente (crecía sin límite); los errores inesperados no salían como `ProblemDetail` (ahora un 500 sin detalles internos); el directo aceptaba conexiones durante el apagado (ahora 503); y tres detalles (latido antes de la instantánea, contador que no bajaba si fallaba el alta, rumbo negativo). Todo en el [informe](../informes/fase-4.md#4-revisión-independiente).
