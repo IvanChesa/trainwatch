@@ -22,7 +22,7 @@ Estado: **aprobado para empezar** (20-nov-2026). Lo ha escrito la sesión de est
    - el retraso llega en minutos enteros, así que se publican medias y porcentajes («% con menos de 3 min»);
    - nada público hasta tener semanas de datos.
 9. **Riesgos:** baja el de los «huecos en Cataluña» (Rodalies, 100 %). Entra uno nuevo, núcleos que no emiten en directo.
-10. **Créditos de la API** (Iván, 20-11): las fases 1 y 2 se programan con el Agent SDK, para gastar los créditos promocionales antes del 26-11. Los encargos están en `docs/prompts/`.
+10. **Créditos de la API** (Iván, 20-11): las fases 1 a 5 se programan con el Agent SDK, para gastar los créditos promocionales antes del 26-11. Los encargos están en `docs/prompts/fase-N.md`. Por eso no hay modo tutor (D4): su papel lo cubren las **guías de defensa**, más detalladas en las fases 3 y 4, que Iván repasa antes de las entrevistas.
 
 ## 0. Qué es y para qué
 
