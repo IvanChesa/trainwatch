@@ -25,13 +25,15 @@
 		Referrer-Policy "no-referrer"
 		Permissions-Policy "geolocation=(), camera=(), microphone=(), interest-cohort=()"
 		Cross-Origin-Resource-Policy "cross-origin"
-		Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
 		-Server
 		-X-Powered-By
 	}
 
-	# La documentación de la API (Swagger UI) sí carga sus scripts, estilos e imágenes del mismo origen.
+	# CSP: la API no carga nada. La documentación (Swagger UI) sí carga sus scripts, estilos e imágenes del mismo
+	# origen. Dos matchers que no se solapan, para que una no pise a la otra.
 	@documentacion path /api/docs /api/docs/*
+	@resto not path /api/docs /api/docs/*
+	header @resto Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
 	header @documentacion Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
 
 	# Desde fuera solo se lee: el disparo manual de la importación (POST) se hace desde la máquina, por el 8080.
