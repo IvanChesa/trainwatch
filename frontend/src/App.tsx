@@ -1,66 +1,297 @@
-import { useEffect, useState } from 'react';
-import { describirDirecto, obtenerEstadoDirecto, type EstadoDirecto } from './api/directo';
-import { formatearHora, obtenerEstado, type EstadoBackend } from './api/estado';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { consultas } from './api/consultas';
+import type { Aviso, Linea, Nucleo, TrenMapa } from './api/tipos';
+import { useConsulta } from './api/useConsulta';
+import { ListaAvisos } from './componentes/Avisos';
+import { EstadoDatos } from './componentes/EstadoDatos';
+import { FichaEstacion } from './componentes/FichaEstacion';
+import { FichaTren } from './componentes/FichaTren';
+import { Hoja } from './componentes/Hoja';
+import { Leyenda } from './componentes/Leyenda';
+import { ListaTrenes } from './componentes/ListaTrenes';
+import { useAhora, useReducirMovimiento } from './componentes/ganchos';
+import { tituloTren } from './componentes/textos';
+import { useDirecto } from './directo/useDirecto';
+import { compararLineas, seVeEnElMapa } from './mapa/retraso';
 import './App.css';
 
-type Conexion =
-  | { tipo: 'cargando' }
-  | { tipo: 'conectado'; estado: EstadoBackend }
-  | { tipo: 'sin-backend' };
+// MapLibre pesa (~1 MB): va en su propio trozo y se carga después de pintar la interfaz.
+const Mapa = lazy(() => import('./mapa/Mapa'));
 
-type Datos = { tipo: 'cargando' } | { tipo: 'conectado'; estado: EstadoDirecto } | { tipo: 'sin-datos' };
+/** Rodalies de Catalunya, el núcleo por defecto; y su RL4 (Lleida), destacada. */
+export const NUCLEO_POR_DEFECTO = 51;
+export const LINEA_DESTACADA = 'RL4';
 
-/** Página provisional: el mapa llega en la fase 5. */
+type Vista = 'mapa' | 'lista';
+type Seleccion =
+  | { tipo: 'tren'; id: string }
+  | { tipo: 'estacion'; id: string; nombre: string | null }
+  | { tipo: 'avisos' }
+  | null;
+
+function leerUrl(): { nucleo: number; linea: string; vista: Vista } {
+  const p = new URLSearchParams(window.location.search);
+  const nucleo = Number(p.get('nucleo'));
+  return {
+    nucleo: Number.isInteger(nucleo) && nucleo > 0 ? nucleo : NUCLEO_POR_DEFECTO,
+    linea: p.get('linea') ?? '',
+    vista: p.get('vista') === 'lista' ? 'lista' : 'mapa',
+  };
+}
+
+function nombreDe(nucleo: Nucleo | undefined, id: number): string {
+  return nucleo?.nombre ?? (id === NUCLEO_POR_DEFECTO ? 'Rodalies de Catalunya' : 'este núcleo');
+}
+
 export default function App() {
-  const [conexion, setConexion] = useState<Conexion>({ tipo: 'cargando' });
-  const [datos, setDatos] = useState<Datos>({ tipo: 'cargando' });
+  const [inicial] = useState(leerUrl);
+  const [nucleoId, setNucleoId] = useState(inicial.nucleo);
+  const [linea, setLinea] = useState(inicial.linea);
+  const [vista, setVista] = useState<Vista>(inicial.vista);
+  const [seleccion, setSeleccion] = useState<Seleccion>(null);
+  const reducirMovimiento = useReducirMovimiento();
+  const ahora = useAhora(1000);
+  /** Dónde estaba el foco al abrir una ficha, para devolverlo al cerrarla. */
+  const focoPrevio = useRef<HTMLElement | null>(null);
 
+  const nucleos = useConsulta<Nucleo[]>('nucleos', (s) => consultas.nucleos(s), 60_000);
+  const listaNucleos = useMemo(
+    () => (nucleos.tipo === 'lista' ? [...nucleos.datos].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')) : []),
+    [nucleos],
+  );
+  const nucleo = listaNucleos.find((n) => n.id === nucleoId);
+  const directo = useDirecto(nucleoId);
+  const avisos = useConsulta<Aviso[]>(`avisos:${nucleoId}`, (s) => consultas.avisos(nucleoId, s), 60_000);
+  const datosLinea = useConsulta<Linea>(linea ? `linea:${nucleoId}:${linea}` : null, (s) =>
+    consultas.linea(nucleoId, linea, s),
+  );
+  const esRodalies = nucleoId === NUCLEO_POR_DEFECTO;
+
+  // La URL guarda el núcleo, la línea y la vista (para compartir un enlace; sin cookies).
   useEffect(() => {
-    // Se cancela al desmontar (y en el doble montaje de StrictMode en desarrollo).
-    const control = new AbortController();
-    obtenerEstado(control.signal)
-      .then((estado) => setConexion({ tipo: 'conectado', estado }))
-      .catch(() => {
-        if (!control.signal.aborted) setConexion({ tipo: 'sin-backend' });
-      });
-    // Fase 7: el estado de los datos en directo (la ingesta ya funciona en el servidor, aunque el mapa no esté).
-    obtenerEstadoDirecto(control.signal)
-      .then((estado) => setDatos({ tipo: 'conectado', estado }))
-      .catch(() => {
-        if (!control.signal.aborted) setDatos({ tipo: 'sin-datos' });
-      });
-    return () => control.abort();
+    const p = new URLSearchParams();
+    if (nucleoId !== NUCLEO_POR_DEFECTO) p.set('nucleo', String(nucleoId));
+    if (linea) p.set('linea', linea);
+    if (vista === 'lista') p.set('vista', 'lista');
+    const consulta = p.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${consulta ? `?${consulta}` : ''}`);
+  }, [nucleoId, linea, vista]);
+
+  const todos = useMemo(() => [...directo.trenes.values()], [directo.trenes]);
+  const lineas = useMemo(() => {
+    const conjunto = new Set(todos.map((t) => t.linea).filter((l): l is string => !!l));
+    if (linea) conjunto.add(linea);
+    if (esRodalies) conjunto.add(LINEA_DESTACADA);
+    return [...conjunto].sort((a, b) => {
+      if (esRodalies && a === LINEA_DESTACADA) return -1;
+      if (esRodalies && b === LINEA_DESTACADA) return 1;
+      return compararLineas(a, b);
+    });
+  }, [todos, linea, esRodalies]);
+  const filtrados = useMemo(() => (linea ? todos.filter((t) => t.linea === linea) : todos), [todos, linea]);
+  const enMapa = useMemo(() => filtrados.filter(seVeEnElMapa), [filtrados]);
+  const enLista = useMemo(() => filtrados.filter((t) => t.estado !== 'TERMINADO'), [filtrados]);
+  const enMarcha = enMapa.filter((t) => t.estado === 'EN_MARCHA').length;
+  const enOrigen = enMapa.length - enMarcha;
+
+  const abrir = useCallback((nueva: Seleccion) => {
+    // Solo se guarda el foco al abrir la primera ficha (al pasar de un tren a una estación, se conserva el de antes).
+    setSeleccion((previa) => {
+      if (previa === null && document.activeElement instanceof HTMLElement) focoPrevio.current = document.activeElement;
+      return nueva;
+    });
   }, []);
+  const cerrar = useCallback(() => {
+    setSeleccion(null);
+    const foco = focoPrevio.current;
+    focoPrevio.current = null;
+    // Si el elemento ya no está (la lista cambió), el foco va al principio del contenido.
+    window.setTimeout(() => {
+      if (foco && document.body.contains(foco)) foco.focus();
+      else document.getElementById('contenido')?.focus();
+    });
+  }, []);
+  const abrirTren = useCallback((id: string) => abrir({ tipo: 'tren', id }), [abrir]);
+  const abrirEstacion = useCallback(
+    (id: string, nombre: string | null = null) => abrir({ tipo: 'estacion', id, nombre }),
+    [abrir],
+  );
+
+  const cambiarNucleo = (id: number) => {
+    setNucleoId(id);
+    setLinea('');
+    setSeleccion(null);
+  };
+
+  const trenSeleccionado: TrenMapa | undefined =
+    seleccion?.tipo === 'tren' ? directo.trenes.get(seleccion.id) : undefined;
+  const avisosVisibles =
+    avisos.tipo === 'lista' ? avisos.datos.filter((a) => !linea || a.lineas.length === 0 || a.lineas.includes(linea)) : [];
+
+  const nombreNucleo = nombreDe(nucleo, nucleoId);
+  const resumen = !directo.cargado
+    ? `Cargando los trenes de ${nombreNucleo}…`
+    : `${enMarcha} ${enMarcha === 1 ? 'tren' : 'trenes'} en marcha y ${enOrigen} en origen${linea ? ` en la ${linea}` : ''}`;
+  const descripcionMapa = `Mapa de ${nombreNucleo}: ${resumen}. Para consultarlos con el teclado, usa la vista de lista.`;
+
+  let tituloHoja = '';
+  if (seleccion?.tipo === 'tren') tituloHoja = tituloTren(trenSeleccionado ?? undefined);
+  else if (seleccion?.tipo === 'estacion') tituloHoja = seleccion.nombre ?? 'Estación';
+  else if (seleccion?.tipo === 'avisos') tituloHoja = linea ? `Avisos de la ${linea}` : `Avisos de ${nombreNucleo}`;
 
   return (
-    <>
-      <main className="pagina">
-        <h1>TrainWatch · en construcción</h1>
-        <p className="resumen">
-          Un mapa con los trenes de Cercanías y Rodalies en directo, con su retraso y estadísticas propias de
-          puntualidad por línea, por hora y por día.
+    <div className={`app app--${vista}${seleccion ? ' app--con-hoja' : ''}`}>
+      <a className="saltar" href="#contenido" onClick={() => setVista('lista')}>
+        Ir a la lista de trenes
+      </a>
+      <header className="panel">
+        <div className="marca">
+          <h1>
+            TrainWatch <span className="marca__sub">Cercanías y Rodalies en directo</span>
+          </h1>
+          <p className="no-oficial" role="note">
+            Proyecto personal <strong>no oficial</strong>, sin relación con Renfe ni con Adif.
+          </p>
+        </div>
+        <EstadoDatos directo={directo} ahora={ahora} />
+
+        <div className="controles">
+          <label className="campo">
+            <span>Núcleo</span>
+            <select value={nucleoId} onChange={(e) => cambiarNucleo(Number(e.target.value))}>
+              {listaNucleos.length === 0 && <option value={nucleoId}>Rodalies de Catalunya</option>}
+              {listaNucleos.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.nombre}
+                  {n.estado === 'EN_DIRECTO' ? '' : ` (${n.estadoTexto})`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="campo">
+            <span>Línea</span>
+            <select
+              value={linea}
+              onChange={(e) => {
+                setLinea(e.target.value);
+                if (seleccion?.tipo === 'avisos') return;
+                setSeleccion(null);
+              }}
+            >
+              <option value="">Todas las líneas</option>
+              {lineas.map((l) => (
+                <option key={l} value={l}>
+                  {esRodalies && l === LINEA_DESTACADA ? `${l} (Lleida) ★` : l}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {esRodalies && linea !== LINEA_DESTACADA && (
+          <button type="button" className="destacada" onClick={() => setLinea(LINEA_DESTACADA)}>
+            <span aria-hidden="true">★</span> Ver la RL4 de Lleida
+          </button>
+        )}
+
+        {nucleo && nucleo.estado !== 'EN_DIRECTO' && (
+          <p className="aviso-nucleo">
+            {nucleo.estado === 'SIN_DATOS_EN_DIRECTO'
+              ? `${nucleo.nombre}: sin datos en directo. El horario tiene trenes en marcha, pero Renfe no envía sus posiciones ahora.`
+              : `${nucleo.nombre}: sin servicio ahora según el horario.`}
+          </p>
+        )}
+        {nucleo?.cobertura?.porcentaje != null && nucleo.cobertura.porcentaje < 80 && (
+          <p className="nota">
+            Cobertura del directo: el {nucleo.cobertura.porcentaje.toLocaleString('es-ES')} % de los trenes en marcha
+            según el horario.
+          </p>
+        )}
+
+        <div className="acciones">
+          <div className="conmutador" role="group" aria-label="Vista">
+            <button type="button" aria-pressed={vista === 'mapa'} onClick={() => setVista('mapa')}>
+              Mapa
+            </button>
+            <button type="button" aria-pressed={vista === 'lista'} onClick={() => setVista('lista')}>
+              Lista
+            </button>
+          </div>
+          <button type="button" className="boton" onClick={() => abrir({ tipo: 'avisos' })}>
+            Avisos{avisos.tipo === 'lista' ? ` (${avisosVisibles.length})` : ''}
+          </button>
+        </div>
+        <p className="resumen" aria-live="off">
+          {resumen}
         </p>
-        <p className="aviso" role="note">
-          <strong>Proyecto personal no oficial.</strong> No tiene relación con Renfe ni con Adif.
-        </p>
-        <p className="backend" role="status">
-          {conexion.tipo === 'cargando' && 'Consultando el backend…'}
-          {conexion.tipo === 'conectado' && (
-            <>
-              Backend {conexion.estado.version} · {formatearHora(conexion.estado.hora)}
-            </>
-          )}
-          {conexion.tipo === 'sin-backend' && 'Backend no disponible'}
-        </p>
-        <p className="datos">
-          {datos.tipo === 'cargando' && 'Consultando el estado de los datos…'}
-          {datos.tipo === 'conectado' && describirDirecto(datos.estado)}
-          {datos.tipo === 'sin-datos' && 'Estado de los datos no disponible.'}
-        </p>
+      </header>
+
+      <main id="contenido" className="contenido" tabIndex={-1}>
+        <div className="mapa-marco" hidden={vista !== 'mapa'}>
+          <Suspense fallback={<p className="nota mapa-cargando">Cargando el mapa…</p>}>
+            <Mapa
+              nucleo={nucleo ?? null}
+              trenes={enMapa}
+              linea={datosLinea.tipo === 'lista' ? datosLinea.datos : null}
+              seleccionado={seleccion?.tipo === 'tren' ? seleccion.id : null}
+              destacada={esRodalies ? LINEA_DESTACADA : null}
+              reducirMovimiento={reducirMovimiento}
+              descripcion={descripcionMapa}
+              alPulsarTren={abrirTren}
+              alPulsarEstacion={abrirEstacion}
+            />
+          </Suspense>
+          <Leyenda />
+        </div>
+        {vista === 'lista' && (
+          <ListaTrenes
+            trenes={enLista}
+            titulo={`Trenes de ${nombreNucleo}${linea ? `, ${linea}` : ''}`}
+            seleccionado={seleccion?.tipo === 'tren' ? seleccion.id : null}
+            alAbrir={abrirTren}
+          />
+        )}
       </main>
-      <footer className="pie">
-        <p>Datos: Renfe (CC BY 4.0)</p>
+
+      {seleccion && (
+        <Hoja titulo={tituloHoja} alCerrar={cerrar}>
+          {seleccion.tipo === 'tren' && (
+            <FichaTren id={seleccion.id} enDirecto={trenSeleccionado} alAbrirEstacion={abrirEstacion} />
+          )}
+          {seleccion.tipo === 'estacion' && (
+            <FichaEstacion
+              id={seleccion.id}
+              alAbrirTren={abrirTren}
+              alConocerNombre={(nombre) =>
+                setSeleccion((s) => (s?.tipo === 'estacion' && s.id === seleccion.id ? { ...s, nombre } : s))
+              }
+            />
+          )}
+          {seleccion.tipo === 'avisos' &&
+            (avisos.tipo === 'cargando' ? (
+              <p className="nota">Cargando los avisos…</p>
+            ) : avisos.tipo === 'error' ? (
+              <p className="nota">No se han podido cargar los avisos.</p>
+            ) : (
+              <ListaAvisos avisos={avisosVisibles} vacio="No hay avisos ahora." />
+            ))}
+        </Hoja>
+      )}
+
+      <footer className="creditos">
+        <a href="https://openfreemap.org" target="_blank" rel="noopener noreferrer">
+          OpenFreeMap
+        </a>{' '}
+        ·{' '}
+        <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener noreferrer">
+          © OpenMapTiles
+        </a>{' '}
+        ·{' '}
+        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">
+          © OpenStreetMap
+        </a>{' '}
+        · Datos: Renfe (CC BY 4.0) · Proyecto no oficial
       </footer>
-    </>
+    </div>
   );
 }
