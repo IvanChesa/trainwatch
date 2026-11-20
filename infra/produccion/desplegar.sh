@@ -64,7 +64,7 @@ listo() {
 
 # Primero se descarga (con la imagen nueva solo en el entorno): si falla, .env sigue apuntando a la que funciona y
 # la próxima vuelta atrás no irá a una imagen que nunca arrancó.
-TRAINWATCH_IMAGEN="$imagen" docker compose pull --quiet
+TRAINWATCH_IMAGEN="$imagen" HOST_API="$HOST_API" docker compose pull --quiet
 escribir_env "$imagen"
 docker compose up -d --remove-orphans
 # Caddy lee el certificado al arrancar: si ha cambiado, se reinicia (es un segundo, y el SSE se reconecta solo).
