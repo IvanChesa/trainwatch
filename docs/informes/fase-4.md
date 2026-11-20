@@ -1,36 +1,125 @@
-# Fase 4 · API y directo — informe
+# Fase 4 · API y directo: informe
 
-**Estado: parada antes de empezar** (20-11-2026). No se ha escrito código ni se ha creado la rama `fase-4-api`.
+**Fecha:** 20-11-2026. **Rama:** `fase-4-api`. **Resultado:** hecha. La API REST pública (núcleos, trenes, ficha del tren, estaciones, líneas y avisos) está documentada con OpenAPI en `/api/docs`, los errores son `ProblemDetail` y el directo va por SSE: una instantánea al conectarse y después solo los cambios. Con la aplicación leyendo los feeds reales de Renfe, **200 clientes SSE a la vez durante 90 s**: latencia p99 de 42 ms, heap entre 71 y 91 MB, CPU del proceso por debajo del 5 %, 0 errores y 0 huecos. Además, `retrasos` ya guarda la **hora programada** de cada parada (para la fase 6). **115 pruebas** en el backend: 114 pasan y 1 se omite (la manual de la fase 2).
 
-## 1. Por qué se para
+> Este fichero sustituye al informe de la parada anterior de la fase 4 («falta la fase 3»), que sigue en el historial de git (`f514d17`). Las fases 3, 3b y 4r ya están fusionadas y `./mvnw verify` estaba en verde en `main` (`42803a0`) al empezar.
 
-### 1.1 La fase 3 no está fusionada
+## 1. Especificación
 
-El encargo dice: «Si la fase 3 no está fusionada o `./mvnw verify` falla, **para** y explica por qué». Comprobado en `main` (`d95edb8`):
+Punto de partida: `docs/prompts/fase-4.md`, la fase 4 del §6 del plan y el §3 (SSE frente a WebSocket).
 
-- el último merge es el de la fase 2 (`787b4da`); el `DIARIO.md` acaba en la fase 2;
-- no existe `docs/informes/fase-3.md` ni ninguna rama `fase-3-*`;
-- en `backend/src/main` no hay cliente de los feeds, ni estado en memoria, ni tablas `posiciones`, `retrasos` o `avisos`.
+**Entra:**
 
-La fase 4 expone lo que recoge la ingesta (trenes por núcleo, ficha del tren, SSE con cambios, avisos, cobertura). Sin la fase 3 no hay nada que exponer, y las pruebas que pide el encargo («con la ingesta alimentada con los `.pb` de prueba de la fase 3») no se pueden escribir. No se ha ejecutado `./mvnw verify`: la primera condición ya basta para parar.
+1. **Hora programada en `retrasos`** (prioridad 1): migración V5 con `llegada_programada TIMESTAMPTZ`, rellenada por la ingesta al cerrar cada parada (también las inferidas), con el horario del viaje y su fecha de servicio; `NULL` en las filas antiguas.
+2. **API REST** (Spring MVC), con records propios y OpenAPI (springdoc) en `/api/docs`:
+   - `GET /api/nucleos`: nombre, centro y zoom del mapa, estado y cobertura;
+   - `GET /api/nucleos/{id}/trenes`: id, línea, estado, posición estimada, rumbo, retraso, próxima parada y salida si está en origen;
+   - `GET /api/trenes/{id}`: línea, origen y destino, paradas con hora programada y estimada, retraso y su evolución;
+   - `GET /api/estaciones/{id}`: próximos trenes con su retraso, líneas y avisos;
+   - `GET /api/estaciones?cerca=lat,lon&radio=`: las más cercanas, con PostGIS;
+   - `GET /api/lineas/{nucleo}/{linea}`: recorrido en GeoJSON, paradas y avisos;
+   - `GET /api/avisos?nucleo=&linea=&estacion=`;
+   - errores con `ProblemDetail` (RFC 9457).
+3. **Directo por SSE** (`GET /api/directo?nucleo=`): instantánea, cambios (altas, cambios y bajas), latido cada ~15 s y `Last-Event-ID` (con ADR).
+4. **CORS** solo para `https://trainwatch.ivanchesa.com` y `http://localhost:5173`; caché HTTP en lo que no cambia.
+5. **Límites:** máximo de conexiones SSE configurable con rechazo claro; tiempos de espera. Sin autenticación.
+6. **Pruebas:** cada endpoint (contrato, errores y sin datos) con la ingesta alimentada con los `.pb` de la fase 3; SSE (instantánea y cambios); carga en local con 200 clientes.
+7. **Contrato para el frontend:** un JSON de ejemplo por endpoint en `docs/api/`.
 
-### 1.2 El objetivo del encargo no cuadra con el plan
+**No entra:** estadísticas (fase 6), el mapa (fase 5), autenticación, varias instancias, un histórico por tren (la ficha solo existe mientras el tren está en directo).
 
-El objetivo de esta sesión no es el de `docs/prompts/fase-4.md` (API REST y SSE), sino: «Pasar todo el código hecho hasta ahora a React, revisar bien el contexto». Revisado el contexto, no se hace, por tres motivos:
+**Aceptación:**
 
-1. **El backend no se puede «pasar» a React.** React es una librería de interfaz para el navegador. Lo hecho hasta ahora es casi todo Java (25 ficheros, unas 1.600 líneas en `backend/src/main`: Spring Boot, Spring Batch, Flyway, PostGIS). Ese código no tiene equivalente en React; reescribirlo en otro lenguaje de servidor contradiría el propósito del proyecto («Proyecto Java de portfolio», PLAN §0).
-2. **Cambiar Angular por React es una decisión de Iván, no de una sesión de programación.** El plan elige Angular a propósito («el stack que más piden las consultoras en España», PLAN §0 y §4), y la fase 1 lo dejó montado (Angular 22.3, ADR y CI). `CLAUDE.md`: «Iván decide, la sesión de estrategia planifica». Un cambio así necesita un ADR y actualizar el plan.
-3. **Hoy apenas hay frontend que migrar.** `frontend/src` son 135 líneas: la página «en construcción» con el aviso de no oficial y la cita de los datos. El mapa llega en la fase 5. Si se cambia a React, conviene decidirlo **antes de la fase 5**, y la migración en sí costaría menos de una hora.
+1. `./mvnw verify` en verde con pruebas de cada endpoint, de errores, sin datos y del SSE.
+2. La prueba de carga aguanta 200 clientes SSE a la vez, con memoria, CPU y latencia apuntadas.
+3. La hora programada se guarda en el cierre normal, en el inferido, en un viaje que pasa la medianoche, y es `NULL` en un tren sin horario.
 
-## 2. Qué haría falta para seguir
+## 2. Qué se hizo
 
-1. Programar y fusionar la **fase 3** (`docs/prompts/fase-3.md`).
-2. Lanzar la **fase 4** con su encargo original (`docs/prompts/fase-4.md`).
-3. Si Iván quiere React en el frontend:
-   - lo decide y lo apunta la sesión de estrategia (cambio en PLAN §0, §4 y fase 5);
-   - un ADR nuevo, «React en vez de Angular», con el motivo (por ejemplo, las ofertas a las que apunte) y lo que se pierde (el argumento de las consultoras);
-   - la migración de la página actual (Vite + React + Vitest, mismos textos legales, CI del frontend ajustada), como tarea corta antes de la fase 5 o dentro de ella. El backend Java no cambia.
+| Pieza | Detalle |
+|---|---|
+| **V5 y cierre** | `retrasos.llegada_programada` (sin `DEFAULT`: no reescribe particiones). `EstadoDirecto.cierre` la calcula con `Viaje.instante(fecha, llegada_s)`, que cuenta desde «mediodía menos 12 h» (horas > 24:00 y cambio de hora). `ON CONFLICT` conserva la que hubiera si llega una nula. [ADR 0014](../adr/0014-hora-programada-en-retrasos.md) |
+| `Respuestas` | Los records de la API, con `@Schema` en español. Horas en hora de Madrid con desfase; retrasos en minutos; lo que no se sabe, `null` |
+| `VistaTrenes` | Del `Tren` en memoria a `TrenMapa`: posición estimada (o la del feed) redondeada a ~1 m, rumbo en grados, próxima parada (la siguiente a la del feed) con hora programada y estimada (programada + retraso), salida si está en origen y destino (la última parada: Renfe deja vacío `trip_headsign`) |
+| `ConsultasApi` | SQL con `JdbcClient`: extensión de cada núcleo, estación, líneas que paran, pasos del horario por estación y día, cercanas (`ST_DWithin` + `<->` sobre el índice `geography`), línea con `ST_AsGeoJSON` (en memoria hasta el horario siguiente), evolución del retraso del viaje y avisos agrupados |
+| Controladores | `NucleosController` (centro y zoom calculados del rectángulo de las estaciones para un mapa de 800 × 600 px), `TrenesController`, `EstacionesController` (horario de ayer y de hoy, de 30 min atrás a 60 min adelante, cruzado con el directo), `LineasController` (líneas y avisos) y `DirectoSseController` |
+| `DifusorDirecto` | El SSE: un canal por núcleo con su foto y su secuencia; al final de cada ciclo de la ingesta (evento de Spring `CicloDirectoTerminado`) calcula altas, cambios y bajas, los serializa una vez y los encola a cada cliente. Un hilo virtual y una cola de 50 eventos por cliente; latido cada 15 s; máximo de conexiones (503 + `Retry-After`); 30 min por conexión; cierre de todas antes del apagado ordenado. [ADR 0015](../adr/0015-sse-para-el-directo.md) |
+| Errores | `ErroresApi` (sobre `ResponseEntityExceptionHandler`) y `Problemas`: 400, 404 y 503 como `application/problem+json` con título y detalle en español; el tipo se fija en la respuesta para que llegue también a `EventSource` |
+| CORS y caché | `ApiConfig`: CORS de solo lectura para los dos orígenes; `ETag` (filtro `ShallowEtagHeaderFilter`) en líneas y estaciones, nunca en el SSE. `Cache-Control` por endpoint (de 5 s a 1 h). [ADR 0016](../adr/0016-api-rest-desde-el-estado-en-memoria.md) |
+| OpenAPI | springdoc 3.2.0: `/api/docs` y Swagger UI en `/api/docs/ui`. `OpenApiConfig` cuelga de cada 200 el ejemplo de `docs/api/` (Maven los copia al classpath) |
+| `docs/api/` | 11 ejemplos sacados de la aplicación con los feeds reales y recortados, con su README (incluye cómo consumir el directo) |
+| Prueba de carga | `backend/carga/CargaSse.java`, un programa de un fichero (JDK 25): N clientes en hilos virtuales, latencia de cada evento, huecos de secuencia, conexión de más y métricas del servidor por Actuator |
 
-## 3. Qué se ha tocado
+### Decisiones tomadas sin consultar
 
-Solo este informe. Ni código, ni ramas, ni `DIARIO.md` (la fase no se ha cerrado). `docs/prompts/React.md` sigue sin seguimiento en git, como estaba.
+- **Al reconectarse, una instantánea nueva**, no los cambios perdidos (el encargo lo permite con un ADR). Medido: un evento `cambios` ocupa de media el 60 % de una instantánea (18,7 KB frente a 30,9 KB), porque casi todos los trenes en marcha cambian en cada ciclo; con dos eventos perdidos ya sale más caro reenviarlos. `Last-Event-ID` se lee y se cuenta (`trainwatch.api.directo.reconexiones`).
+- **El directo manda un evento por ciclo de la ingesta (~7 s)**, no por muestra nueva de Renfe (~20 s): la posición estimada avanza entre muestras.
+- **Límites por defecto:** 500 conexiones, cola de 50 eventos (~6 min), 30 min por conexión, latido de 15 s, `retry:` de 3-6 s con azar. Todo en `trainwatch.api.directo.*`.
+- **Caché:** 5 s (trenes), 10 s (núcleos), 15 s (estación), 30 s (avisos), 1 min + `ETag` (línea: lleva avisos), 1 h + `ETag` (cercanas).
+- **Próximos trenes de una estación:** como mucho 15, de 30 min atrás (los retrasados que aún no han pasado) a 60 min adelante.
+- **La ficha de un tren solo existe en directo** (404 si no). **Los núcleos sin horario pero con trenes en el feed** salen en `/api/nucleos` sin centro ni zoom.
+- **springdoc 3.2.0** (24-10-2026, la rama para Boot 4, compilada contra Boot 4.1): funciona con Boot 4.2 en todas las pruebas.
+- **Swagger UI activado** también fuera de local: la API es pública y su documentación también. springdoc avisa al arrancar; si la fase 7 prefiere quitarla, es `springdoc.swagger-ui.enabled=false`.
+
+## 3. Cifras
+
+### Pruebas
+
+`./mvnw verify`: **115 pruebas, 0 fallos, 1 omitida** (antes, 94). Nuevas:
+
+- `EstadoDirectoTests.HoraProgramadaEnRetrasos` (5): cierre normal (la llegada de las 10:10, no la salida de las 10:11 ni la hora del cierre), cierre inferido, viaje que pasa la medianoche con calendario de varios días (fecha deducida: el 20, llegada el 21 a las 00:10), día del cambio de hora (29-03-2026) y tren sin horario (no cierra nada).
+- `DirectoIntegracionTests`: la fila real del C1 de Valencia guarda 10:24 (hora de Madrid) y una fila sin hora queda en `NULL`.
+- `ApiIntegracionTests` (6, con PostGIS en Testcontainers y la ingesta alimentada con los `.pb` de la fase 3):
+  - **sin datos:** núcleos con mapa y «sin datos en directo», listas vacías, instantánea vacía; errores 404 (núcleo, tren, estación, línea, ruta inexistente) y 400 (tipo incorrecto, parámetro que falta, formato y rango de `cerca`, `radio`), todos `application/problem+json` con título en español; el SSE de un núcleo inexistente, 404 como `ProblemDetail`;
+  - **con datos:** cada endpoint con su contrato (C1 en marcha con próxima parada y hora estimada = programada + retraso; ficha con paradas, situación y evolución; estación con el C1 en directo y el de Bilbao sin directo, y sin el tren que ya pasó; cercanas ordenadas y dentro del radio; línea en GeoJSON con paradas en orden; avisos filtrados por núcleo y estación);
+  - **caché, `ETag` (304) y CORS** (los dos orígenes sí; otro origen y `POST`, 403);
+  - **OpenAPI** con todos los endpoints, sus 404/503 como `problem+json` y los ejemplos de `docs/api/`;
+  - **SSE:** instantánea igual que la REST y con tildes bien (UTF-8), después un evento `cambios` con la secuencia siguiente y menos trenes que la instantánea, ningún evento si nada cambia, latido con la antigüedad, y reconexión con `Last-Event-ID` que recibe una instantánea al día;
+  - **máximo de conexiones:** con 3, la cuarta recibe 503 + `Retry-After: 30` + `ProblemDetail`, y al cerrarse las conexiones se liberan.
+- `EjemplosApiTests` (10): cada ejemplo de `docs/api/` se lee con su record y se vuelve a escribir igual.
+
+### Prueba de carga (20-11-2026, de 14:54:54 a 14:56:24)
+
+Aplicación con `./mvnw spring-boot:run`, perfil `local`, `-Xmx512m`, `maximo-conexiones=200`, leyendo los **feeds reales de Renfe** (466 trenes en memoria) y la base local. Cliente: `java backend/carga/CargaSse.java http://localhost:8080 200 90 51,10,40,20,60` en el mismo portátil (los núcleos, por turnos: Rodalies, Madrid, Valencia, Asturias y Bilbao).
+
+| Medida | Valor |
+|---|---:|
+| Clientes a la vez | **200** durante 90 s; conectados en 217 ms |
+| Conexión 201 | **503**, `Retry-After: 30`, `ProblemDetail` «Directo completo» |
+| Eventos recibidos | 200 instantáneas, 2.600 cambios (13 por cliente, uno por ciclo de ~7 s), 1.200 latidos; 56,5 MB |
+| Tamaño medio | instantánea 30,9 KB · cambios 18,7 KB |
+| Correcto | 0 errores, 0 cortes, 0 huecos de secuencia, todas empiezan por la instantánea |
+| **Latencia** de `cambios` (del final del ciclo a la llegada) | **p50 10 ms · p95 30 ms · p99 42 ms · máx 44 ms** |
+| **Heap** del servidor | 63 MB sin clientes; **71-91 MB** con 200 (de 512 MB) |
+| **CPU** del proceso (`process.cpu.usage`, todos los núcleos) | 5,1 % al conectarse los 200; luego **0,1-0,3 %** |
+| Hilos de plataforma | 33 sin clientes; 240 mientras Tomcat atendía las conexiones; 84 al final (los hilos virtuales de los clientes no cuentan aquí) |
+| Ancho de banda | ~3 KB/s por cliente, ~0,6 MB/s en total |
+
+El servidor apenas nota los 200 clientes: lo que más crece es el ancho de banda. El registro de la aplicación no tiene ni un `WARN` ni un `ERROR` de la API durante la prueba.
+
+### Tiempos de respuesta con datos reales (primera llamada · siguientes)
+
+`/api/nucleos` 761 ms · 6 ms (la primera calcula la extensión de cada núcleo sobre 1,8 M horas de paso) · `/api/nucleos/51/trenes` 22 ms (54 KB) · `/api/trenes/{id}` 42 ms · `/api/estaciones/71801` 137 ms · 91 ms · cercanas 53 ms · `/api/lineas/51/R4` 134 ms · 14 ms (45 KB) · `/api/avisos` 12 ms · `/api/docs` 525 ms (la primera vez genera la especificación).
+
+### Lo que se vio con los datos reales
+
+- **Barcelona-Sants a las 14:55:** 12 líneas y 15 próximos trenes, casi todos en directo; un R1 a Blanes con 29 min y un R4 con 25 min de retraso salían todavía como próximos (la ventana de 30 min atrás funciona). Cobertura por núcleo entre el 66,7 % (León) y el 100 %.
+- **`trip_updates` y `vehicle_positions` no siempre coinciden:** en 4 de 99 trenes en marcha con horario, `retrasos` ya tenía cerradas (como inferidas) paradas por delante de donde `vehicle_positions` sitúa al tren. Por ejemplo, un R1 con 27 min en Pl. de Catalunya tenía cerradas hasta El Masnou: `trip_updates` saltó seis paradas en una muestra. No es sistemático (no pasa con los trenes muy retrasados en general), pero en la ficha se ven paradas pendientes con retraso final. Es el caso del ADR 0012 y refuerza la propuesta de la fase 3b: publicar las estadísticas sin inferidos y contarlos aparte.
+
+## 4. Revisión independiente
+
+*(Se completa con el resultado de la revisión.)*
+
+## 5. Qué quedó fuera o pendiente
+
+- **Varias instancias:** el directo y el estado viven en memoria (ADR 0008 y 0015). La guía de defensa explica cómo separar ingesta y API con un bus.
+- **Ancho de banda del directo:** ~3 KB/s por cliente. Si crece, mandar solo los campos que cambian o comprimir.
+- **La hora estimada no es una predicción:** es la programada más el retraso actual.
+- **Un histórico por tren** (ficha de un tren que ya no está en directo).
+- **`EventSource` no reintenta un 503:** el frontend tiene que volver a abrir el directo pasado el `Retry-After` (está en `docs/api/README.md`).
+
+## 6. Qué cambiaría del plan
+
+- **§6, fase 5:** el frontend tiene su contrato en `docs/api/` (ejemplos con datos reales, comprobados contra los records) y la forma de consumir el directo. Debe reabrir el `EventSource` tras un 503 y enseñar la antigüedad del latido.
+- **§6, fase 6:** `retrasos.llegada_programada` está desde la V5 (hoy). Agrupar por `extract(hour from llegada_programada AT TIME ZONE 'Europe/Madrid')` y excluir las filas anteriores (`NULL`). Contar aparte los inferidos (ver §3).
+- **§6, fase 7:** en el servidor, vigilar `trainwatch.api.directo.conexiones`, `.rechazadas`, `.desconectados` y `.reconexiones`; poner el *rate limiting* de Cloudflare delante de la API; y decidir si Swagger UI se queda público.
