@@ -25,3 +25,6 @@ Thumbs.db
 # Frontend (fases siguientes)
 node_modules/
 dist/
+
+# Plantilla de variables de entorno: esta sí va al repo
+!.env.example
