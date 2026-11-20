@@ -23,6 +23,8 @@
 		<java.version>25</java.version>
 		<gtfs-realtime-bindings.version>0.2.0</gtfs-realtime-bindings.version>
 		<resilience4j.version>2.4.0</resilience4j.version>
+		<!-- springdoc 3.x es la rama para Spring Boot 4; 3.2.0 (24-10-2026) está compilada contra Boot 4.1 -->
+		<springdoc.version>3.2.0</springdoc.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -73,6 +75,13 @@
 			<groupId>io.github.resilience4j</groupId>
 			<artifactId>resilience4j-micrometer</artifactId>
 			<version>${resilience4j.version}</version>
+		</dependency>
+
+		<!-- Fase 4: documentación OpenAPI de la API (/api/docs) e interfaz de Swagger -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>${springdoc.version}</version>
 		</dependency>
 
 		<dependency>
@@ -128,6 +137,19 @@
 	</dependencies>
 
 	<build>
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+			</resource>
+			<!-- Fase 4: los ejemplos de docs/api/ (contrato para el frontend) también son los ejemplos de OpenAPI -->
+			<resource>
+				<directory>${project.basedir}/../docs/api</directory>
+				<targetPath>ejemplos-api</targetPath>
+				<includes>
+					<include>*.json</include>
+				</includes>
+			</resource>
+		</resources>
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
