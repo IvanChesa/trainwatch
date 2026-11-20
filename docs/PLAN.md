@@ -4,7 +4,7 @@ Estado: **aprobado para empezar** (20-nov-2026). Lo ha escrito la sesión de est
 
 ## Cambio de stack (Iván, 20-11): React + Java
 
-El frontend pasa de Angular a **React** (React 19, Vite y TypeScript). El backend sigue en Java 25 y Spring Boot. Lo ejecutó la tarea `docs/prompts/React.md` (fase 4r, [ADR 0011](adr/0011-react-en-lugar-de-angular.md)), antes de la fase 4. El §0 y el esquema de arquitectura conservan «Angular» como registro de la idea original.
+El frontend pasa de Angular a **React** (React 19, Vite y TypeScript). El backend sigue en Java 25 y Spring Boot. Lo ejecutó la tarea `docs/prompts/React.md` (fase 4r, [ADR 0011](adr/0011-react-en-lugar-de-angular.md)), antes de la fase 4. El §0 conserva «Angular» como registro de la idea original.
 
 ## Cambios tras la fase 0 (20-11, `docs/informes/fase-0.md` §7; prevalecen sobre el resto del plan)
 
@@ -80,7 +80,7 @@ El frontend pasa de Angular a **React** (React 19, Vite y TypeScript). El backen
 ```
 Renfe GTFS-RT (cada ~20 s) ──► Ingesta (Spring Boot, @Scheduled + Resilience4j)
                                    │  decodifica protobuf, cruza con el GTFS estático
-                                   ├─► estado actual en memoria ──► SSE ──► navegador (Angular + MapLibre)
+                                   ├─► estado actual en memoria ──► SSE ──► navegador (React + MapLibre)
                                    └─► PostgreSQL + PostGIS
                                          · posiciones (48 h, particionadas por día)
                                          · retraso final de cada tren en cada parada (histórico)

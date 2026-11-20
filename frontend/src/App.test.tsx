@@ -30,6 +30,17 @@ describe('App', () => {
     expect(fetchSimulado).toHaveBeenCalledWith('/api/estado', expect.anything());
   });
 
+  it('cancela la petición al desmontarse', () => {
+    const fetchSimulado = vi.fn().mockReturnValue(new Promise<Response>(() => {}));
+    vi.stubGlobal('fetch', fetchSimulado);
+    const { unmount } = render(<App />);
+
+    const { signal } = fetchSimulado.mock.calls[0][1] as RequestInit;
+    expect(signal?.aborted).toBe(false);
+    unmount();
+    expect(signal?.aborted).toBe(true);
+  });
+
   it('dice «backend no disponible» si responde con un error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respuestaJson({ error: 'caído' }, 503)));
     render(<App />);
