@@ -829,6 +829,81 @@ class EstadoDirectoTests {
         }
     }
 
+    // ---------------------------------------------------------------- fase 4: hora programada en retrasos
+
+    @Nested
+    class HoraProgramadaEnRetrasos {
+
+        /** Un viaje con paradas A, B y C a las horas dadas (segundos del día de servicio, pueden pasar de 86.400). */
+        Viaje viajeA(String id, LocalDate fecha, int a, int b, int c) {
+            return new Viaje(id, "51T0004R4", "R4", 51, "C", fecha, List.of(
+                    new ParadaViaje(1, "A", "A", 41.6, 0.60, a, a, null),
+                    new ParadaViaje(2, "B", "B", 41.6, 0.61, b, b + 60, null),
+                    new ParadaViaje(3, "C", "C", 41.6, 0.62, c, c, null)), null, 1);
+        }
+
+        @Test
+        void elCierreNormalGuardaLaLlegadaProgramadaDeLaParada() {
+            estado.procesarRetrasos(retrasos(hora(10, 2), List.of(tu("51T1", "B", 120))), hora(10, 2));
+            ResultadoRetrasos r = estado.procesarRetrasos(retrasos(hora(10, 13), List.of(tu("51T1", "C", 180))),
+                    hora(10, 13));
+            // B llega a las 10:10 según el horario (sale a las 10:11): la llegada, no la salida ni el cierre.
+            assertThat(r.cerrados()).singleElement().satisfies(f -> {
+                assertThat(f.llegadaProgramada()).isEqualTo(hora(10, 10));
+                assertThat(f.registrado()).isEqualTo(hora(10, 13));
+            });
+        }
+
+        @Test
+        void elCierreInferidoTambienLaGuarda() {
+            estado.procesarRetrasos(retrasos(hora(9, 58), List.of(tu("51T1", "A", 60))), hora(9, 58));
+            ResultadoRetrasos r = estado.procesarRetrasos(retrasos(hora(10, 12), List.of(tu("51T1", "C", 180))),
+                    hora(10, 12));
+            assertThat(r.cerrados()).extracting(RetrasoFinal::stopId, RetrasoFinal::inferido,
+                    RetrasoFinal::llegadaProgramada).containsExactly(
+                            org.assertj.core.groups.Tuple.tuple("A", false, hora(10, 0)),
+                            org.assertj.core.groups.Tuple.tuple("B", true, hora(10, 10)));
+        }
+
+        @Test
+        void unViajeQuePasaLaMedianocheCuentaDesdeSuFechaDeServicio() {
+            // Calendario de varios días (fechaServicio null): la fecha se deduce. A las 00:05 del 21 el viaje que
+            // salió a las 23:50 del 20 sigue en marcha: su fecha de servicio es el 20 y B (24:10) es el 21 a las 00:10.
+            horario.viajes.put("51NOCHE", viajeA("51NOCHE", null, 85_800, 87_000, 88_200));
+            Instant cero5 = ZonedDateTime.of(2026, 11, 21, 0, 5, 0, 0, MADRID).toInstant();
+            Instant cero15 = ZonedDateTime.of(2026, 11, 21, 0, 15, 0, 0, MADRID).toInstant();
+            estado.procesarRetrasos(retrasos(cero5, List.of(tu("51NOCHE", "B", 60))), cero5);
+            ResultadoRetrasos r = estado.procesarRetrasos(retrasos(cero15, List.of(tu("51NOCHE", "C", 60))), cero15);
+            assertThat(r.cerrados()).singleElement().satisfies(f -> {
+                assertThat(f.fechaServicio()).isEqualTo(DIA);
+                assertThat(f.llegadaProgramada())
+                        .isEqualTo(ZonedDateTime.of(2026, 11, 21, 0, 10, 0, 0, MADRID).toInstant());
+            });
+        }
+
+        @Test
+        void elDiaDelCambioDeHoraLaHoraEsLaDelReloj() {
+            // 29-03-2026: a las 02:00 se adelanta a las 03:00. Las 10:00 del horario son las 10:00 (CEST, 08:00 UTC).
+            LocalDate cambio = LocalDate.of(2026, 3, 29);
+            horario.viajes.put("51VERANO", viajeA("51VERANO", cambio, s(9, 50), s(10, 0), s(10, 10)));
+            Instant antes = Instant.parse("2026-03-29T07:55:00Z");
+            Instant despues = Instant.parse("2026-03-29T08:05:00Z");
+            estado.procesarRetrasos(retrasos(antes, List.of(tu("51VERANO", "B", 0))), antes);
+            ResultadoRetrasos r = estado.procesarRetrasos(retrasos(despues, List.of(tu("51VERANO", "C", 0))), despues);
+            assertThat(r.cerrados()).singleElement().satisfies(
+                    f -> assertThat(f.llegadaProgramada()).isEqualTo(Instant.parse("2026-03-29T08:00:00Z")));
+        }
+
+        @Test
+        void unTrenSinHorarioNoCierraNadaNiInventaLaHora() {
+            estado.procesarRetrasos(retrasos(hora(10, 5), List.of(tu("SPECIAL_10_1", "X", 60))), hora(10, 5));
+            ResultadoRetrasos r = estado.procesarRetrasos(retrasos(hora(10, 6), List.of(tu("SPECIAL_10_1", "Y", 60))),
+                    hora(10, 6));
+            assertThat(r.cerrados()).isEmpty();
+            assertThat(r.sinCerrar()).isEqualTo(1);
+        }
+    }
+
     @Nested
     class Concurrencia {
 

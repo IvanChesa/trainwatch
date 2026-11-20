@@ -610,11 +610,17 @@ public class EstadoDirecto {
         return indice >= 0 ? indice : viaje.indiceDe(stopId, 0);
     }
 
-    private static RetrasoFinal cierre(SeguimientoViaje s, int indice, boolean inferido, Instant ahora) {
+    /**
+     * La fila de {@code retrasos} de la parada {@code indice}. La hora programada de llegada sale del horario del viaje
+     * y de su fecha de servicio, como la posición estimada ({@link Viaje#instante}): cuenta desde «mediodía menos
+     * 12 h», así que vale con las horas de más de 24:00 y los días de cambio de hora (fase 4, ADR 0014).
+     */
+    private RetrasoFinal cierre(SeguimientoViaje s, int indice, boolean inferido, Instant ahora) {
         ParadaViaje parada = s.viaje().paradas().get(indice);
         int minutos = (int) Math.round(s.retrasoS() / 60.0);
+        Instant llegada = s.fecha() == null ? null : Viaje.instante(s.fecha(), parada.llegadaS(), zona);
         return new RetrasoFinal(s.fecha(), s.tripId(), parada.secuencia(), parada.stopId(), s.viaje().routeId(),
-                s.viaje().linea(), s.viaje().nucleo(), minutos, ahora, inferido);
+                s.viaje().linea(), s.viaje().nucleo(), minutos, ahora, inferido, llegada);
     }
 
     /** «C3-17907» → «C3». */

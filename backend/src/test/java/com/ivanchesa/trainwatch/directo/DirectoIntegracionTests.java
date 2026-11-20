@@ -209,6 +209,10 @@ class DirectoIntegracionTests {
                 .containsEntry("minutos", 3).containsEntry("linea", "C1").containsEntry("route_id", "40T0001C1");
         assertThat(((java.sql.Date) retraso.get("fecha_servicio")).toLocalDate()).isEqualTo(LocalDate.of(2026, 11, 20));
         assertThat(((Number) retraso.get("nucleo")).intValue()).isEqualTo(40);
+        // Fase 4: la hora programada de llegada a la 69103 (37.440 s = 10:24, hora de Madrid).
+        assertThat(jdbc.sql("SELECT llegada_programada FROM retrasos WHERE trip_id = '4023V24219C1'")
+                .query(java.time.OffsetDateTime.class).single().toInstant())
+                .isEqualTo(Instant.parse("2026-11-20T09:24:00Z"));
         assertThat(jdbc.sql("SELECT tableoid::regclass::text FROM retrasos LIMIT 1").query(String.class).single())
                 .isEqualTo("retrasos_p202611");
         assertThat(jdbc.sql("SELECT DISTINCT tableoid::regclass::text FROM posiciones").query(String.class).list())
@@ -411,14 +415,17 @@ class DirectoIntegracionTests {
     void unCierreInferidoNoPisaUnoVisto() {
         LocalDate dia = LocalDate.of(2026, 11, 20);
         Instant t = Instant.parse("2026-11-20T10:00:00Z");
-        repositorio.guardarRetrasos(List.of(new RetrasoFinal(dia, "INF1", 1, "A", "R", "C1", 40, 3, t, false)));
-        repositorio.guardarRetrasos(List.of(new RetrasoFinal(dia, "INF1", 1, "A", "R", "C1", 40, 9, t, true)));
+        repositorio.guardarRetrasos(List.of(new RetrasoFinal(dia, "INF1", 1, "A", "R", "C1", 40, 3, t, false, null)));
+        repositorio.guardarRetrasos(List.of(new RetrasoFinal(dia, "INF1", 1, "A", "R", "C1", 40, 9, t, true, null)));
         assertThat(jdbc.sql("SELECT minutos, inferido FROM retrasos WHERE trip_id = 'INF1'").query().singleRow())
                 .containsEntry("minutos", 3).containsEntry("inferido", false);
+        // Sin hora programada (como las filas anteriores a la V5): NULL, no un valor inventado.
+        assertThat(jdbc.sql("SELECT count(*) FROM retrasos WHERE trip_id = 'INF1' AND llegada_programada IS NULL")
+                .query(Long.class).single()).isEqualTo(1);
 
         // Al revés, sí: uno visto sustituye a uno inferido.
-        repositorio.guardarRetrasos(List.of(new RetrasoFinal(dia, "INF2", 1, "A", "R", "C1", 40, 9, t, true)));
-        repositorio.guardarRetrasos(List.of(new RetrasoFinal(dia, "INF2", 1, "A", "R", "C1", 40, 4, t, false)));
+        repositorio.guardarRetrasos(List.of(new RetrasoFinal(dia, "INF2", 1, "A", "R", "C1", 40, 9, t, true, null)));
+        repositorio.guardarRetrasos(List.of(new RetrasoFinal(dia, "INF2", 1, "A", "R", "C1", 40, 4, t, false, null)));
         assertThat(jdbc.sql("SELECT minutos, inferido FROM retrasos WHERE trip_id = 'INF2'").query().singleRow())
                 .containsEntry("minutos", 4).containsEntry("inferido", false);
     }

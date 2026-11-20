@@ -1,0 +1,11 @@
+-- Fase 4 · Hora programada de llegada en retrasos (ADR 0014).
+--
+-- Las estadísticas por franja horaria de la fase 6 («a las 8:00 llega con 4 min») necesitan la hora PROGRAMADA de
+-- cada parada. Hasta ahora retrasos no la guardaba: el horario de ese día se sustituye por la noche (ADR 0006), y
+-- registrado es cuándo se cerró el retraso, no cuándo tocaba pasar.
+--
+-- La rellena la ingesta al cerrar cada parada (también las inferidas) con el horario del viaje y su fecha de
+-- servicio, contando desde «mediodía menos 12 h» (vale con las horas de más de 24:00 y con el cambio de hora).
+-- NULL en las filas anteriores a esta migración (no se puede reconstruir: su horario ya no está).
+-- Sin DEFAULT: en una tabla particionada, ADD COLUMN sin valor por defecto no reescribe ninguna partición.
+ALTER TABLE retrasos ADD COLUMN llegada_programada TIMESTAMPTZ;
