@@ -65,6 +65,8 @@ public class EstadoDirecto {
     }
 
     private static final String SIN_COORDENADAS = "00000";
+    /** Una marca de tren a mas de 1 h de la cabecera se sustituye por la cabecera. */
+    private static final long MARGEN_MARCA_S = 3600;
 
     private final FuenteHorario horario;
     private final ZoneId zona;
@@ -78,6 +80,8 @@ public class EstadoDirecto {
     private final DetectorMuestrasIncompletas detectorRetrasos;
     private long cabeceraPosiciones = -1;
     private long cabeceraRetrasos = -1;
+    private int retrocesosPosiciones;
+    private int retrocesosRetrasos;
     private volatile Instant ultimaMuestraPosiciones;
     private volatile Instant ultimaMuestraRetrasos;
 
@@ -118,14 +122,15 @@ public class EstadoDirecto {
 
     public synchronized ResultadoRetrasos procesarRetrasos(FeedMessage muestra, Instant ahora) {
         long cabecera = muestra.getHeader().getTimestamp();
-        if (cabecera <= cabeceraRetrasos) {
+        if (!esNueva(cabecera, cabeceraRetrasos, retrocesosRetrasos)) {
+            retrocesosRetrasos = cabecera < cabeceraRetrasos ? retrocesosRetrasos + 1 : 0;
             return new ResultadoRetrasos(false, false, List.of(), 0);
         }
+        retrocesosRetrasos = 0;
         cabeceraRetrasos = cabecera;
         ultimaMuestraRetrasos = Instant.ofEpochSecond(cabecera);
         boolean completa = detectorRetrasos.completa(muestra.getEntityCount());
         Set<String> vistos = new HashSet<>();
-        Set<String> canceladosAhora = new HashSet<>();
         List<RetrasoFinal> cerrados = new ArrayList<>();
         int sinCerrar = 0;
 
@@ -140,12 +145,12 @@ public class EstadoDirecto {
             }
             SeguimientoViaje previo = seguimiento.get(tripId);
             Viaje viaje = horario.viaje(tripId);
-            LocalDate fecha = previo != null ? previo.fecha()
+            // La fecha se fija con el viaje; si antes no se encontraba en el horario y ahora si, se recalcula.
+            LocalDate fecha = previo != null && (previo.viaje() != null || viaje == null) ? previo.fecha()
                     : viaje != null ? viaje.fechaServicio(ahora, zona) : LocalDate.ofInstant(ahora, zona);
 
             if (tu.getTrip().getScheduleRelationship() == TripDescriptor.ScheduleRelationship.CANCELED) {
                 // Lo pendiente de un cancelado se descarta: no ha pasado por esa parada.
-                canceladosAhora.add(tripId);
                 seguimiento.put(tripId, new SeguimientoViaje(tripId, viaje, fecha, null, -1, null, true, 0));
                 continue;
             }
@@ -192,15 +197,23 @@ public class EstadoDirecto {
                 it.remove();
             }
         }
-        cancelados = Set.copyOf(canceladosAhora);
+        Set<String> todos = new HashSet<>();
+        for (SeguimientoViaje s : seguimiento.values()) {
+            if (s.cancelado()) {
+                todos.add(s.tripId()); // tambien los que faltan en esta muestra y aun no han desaparecido
+            }
+        }
+        cancelados = Set.copyOf(todos);
         return new ResultadoRetrasos(true, completa, cerrados, sinCerrar);
     }
 
     public synchronized ResultadoPosiciones procesarPosiciones(FeedMessage muestra, Instant ahora) {
         long cabecera = muestra.getHeader().getTimestamp();
-        if (cabecera <= cabeceraPosiciones) {
+        if (!esNueva(cabecera, cabeceraPosiciones, retrocesosPosiciones)) {
+            retrocesosPosiciones = cabecera < cabeceraPosiciones ? retrocesosPosiciones + 1 : 0;
             return new ResultadoPosiciones(false, false, List.of(), 0);
         }
+        retrocesosPosiciones = 0;
         cabeceraPosiciones = cabecera;
         Instant instanteCabecera = Instant.ofEpochSecond(cabecera);
         ultimaMuestraPosiciones = instanteCabecera;
@@ -234,9 +247,15 @@ public class EstadoDirecto {
                 lon = (double) v.getPosition().getLongitude();
             }
             Instant marca = v.hasTimestamp() ? Instant.ofEpochSecond(v.getTimestamp()) : instanteCabecera;
-            LocalDate fecha = seg != null ? seg.fecha()
-                    : anterior != null && anterior.fechaServicio() != null ? anterior.fechaServicio()
+            if (cabecera > 0 && Math.abs(marca.getEpochSecond() - cabecera) > MARGEN_MARCA_S) {
+                marca = instanteCabecera; // una marca absurda no puede caer fuera de las particiones
+            }
+            LocalDate fecha = seg != null && seg.viaje() != null ? seg.fecha()
+                    : anterior != null && anterior.viaje() != null ? anterior.fechaServicio()
                     : viaje != null ? viaje.fechaServicio(ahora, zona) : LocalDate.ofInstant(ahora, zona);
+            if (stopId == null && anterior != null) {
+                stopId = anterior.stopId(); // sin parada en esta muestra (00000): sigue en la ultima conocida
+            }
             int indice = -1;
             if (viaje != null && stopId != null) {
                 int desde = anterior != null && anterior.indiceParada() >= 0 ? anterior.indiceParada() : 0;
@@ -282,11 +301,27 @@ public class EstadoDirecto {
     /** Recalcula la posición estimada de todos los trenes para {@code ahora} (entre muestras, el tren avanza). */
     public synchronized void reestimar(Instant ahora) {
         for (Tren t : trenes.values()) {
-            trenes.put(t.id(), t.conEstimada(EstimadorPosicion.estimar(t, t, ahora, zona)));
+            // El estado depende de la hora (EN_ORIGEN pasa a EN_MARCHA al llegar su salida): se vuelve a calcular.
+            EstadoTren estadoAhora = clasificar(t.viaje(), t.indiceParada(), t.fechaServicio(), t.retrasoS(),
+                    t.estado() == EstadoTren.CANCELADO, ahora);
+            Tren actual = estadoAhora == t.estado() ? t : t.conEstado(estadoAhora);
+            trenes.put(t.id(), actual.conEstimada(EstimadorPosicion.estimar(actual, t, ahora, zona)));
         }
     }
 
     // ---------------------------------------------------------------- reglas
+
+    /**
+     * Una muestra es nueva si su cabecera es posterior a la anterior. Sin marca (0), se confia en el ETag del cliente.
+     * Si la marca retrocede (otro servidor, un reinicio del feed), se descarta, pero si se repite en 3 muestras
+     * seguidas se acepta como el reloj nuevo: si no, la ingesta se quedaria parada hasta reiniciar la aplicacion.
+     */
+    private boolean esNueva(long cabecera, long anterior, int retrocesosSeguidos) {
+        if (cabecera == 0 || cabecera > anterior) {
+            return true;
+        }
+        return cabecera < anterior && retrocesosSeguidos + 1 >= muestrasParaDesaparecer;
+    }
 
     EstadoTren clasificar(Viaje viaje, int indice, LocalDate fecha, Integer retraso, boolean cancelado, Instant ahora) {
         if (cancelado) {

@@ -47,6 +47,11 @@ public record Tren(String id, String tripId, String vehiculo, String linea, Inte
                 estadoFeed, lat, lon, marca, retrasoS, estimada, n);
     }
 
+    Tren conEstado(EstadoTren e) {
+        return new Tren(id, tripId, vehiculo, linea, nucleo, viaje, fechaServicio, e, stopId, indiceParada,
+                estadoFeed, lat, lon, marca, retrasoS, estimada, ausencias);
+    }
+
     Tren conEstimada(PosicionEstimada p) {
         return new Tren(id, tripId, vehiculo, linea, nucleo, viaje, fechaServicio, estado, stopId, indiceParada,
                 estadoFeed, lat, lon, marca, retrasoS, p, ausencias);

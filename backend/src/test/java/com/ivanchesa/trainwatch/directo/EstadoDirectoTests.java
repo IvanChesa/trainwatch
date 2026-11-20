@@ -485,6 +485,53 @@ class EstadoDirectoTests {
         }
     }
 
+    // ---------------------------------------------------------------- lo que encontró la revisión
+
+    @Nested
+    class CasosDeLaRevision {
+
+        @Test
+        void sinMuestraNuevaUnTrenEnOrigenPasaAEnMarchaConLaHora() {
+            estado.procesarPosiciones(posiciones(hora(9, 59), List.of(vp("51T1", "A", 41.6, 0.60))), hora(9, 59));
+            assertThat(estado.tren("51T1").estado()).isEqualTo(EstadoTren.EN_ORIGEN);
+            estado.reestimar(hora(10, 5));
+            assertThat(estado.tren("51T1").estado()).isEqualTo(EstadoTren.EN_MARCHA);
+            assertThat(estado.tren("51T1").estimada().fraccion()).isCloseTo(0.25, within(1e-9));
+        }
+
+        @Test
+        void conStop00000ConservaLaUltimaParadaConocida() {
+            estado.procesarPosiciones(posiciones(hora(10, 21), List.of(vp("51T1", "C", 41.6, 0.62))), hora(10, 21));
+            estado.procesarPosiciones(posiciones(hora(10, 22), List.of(vp("51T1", "00000", null, null))), hora(10, 22));
+            Tren t = estado.tren("51T1");
+            assertThat(t.stopId()).isEqualTo("C");
+            assertThat(t.estado()).isEqualTo(EstadoTren.TERMINADO);
+        }
+
+        @Test
+        void siElRelojDelFeedRetrocedeSeAceptaTrasTresMuestras() {
+            estado.procesarPosiciones(posiciones(hora(10, 5), relleno(10)), hora(10, 5));
+            long atras = cabecera - 3600;
+            List<Boolean> nuevas = new ArrayList<>();
+            for (int i = 0; i < 3; i++) {
+                FeedMessage m = FeedMessage.newBuilder(posiciones(hora(10, 5), relleno(10)))
+                        .setHeader(FeedHeader.newBuilder().setGtfsRealtimeVersion("2.0").setTimestamp(atras + i)).build();
+                cabecera = atras + i;
+                nuevas.add(estado.procesarPosiciones(m, hora(10, 6)).nueva());
+            }
+            assertThat(nuevas).containsExactly(false, false, true);
+        }
+
+        @Test
+        void lasHorasDelHorarioCuentanDesdeMediodiaMenos12h() {
+            // 29-03-2026: a las 02:00 se adelanta a las 03:00. Las 03:00 del horario (10.800 s) son las 03:00 reales.
+            Instant tres = Viaje.instante(LocalDate.of(2026, 3, 29), 3 * 3600, MADRID);
+            assertThat(tres).isEqualTo(ZonedDateTime.of(2026, 3, 29, 4, 0, 0, 0, MADRID).toInstant()
+                    .minusSeconds(3600));
+            assertThat(Viaje.instante(DIA, s(10, 0), MADRID)).isEqualTo(hora(10, 0));
+        }
+    }
+
     // ---------------------------------------------------------------- muestras reales
 
     static FeedMessage muestra(String nombre) throws IOException {

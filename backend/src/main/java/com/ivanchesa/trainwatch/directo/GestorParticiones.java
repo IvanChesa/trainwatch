@@ -1,5 +1,6 @@
 package com.ivanchesa.trainwatch.directo;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -13,6 +14,8 @@ import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -50,11 +53,23 @@ public class GestorParticiones {
     private final JdbcTemplate jdbc;
     private final ZoneId zona = RelojConfig.ZONA;
     private final Duration retencion;
+    private final Clock reloj;
     private Instant ultimaPasada;
 
-    public GestorParticiones(JdbcTemplate jdbc, DirectoProperties propiedades) {
+    public GestorParticiones(JdbcTemplate jdbc, DirectoProperties propiedades, Clock reloj) {
         this.jdbc = jdbc;
+        this.reloj = reloj;
         this.retencion = propiedades.retencionPosiciones();
+    }
+
+    /** Al arrancar, antes del primer ciclo de la ingesta (que espera 10 s), y aunque la ingesta este desactivada. */
+    @EventListener(ApplicationReadyEvent.class)
+    void alArrancar() {
+        try {
+            mantenerSiToca(reloj.instant());
+        } catch (RuntimeException e) {
+            log.warn("No se pudieron preparar las particiones al arrancar: {}", e.toString());
+        }
     }
 
     /** Hace una pasada si nunca se ha hecho, si hace más de una hora de la última o si ha cambiado el día. */
@@ -84,11 +99,16 @@ public class GestorParticiones {
             if (!m.matches()) {
                 continue;
             }
-            LocalDate dia = LocalDate.parse(m.group(1), DIA);
-            Instant fin = dia.plusDays(1).atStartOfDay(zona).toInstant();
-            if (!fin.isAfter(ahora.minus(retencion))) {
-                jdbc.execute("DROP TABLE " + nombre); // el nombre viene del catálogo y cumple el patrón
-                borradas.add(nombre);
+            try {
+                LocalDate dia = LocalDate.parse(m.group(1), DIA);
+                Instant fin = dia.plusDays(1).atStartOfDay(zona).toInstant();
+                if (!fin.isAfter(ahora.minus(retencion))) {
+                    jdbc.execute("DROP TABLE " + nombre); // el nombre viene del catalogo y cumple el patron
+                    borradas.add(nombre);
+                }
+            } catch (RuntimeException e) {
+                // Una particion rara (fecha imposible, bloqueada) no impide revisar las demas.
+                log.warn("No se pudo revisar o borrar la particion {}: {}", nombre, e.toString());
             }
         }
         ultimaPasada = ahora;

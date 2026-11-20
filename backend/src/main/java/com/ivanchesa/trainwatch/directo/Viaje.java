@@ -53,15 +53,22 @@ public record Viaje(String tripId, String routeId, String linea, Integer nucleo,
         long salida = paradas.getFirst().salidaS();
         long llegada = paradas.getLast().llegadaS();
         LocalDate ayer = hoy.minusDays(1);
-        long segundosAyer = ahora.getEpochSecond() - ayer.atStartOfDay(zona).toEpochSecond();
-        long segundosHoy = ahora.getEpochSecond() - hoy.atStartOfDay(zona).toEpochSecond();
+        long segundosAyer = ahora.getEpochSecond() - origenDelDia(ayer, zona).getEpochSecond();
+        long segundosHoy = ahora.getEpochSecond() - origenDelDia(hoy, zona).getEpochSecond();
         boolean enMarchaDeAyer = segundosAyer >= salida - 3600 && segundosAyer <= llegada + 3600;
         return enMarchaDeAyer && segundosHoy < salida - 3600 ? ayer : hoy;
     }
 
+    /**
+     * El cero de las horas de un dia de servicio en GTFS: mediodia menos 12 h, no la medianoche. Los dos dias de
+     * cambio de hora no es lo mismo.
+     */
+    public static Instant origenDelDia(LocalDate fecha, ZoneId zona) {
+        return fecha.atTime(12, 0).atZone(zona).toInstant().minusSeconds(12 * 3600);
+    }
+
     /** Instante de una hora del horario (segundos desde la medianoche del día de servicio). */
     public static Instant instante(LocalDate fecha, int segundos, ZoneId zona) {
-        // En GTFS las horas cuentan desde «mediodía menos 12 h»; salvo los dos días de cambio de hora, es la medianoche.
-        return fecha.atStartOfDay(zona).toInstant().plusSeconds(segundos);
+        return origenDelDia(fecha, zona).plusSeconds(segundos);
     }
 }

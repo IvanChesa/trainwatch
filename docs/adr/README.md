@@ -9,3 +9,6 @@ Un fichero por decisión: `NNNN-titulo-corto.md`, con contexto, decisión, alter
 - [0005 · `geometry(…, 4326)` para estaciones y recorridos, con índice sobre `geography`](0005-geometry-4326-con-indice-geography.md)
 - [0006 · Cambio atómico del horario renombrando esquemas](0006-cambio-atomico-del-horario-por-esquemas.md)
 - [0007 · Spring Batch con `COPY` por lotes, repositorio de trabajos en memoria y disparo manual con token](0007-spring-batch-con-copy-y-repositorio-en-memoria.md)
+- [0008 · El estado del directo vive en memoria; la base de datos guarda el historial](0008-estado-del-directo-en-memoria.md)
+- [0009 · Particiones diarias para `posiciones` y mensuales para `retrasos`, gestionadas por la aplicación](0009-particiones-diarias-y-mensuales.md)
+- [0010 · La posición del tren se estima con el horario, el retraso y el recorrido](0010-posicion-estimada-sobre-el-recorrido.md)

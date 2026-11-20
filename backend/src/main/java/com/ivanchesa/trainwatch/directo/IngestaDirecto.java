@@ -69,6 +69,13 @@ public class IngestaDirecto {
 
     private final AtomicReference<ResumenDirecto> resumen;
     private volatile Instant ultimaMuestraAvisos;
+    private final DetectorMuestrasIncompletas detectorAvisos;
+    /**
+     * Retrasos finales cerrados que aun no se han podido escribir (la base de datos fallo): se reintentan en el
+     * ciclo siguiente. Son la base de las estadisticas y el estado en memoria ya no los volveria a cerrar. Acotada.
+     */
+    private final List<RetrasoFinal> retrasosPendientes = new ArrayList<>();
+    private static final int MAXIMO_PENDIENTES = 100_000;
 
     public IngestaDirecto(ClienteFeeds cliente, EstadoDirecto estado, HorarioDirectoJdbc horario,
             RepositorioDirecto repositorio, GestorParticiones particiones, DirectoProperties propiedades, Clock reloj,
@@ -82,6 +89,8 @@ public class IngestaDirecto {
         this.reloj = reloj;
         this.metricas = metricas;
         this.resumen = new AtomicReference<>(ResumenDirecto.vacio(reloj.instant()));
+        this.detectorAvisos = new DetectorMuestrasIncompletas(propiedades.fraccionIncompleta(),
+                propiedades.muestrasParaDesaparecer());
         registrarIndicadores();
     }
 
@@ -103,15 +112,19 @@ public class IngestaDirecto {
         }
 
         descargar(Feed.RETRASOS).ifPresent(muestra -> {
-            ResultadoRetrasos r = procesar(Feed.RETRASOS, () -> estado.procesarRetrasos(muestra, ahora));
+            Instant ahoraRetrasos = reloj.instant(); // la descarga puede haber tardado (reintentos)
+            ResultadoRetrasos r = procesar(Feed.RETRASOS, () -> estado.procesarRetrasos(muestra, ahoraRetrasos));
             if (r != null && r.nueva()) {
                 contarMuestra(Feed.RETRASOS, r.completa());
                 metricas.counter("trainwatch.directo.retrasos.sin.cerrar").increment(r.sinCerrar());
-                guardar("retrasos", () -> repositorio.guardarRetrasos(r.cerrados()));
+                retrasosPendientes.addAll(r.cerrados());
             }
         });
+        guardarRetrasosPendientes();
         descargar(Feed.POSICIONES).ifPresent(muestra -> {
-            ResultadoPosiciones r = procesar(Feed.POSICIONES, () -> estado.procesarPosiciones(muestra, ahora));
+            Instant ahoraPosiciones = reloj.instant();
+            ResultadoPosiciones r = procesar(Feed.POSICIONES,
+                    () -> estado.procesarPosiciones(muestra, ahoraPosiciones));
             if (r != null && r.nueva()) {
                 contarMuestra(Feed.POSICIONES, r.completa());
                 metricas.counter("trainwatch.directo.trenes.desaparecidos").increment(r.desaparecidos());
@@ -121,16 +134,21 @@ public class IngestaDirecto {
         descargar(Feed.AVISOS).ifPresent(muestra -> {
             long cabecera = muestra.getHeader().getTimestamp();
             Instant previa = ultimaMuestraAvisos;
-            if (previa == null || cabecera > previa.getEpochSecond()) {
+            if (previa == null || cabecera == 0 || cabecera != previa.getEpochSecond()) {
                 ultimaMuestraAvisos = Instant.ofEpochSecond(cabecera);
-                contarMuestra(Feed.AVISOS, true);
-                guardar("avisos", () -> repositorio.sustituirAvisos(avisosDe(muestra, ahora)));
+                // Una muestra de avisos vacia o con muchos menos no borra los que hay (como las incompletas).
+                boolean completa = detectorAvisos.completa(muestra.getEntityCount());
+                contarMuestra(Feed.AVISOS, completa);
+                if (completa) {
+                    guardar("avisos", () -> repositorio.sustituirAvisos(avisosDe(muestra, reloj.instant())));
+                }
             }
         });
 
         try {
-            estado.reestimar(ahora);
-            resumen.set(calcularResumen(ahora));
+            Instant fin = reloj.instant();
+            estado.reestimar(fin);
+            resumen.set(calcularResumen(fin));
         } catch (RuntimeException e) {
             error(null, "resumen", e);
         }
@@ -173,6 +191,22 @@ public class IngestaDirecto {
             metricas.counter("trainwatch.directo.filas", "tabla", tabla).increment(filas);
         } catch (RuntimeException e) {
             error(null, "base_de_datos", e);
+        }
+    }
+
+    private void guardarRetrasosPendientes() {
+        if (retrasosPendientes.isEmpty()) {
+            return;
+        }
+        try {
+            int filas = repositorio.guardarRetrasos(List.copyOf(retrasosPendientes));
+            metricas.counter("trainwatch.directo.filas", "tabla", "retrasos").increment(filas);
+            retrasosPendientes.clear();
+        } catch (RuntimeException e) {
+            error(null, "base_de_datos", e);
+            if (retrasosPendientes.size() > MAXIMO_PENDIENTES) {
+                retrasosPendientes.subList(0, retrasosPendientes.size() - MAXIMO_PENDIENTES).clear();
+            }
         }
     }
 

@@ -124,6 +124,9 @@ public class ClienteFeeds {
         } catch (IOException | RuntimeException e) {
             throw e;
         } catch (Throwable e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt(); // el apagado de la aplicacion tiene que ver la interrupcion
+            }
             throw new IOException(e);
         }
     }

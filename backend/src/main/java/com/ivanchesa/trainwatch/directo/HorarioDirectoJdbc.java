@@ -94,7 +94,7 @@ public class HorarioDirectoJdbc implements FuenteHorario {
                 lista = cargarIntervalos(fecha);
                 intervalos.put(fecha, lista);
             }
-            long segundos = ahora.getEpochSecond() - fecha.atStartOfDay(zona).toEpochSecond();
+            long segundos = ahora.getEpochSecond() - Viaje.origenDelDia(fecha, zona).getEpochSecond();
             for (Intervalo i : lista) {
                 if (i.nucleo() != null && i.inicioS() <= segundos && segundos <= i.finS()) {
                     resultado.computeIfAbsent(i.nucleo(), k -> new HashSet<>()).add(i.tripId());
