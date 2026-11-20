@@ -55,8 +55,10 @@ resource "azurerm_federated_identity_credential" "github" {
   user_assigned_identity_id = azurerm_user_assigned_identity.github.id
   issuer                    = "https://token.actions.githubusercontent.com"
   audience                  = ["api://AzureADTokenExchange"]
-  # Solo los trabajos del entorno «produccion» de este repositorio (y el entorno solo admite la rama main).
-  subject = "repo:${var.repositorio_github}:environment:${var.entorno_github}"
+  # Solo los trabajos del entorno «produccion» de este repositorio (y el entorno solo admite la rama main). GitHub
+  # pone en el subject los identificadores de la cuenta y del repositorio (var.sujeto_github): si se renombrara el
+  # repositorio, seguiría valiendo; si se borrara y se creara otro con el mismo nombre, no.
+  subject = var.sujeto_github
 }
 
 # Rol propio con lo justo para «az vm run-command invoke» en esta máquina: ni crear, ni borrar, ni leer secretos.
