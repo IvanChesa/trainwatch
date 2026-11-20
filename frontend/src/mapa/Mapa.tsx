@@ -5,6 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import urlWorker from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import type { Linea, Nucleo, TrenMapa } from '../api/tipos';
 import { CapaLinea } from './capaLinea';
+import { aligerarEstilo } from './estiloBase';
 import { CAPA_DESTACADA, CapaTrenes2D, type CapaDeTrenes } from './capaTrenes';
 
 setWorkerUrl(urlWorker);
@@ -56,7 +57,6 @@ export default function Mapa(props: PropsMapa) {
     const { nucleo, reducirMovimiento } = ultimas.current;
     const m = new MapaLibre({
       container: contenedor.current,
-      style: ESTILO_MAPA,
       center: nucleo?.centro ? [nucleo.centro.lon, nucleo.centro.lat] : [2.17, 41.39],
       zoom: nucleo?.zoom ?? 8,
       attributionControl: false,
@@ -66,6 +66,7 @@ export default function Mapa(props: PropsMapa) {
       maxPitch: 0,
       fadeDuration: reducirMovimiento ? 0 : 300,
     });
+    m.setStyle(ESTILO_MAPA, { transformStyle: aligerarEstilo });
     m.touchZoomRotate.disableRotation();
     // El estilo de OpenFreeMap pide algún icono que no trae su sprite: uno vacío evita el aviso en la consola.
     m.setMissingStyleImageResolver((id) => {
