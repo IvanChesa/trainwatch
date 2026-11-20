@@ -61,6 +61,16 @@ Comprobado en la parte A (20-11, solo lectura, con el `az login` de Iván):
 
 Si algo de esto ha cambiado, se para y se decide con Iván (la otra región permitida más cercana es `italynorth`).
 
+### Lo que pasó el 20-11 (parte B): MFA obligatorio
+
+Azure exige **MFA** para crear o cambiar recursos, también en Azure for Students. Un `az login` normal reutiliza la sesión del navegador y puede dejar un token sin MFA: el `apply` falla con `RequestDisallowedByAzure ... without authenticating through MFA`. La CLI guarda un token por cada forma de pedirlo, y Terraform pide `https://management.azure.com` (sin barra final), así que hay que forzar el MFA para esa forma:
+
+```powershell
+az login --tenant <tenant> --scope https://management.azure.com/.default --claims-challenge eyJhY2Nlc3NfdG9rZW4iOnsiYWNycyI6eyJlc3NlbnRpYWwiOnRydWUsInZhbHVlcyI6WyJwMSJdfX19
+```
+
+(El reto en base64 es `{"access_token":{"acrs":{"essential":true,"values":["p1"]}}}`.) Para comprobarlo: el token de `az account get-access-token --resource https://management.azure.com` tiene que llevar `amr: mfa`.
+
 ## 2 · Cloudflare: tokens (Iván)
 
 En el panel de Cloudflare, **My Profile → API Tokens → Create Token → Custom token**. Dos tokens:
@@ -69,6 +79,8 @@ En el panel de Cloudflare, **My Profile → API Tokens → Create Token → Cust
 |---|---|---|---|---|
 | `trainwatch-terraform` | Zone · DNS · Edit; Zone · SSL and Certificates · Edit (certificado de origen y Authenticated Origin Pulls por nombre de host); Account · Cloudflare Pages · Edit | Zona `ivanchesa.com`; la cuenta de Iván | **1 día** | Variable de entorno `CLOUDFLARE_API_TOKEN` en la terminal de la sesión. Nunca en un fichero |
 | `trainwatch-pages-ci` | Account · Cloudflare Pages · Edit | La cuenta de Iván | Sin caducidad (se puede rotar) | Secreto `CLOUDFLARE_API_TOKEN` del entorno `produccion` de GitHub (paso 6) |
+
+**Ojo con el permiso de Pages:** es de **cuenta** («Account»), no de zona. El 20-11 el token tenía 95 permisos de zona y ninguno de cuenta, y la creación del proyecto de Pages daba 403 (`Authentication error`) aunque el plan saliera bien: el plan no llama a la API de Pages, el `apply` sí. Y no hace falta un token con todos los permisos de zona: con los tres de la tabla basta.
 
 El **Zone ID** de `ivanchesa.com` y el **Account ID** ya están en `infra/terraform/produccion/terraform.tfvars.example` (los leyó la sesión de control; no son secretos).
 
@@ -92,7 +104,7 @@ cd ../produccion
 cp backend.hcl.example backend.hcl             # con la cuenta de almacenamiento del paso 3
 cp terraform.tfvars.example terraform.tfvars   # suscripción e IP pública del portátil (Zone ID y Account ID ya vienen)
 export CLOUDFLARE_API_TOKEN=...                # el token trainwatch-terraform (lo pega Iván)
-terraform init -backend-config=backend.hcl
+terraform init "-backend-config=backend.hcl"   # entre comillas: PowerShell 5.1 parte el argumento por el punto
 terraform plan -out produccion.tfplan
 ```
 
