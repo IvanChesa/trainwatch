@@ -60,10 +60,13 @@ variable "ips_administracion" {
   type        = list(string)
 }
 
-variable "repositorio_github" {
-  description = "Repositorio de GitHub que despliega por OIDC (propietario/nombre)"
+variable "sujeto_github" {
+  description = <<-EOT
+    Subject del token OIDC de GitHub que se acepta. GitHub lo firma con los identificadores fijos de la cuenta y del
+    repositorio (propietario@id/repo@id), no solo con los nombres: comprobado en el primer despliegue (20-11-2026).
+  EOT
   type        = string
-  default     = "IvanChesa/trainwatch"
+  default     = "repo:IvanChesa@304584247/trainwatch@1465700293:environment:produccion"
 }
 
 variable "entorno_github" {
