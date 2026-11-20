@@ -20,7 +20,7 @@ import com.sun.net.httpserver.HttpServer;
  * 304 a {@code If-None-Match} y puede fallar con 500, tardar a propósito (antes de las cabeceras o a mitad del
  * cuerpo), mandar el cuerpo sin {@code Content-Length} (por trozos) o anunciar un {@code Content-Length} falso.
  */
-final class ServidorFeeds implements AutoCloseable {
+public final class ServidorFeeds implements AutoCloseable {
 
     private final HttpServer servidor;
     private final Map<String, byte[]> ficheros = new ConcurrentHashMap<>();
@@ -36,7 +36,7 @@ final class ServidorFeeds implements AutoCloseable {
     /** {@code System.nanoTime()} de la llegada de cada petición. */
     final List<Long> llegadas = new CopyOnWriteArrayList<>();
 
-    ServidorFeeds() {
+    public ServidorFeeds() {
         try {
             servidor = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         } catch (IOException e) {
@@ -46,11 +46,11 @@ final class ServidorFeeds implements AutoCloseable {
         servidor.start();
     }
 
-    URI url(String ruta) {
+    public URI url(String ruta) {
         return URI.create("http://127.0.0.1:" + servidor.getAddress().getPort() + ruta);
     }
 
-    void servir(String ruta, byte[] contenido) {
+    public void servir(String ruta, byte[] contenido) {
         ficheros.put(ruta, contenido);
     }
 

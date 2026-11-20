@@ -2,12 +2,14 @@ package com.ivanchesa.trainwatch.api;
 
 import java.util.Map;
 
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
@@ -36,6 +38,10 @@ public class ErroresApi extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
             HttpStatusCode statusCode, WebRequest request) {
+        if (body == null && ex instanceof ErrorResponse respuesta) {
+            // Lo mismo que haría la clase base, pero antes, para poder traducirlo.
+            body = respuesta.updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
+        }
         if (body instanceof ProblemDetail p) {
             // El título que pone Spring es la frase del estado en inglés («Not Found»); los propios ya van en español.
             HttpStatus estado = HttpStatus.resolve(statusCode.value());
