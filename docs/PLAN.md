@@ -2,6 +2,10 @@
 
 Estado: **aprobado para empezar** (20-nov-2026). Lo ha escrito la sesión de estrategia. Nombre y dirección decididos por Iván: **TrainWatch**, en **`trainwatch.ivanchesa.com`**. Las demás decisiones del §9 (D2-D5) se cierran tras la fase 0.
 
+## Cambio de stack (Iván, 20-11): React + Java
+
+El frontend pasa de Angular a **React** (React 19, Vite y TypeScript). El backend sigue en Java 25 y Spring Boot. Lo ejecuta la tarea `docs/prompts/React.md`, antes de la fase 4, y prevalece sobre donde este plan diga «Angular».
+
 ## Cambios tras la fase 0 (20-11, `docs/informes/fase-0.md` §7; prevalecen sobre el resto del plan)
 
 1. **Movimiento:** la posición del feed salta de estación en estación (el 78 % está a menos de 50 m de una). La posición en el mapa se **estima** con la última parada, la siguiente, sus horas programadas más el retraso y `shapes.txt`, y el feed la corrige. Por eso la fase 2 proyecta las paradas sobre el recorrido.

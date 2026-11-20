@@ -28,7 +28,7 @@ Exponer lo que ya recoge la ingesta con una **API REST documentada** y un **cana
    - Un latido cada ~15 s.
    - Soporta `Last-Event-ID`, o explica en el ADR por qué basta con reenviar la instantánea.
    - El ADR de SSE frente a WebSocket ya lo pide el plan (§3).
-3. **CORS** solo para `https://trainwatch.ivanchesa.com` y `http://localhost:4200`. Cabeceras de caché razonables en lo que no cambia, como las líneas y las estaciones.
+3. **CORS** solo para `https://trainwatch.ivanchesa.com` y `http://localhost:5173`, el frontend de React con Vite. Cabeceras de caché razonables en lo que no cambia, como las líneas y las estaciones.
 4. **Límites:**
    - un máximo de conexiones SSE configurable, con un rechazo claro si se pasa;
    - tiempos de espera.
