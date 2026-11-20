@@ -4,7 +4,7 @@ Estado: **aprobado para empezar** (20-nov-2026). Lo ha escrito la sesión de est
 
 ## Cambio de stack (Iván, 20-11): React + Java
 
-El frontend pasa de Angular a **React** (React 19, Vite y TypeScript). El backend sigue en Java 25 y Spring Boot. Lo ejecuta la tarea `docs/prompts/React.md`, antes de la fase 4, y prevalece sobre donde este plan diga «Angular».
+El frontend pasa de Angular a **React** (React 19, Vite y TypeScript). El backend sigue en Java 25 y Spring Boot. Lo ejecutó la tarea `docs/prompts/React.md` (fase 4r, [ADR 0011](adr/0011-react-en-lugar-de-angular.md)), antes de la fase 4. El §0 conserva «Angular» como registro de la idea original.
 
 ## Cambios tras la fase 0 (20-11, `docs/informes/fase-0.md` §7; prevalecen sobre el resto del plan)
 
@@ -80,7 +80,7 @@ El frontend pasa de Angular a **React** (React 19, Vite y TypeScript). El backen
 ```
 Renfe GTFS-RT (cada ~20 s) ──► Ingesta (Spring Boot, @Scheduled + Resilience4j)
                                    │  decodifica protobuf, cruza con el GTFS estático
-                                   ├─► estado actual en memoria ──► SSE ──► navegador (Angular + MapLibre)
+                                   ├─► estado actual en memoria ──► SSE ──► navegador (React + MapLibre)
                                    └─► PostgreSQL + PostGIS
                                          · posiciones (48 h, particionadas por día)
                                          · retraso final de cada tren en cada parada (histórico)
@@ -111,7 +111,7 @@ Front: trainwatch.ivanchesa.com (Cloudflare Pages) · API: trainwatch-api.ivanch
 | Procesos programados | Spring Batch (GTFS estático) y `@Scheduled` (tiempo real) |
 | Resiliencia y métricas | Resilience4j, Spring Boot Actuator y Micrometer |
 | API | Spring Web con OpenAPI (springdoc), y SSE |
-| Frontend | **Angular** con **MapLibre GL** y mapas de OpenFreeMap (gratis, sin clave; se cita OpenStreetMap) |
+| Frontend | **React 19** con **Vite** y TypeScript, y **MapLibre GL** y mapas de OpenFreeMap (gratis, sin clave; se cita OpenStreetMap) |
 | Pruebas | JUnit 5, **Testcontainers** (PostgreSQL de verdad en las pruebas), feeds grabados como datos de prueba, Vitest y Playwright en el frontend |
 | Contenedores | Docker y Docker Compose (en local y en el servidor) |
 | CI/CD | GitHub Actions: compilar, probar, crear la imagen en GHCR y desplegar |
@@ -138,8 +138,8 @@ Mismo ciclo que en Torno y en ivanchesa.com: especificación, rama, pruebas, rev
 | **1 · Cimientos** | Monorepo (`backend/`, `frontend/`, `infra/`), Java 25 y Spring Boot, Docker Compose con PostGIS, CI y el primer ADR | Proyecto vacío con pruebas en CI |
 | **2 · GTFS estático** | Importación nocturna con Spring Batch, idempotente y con cambio de golpe | Carga completa en menos de X min; pruebas con un GTFS pequeño de ejemplo |
 | **3 · Ingesta en directo** | Lectura cada ~20 s, cruce con el horario, estado en memoria, posiciones y retrasos en base de datos, resiliencia y métricas | 24 h seguidas sin errores; reintentos probados simulando caídas del feed |
-| **4 · API y directo** | REST con OpenAPI (núcleos, trenes, estaciones) y SSE | Pruebas de los endpoints; el SSE aguanta 200 clientes en local |
-| **5 · El mapa** | Angular y MapLibre: trenes moviéndose, colores, fichas, filtro de línea, vista de lista y accesibilidad | e2e con Playwright; Lighthouse ≥ 90 en móvil (el mapa pesa) |
+| **4 · API y directo** | REST con OpenAPI (núcleos, trenes, estaciones) y SSE; CORS para la web y `localhost:5173` (Vite) | Pruebas de los endpoints; el SSE aguanta 200 clientes en local |
+| **5 · El mapa** | React y MapLibre: trenes moviéndose, colores, fichas, filtro de línea, vista de lista y accesibilidad | e2e con Playwright; Lighthouse ≥ 90 en móvil (el mapa pesa) |
 | **6 · Estadísticas** | Agregados, páginas por línea y RL4 destacada | Cifras comprobadas a mano contra los datos sin procesar en una muestra |
 | **7 · Despliegue y portfolio** | Servidor con Terraform, dominio, HTTPS, despliegue automático, copias de la base de datos y alertas. Después, el **hito de portfolio**: README con el esquema, vídeo de 60 s, ficha en ivanchesa.com y publicación en LinkedIn | La aplicación en marcha 7 días seguidos en producción |
 | **8 · Opcional** | AV, larga y media distancia en el mapa; repetición de un día pasado | — |
