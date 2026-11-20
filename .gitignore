@@ -1,0 +1,27 @@
+# Datos crudos de la prueba técnica (feeds .pb grabados y GTFS descargado)
+spike/datos/
+*.pb
+fomento_transit.zip
+
+# Java / Maven
+target/
+*.class
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE y sistema
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Entorno y secretos
+.env
+.env.*
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Frontend (fases siguientes)
+node_modules/
+dist/
