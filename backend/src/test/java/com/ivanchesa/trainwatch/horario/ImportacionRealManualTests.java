@@ -81,6 +81,10 @@ class ImportacionRealManualTests {
         salida.add("Tercera (mismo ETag): " + tercera.resultado() + " en " + tercera.duracion().toMillis() + " ms");
 
         salida.add("Filas y calidad: " + segunda.filas());
+        salida.add("Tamaño del esquema horario (tablas e índices): " + jdbc.sql("""
+                SELECT pg_size_pretty(sum(pg_total_relation_size(c.oid)))
+                FROM pg_class c WHERE c.relnamespace = 'horario'::regnamespace AND c.relkind = 'r'
+                """).query(String.class).single());
 
         salida.add("Encaje de los viajes de tren en su recorrido, por núcleo:");
         jdbc.sql("""
