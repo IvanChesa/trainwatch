@@ -149,7 +149,7 @@ test('filtra por línea y destaca la RL4 en Rodalies', async ({ page }) => {
   await page.getByRole('combobox', { name: 'Línea' }).selectOption('R15');
   await expect(lista.getByRole('button')).toHaveCount(2);
   await expect(page).toHaveURL(/linea=R15/);
-  await page.getByRole('button', { name: /Ver la RL4 de Lleida/ }).click();
+  await page.getByRole('button', { name: /RL4 Lleida/ }).click();
   await expect(page.getByRole('combobox', { name: 'Línea' })).toHaveValue('RL4');
   await expect(lista).toContainText('No hay trenes');
 });

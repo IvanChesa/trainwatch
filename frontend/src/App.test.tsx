@@ -79,7 +79,7 @@ describe('App', () => {
     expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=51');
     expect(screen.getByRole('combobox', { name: 'Núcleo' })).toHaveValue('51');
     expect(screen.getByRole('option', { name: 'RL4 (Lleida) ★' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Ver la RL4 de Lleida/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /RL4 Lleida/ })).toBeInTheDocument();
     expect(screen.getByText('2 trenes en marcha y 1 en origen')).toBeInTheDocument();
     expect(screen.getByText(/^En directo · dato de Renfe hace 16 s$/)).toBeInTheDocument();
     // Los tres trenes de la instantánea, en el mapa.

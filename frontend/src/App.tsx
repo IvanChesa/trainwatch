@@ -188,12 +188,6 @@ export default function App() {
           </label>
         </div>
 
-        {esRodalies && linea !== LINEA_DESTACADA && (
-          <button type="button" className="destacada" onClick={() => setLinea(LINEA_DESTACADA)}>
-            <span aria-hidden="true">★</span> Ver la RL4 de Lleida
-          </button>
-        )}
-
         {nucleo && nucleo.estado !== 'EN_DIRECTO' && (
           <p className="aviso-nucleo">
             {nucleo.estado === 'SIN_DATOS_EN_DIRECTO'
@@ -202,7 +196,7 @@ export default function App() {
           </p>
         )}
         {nucleo?.cobertura?.porcentaje != null && nucleo.cobertura.porcentaje < 80 && (
-          <p className="nota">
+          <p className="nota cobertura">
             Cobertura del directo: el {nucleo.cobertura.porcentaje.toLocaleString('es-ES')} % de los trenes en marcha
             según el horario.
           </p>
@@ -220,6 +214,11 @@ export default function App() {
           <button type="button" className="boton" onClick={() => abrir({ tipo: 'avisos' })}>
             Avisos{avisos.tipo === 'lista' ? ` (${avisosVisibles.length})` : ''}
           </button>
+          {esRodalies && linea !== LINEA_DESTACADA && (
+            <button type="button" className="destacada" onClick={() => setLinea(LINEA_DESTACADA)}>
+              <span aria-hidden="true">★</span> RL4 Lleida
+            </button>
+          )}
         </div>
         <p className="resumen" aria-live="off">
           {resumen}

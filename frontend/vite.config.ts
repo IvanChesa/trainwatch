@@ -44,6 +44,10 @@ export default defineConfig({
       '/api': destinoApi,
     },
   },
+  build: {
+    // MapLibre (~1 MB sin comprimir, ~290 KB con gzip) va en su propio trozo y se carga después de la interfaz.
+    chunkSizeWarningLimit: 1200,
+  },
   preview: {
     proxy: {
       '/api': destinoApi,

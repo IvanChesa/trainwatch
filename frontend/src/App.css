@@ -122,7 +122,6 @@
   border-color: var(--sec);
 }
 .destacada {
-  align-self: flex-start;
   border-color: var(--acento);
   color: var(--acento);
   font-weight: 600;
@@ -499,15 +498,21 @@
 /* ---- Móvil: el mapa ocupa lo que queda y las fichas, una hoja inferior ---- */
 @media (max-width: 767px) {
   .marca__sub,
-  .resumen {
+  .resumen,
+  .cobertura {
     display: none;
   }
   .panel {
     gap: 8px;
     padding: 10px 12px;
   }
+  .acciones {
+    gap: 6px;
+  }
   .acciones .boton,
-  .destacada {
+  .destacada,
+  .conmutador button {
+    padding: 6px 10px;
     font-size: 0.9rem;
   }
   .hoja {

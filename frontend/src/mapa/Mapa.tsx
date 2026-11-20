@@ -68,8 +68,8 @@ export default function Mapa(props: PropsMapa) {
     });
     m.touchZoomRotate.disableRotation();
     // El estilo de OpenFreeMap pide algún icono que no trae su sprite: uno vacío evita el aviso en la consola.
-    m.on('styleimagemissing', (e) => {
-      if (!m.hasImage(e.id)) m.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
+    m.setMissingStyleImageResolver((id) => {
+      if (!m.hasImage(id)) m.addImage(id, { width: 1, height: 1, data: new Uint8Array(4) });
     });
     m.addControl(new NavigationControl({ showCompass: false }), 'bottom-right');
     // El texto del lienzo, en vez del «Mapa» genérico, lo pone el efecto de `descripcion`.
@@ -109,7 +109,11 @@ export default function Mapa(props: PropsMapa) {
           [lonMax, latMax],
         ],
         // En pantallas anchas, el panel de control tapa la izquierda del mapa.
-        { padding: m.getContainer().clientWidth >= 768 ? { top: 30, bottom: 50, left: 370, right: 30 } : 24, animate: !reducirMovimiento, duration: 800 },
+        {
+          padding: m.getContainer().clientWidth >= 768 ? { top: 30, bottom: 50, left: 370, right: 30 } : 24,
+          animate: !reducirMovimiento,
+          duration: 800,
+        },
       );
     } else if (nucleo.centro) {
       m.jumpTo({ center: [nucleo.centro.lon, nucleo.centro.lat], zoom: nucleo.zoom ?? 9 });
@@ -124,6 +128,21 @@ export default function Mapa(props: PropsMapa) {
 
   useEffect(() => {
     if (listo) capaTrenes.current?.seleccionar(props.seleccionado);
+  }, [listo, props.seleccionado]);
+
+  // Al abrir la ficha de un tren, el mapa se acerca a él (sin tapar el panel ni la ficha).
+  useEffect(() => {
+    const m = mapa.current;
+    const tren = ultimas.current.trenes.find((t) => t.id === props.seleccionado);
+    if (!listo || !m || !tren) return;
+    const ancho = m.getContainer().clientWidth >= 768;
+    m.easeTo({
+      center: [tren.lon, tren.lat],
+      zoom: Math.max(m.getZoom(), 11),
+      padding: ancho ? { top: 20, bottom: 40, left: 360, right: 410 } : { top: 20, bottom: 300, left: 20, right: 20 },
+      animate: !ultimas.current.reducirMovimiento,
+      duration: 700,
+    });
   }, [listo, props.seleccionado]);
 
   useEffect(() => {
