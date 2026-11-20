@@ -1,0 +1,42 @@
+[
+  {
+    "id": "AVISO_521807",
+    "texto": "Circulación ferroviaria entre Lleida Pirineus y Manresa. El tramo entre Manresa y Terrassa Estació del Nord se realiza mediante los servicios de la línea R4.",
+    "inicio": "2026-10-25T08:06:00+01:00",
+    "fin": null,
+    "nucleos": [
+      51
+    ],
+    "lineas": [
+      "RL4"
+    ],
+    "estaciones": []
+  },
+  {
+    "id": "AVISO_521823",
+    "texto": "Circulación ferroviaria entre La Garriga - Puigcerdà/La Tor de Querol. Servicio alternativo por carretera entre Fabra i Puig - La Garriga. Servicio complementario por carretera entre La Garriga - Puigcerdà/La Tor de Querol.",
+    "inicio": "2026-10-25T08:02:00+01:00",
+    "fin": null,
+    "nucleos": [
+      51
+    ],
+    "lineas": [
+      "R3"
+    ],
+    "estaciones": []
+  },
+  {
+    "id": "AVISO_521824",
+    "texto": "Servicio ferroviario entre Lleida Pirineus - Les Borges Blanques y entre La Plana Picamoixons - Barcelona Estació de França. Servicio alternativo por carretera entre Lleida Pirineus - La Plana Picamoixons.",
+    "inicio": "2026-10-25T08:05:00+01:00",
+    "fin": null,
+    "nucleos": [
+      51
+    ],
+    "lineas": [
+      "R13",
+      "R14"
+    ],
+    "estaciones": []
+  }
+]

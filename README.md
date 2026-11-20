@@ -4,7 +4,7 @@ Mapa con los trenes de Cercanías y Rodalies moviéndose en directo, con su retr
 
 > **Proyecto personal, no oficial.** No tiene relación con Renfe ni con Adif.
 
-> **Estado:** en desarrollo. Están hechas la prueba técnica de los datos (fase 0), los cimientos del proyecto (fase 1: backend, frontend, PostGIS, pruebas y CI), la importación nocturna del horario de Renfe (fase 2) y la ingesta en directo (fase 3). El frontend pasó de Angular a React (fase 4r). El plan está en [`docs/PLAN.md`](docs/PLAN.md) y los informes de cada fase, en [`docs/informes/`](docs/informes/).
+> **Estado:** en desarrollo. Están hechas la prueba técnica de los datos (fase 0), los cimientos del proyecto (fase 1: backend, frontend, PostGIS, pruebas y CI), la importación nocturna del horario de Renfe (fase 2), la ingesta en directo (fase 3) y la API REST con el directo por SSE (fase 4). El frontend pasó de Angular a React (fase 4r). El plan está en [`docs/PLAN.md`](docs/PLAN.md) y los informes de cada fase, en [`docs/informes/`](docs/informes/).
 
 ## Arquitectura (prevista)
 
@@ -71,6 +71,13 @@ La ingesta en directo empieza 10 s después de arrancar: cada 7 s pide a Renfe l
 - `http://localhost:8080/actuator/metrics/trainwatch.directo.descargas` (y `.trenes`, `.filas`, `.errores`, `.antiguedad`), solo en el perfil `local`.
 - Para desactivarla: `TRAINWATCH_DIRECTO_ACTIVADA=false`.
 
+La API pública (solo lectura, documentada con OpenAPI):
+
+- `http://localhost:8080/api/docs/ui` → Swagger UI; la especificación OpenAPI 3, en `/api/docs`.
+- `GET /api/nucleos`, `/api/nucleos/{id}/trenes`, `/api/trenes/{id}`, `/api/estaciones/{id}`, `/api/estaciones?cerca=lat,lon&radio=…`, `/api/lineas/{nucleo}/{linea}` y `/api/avisos?nucleo=&linea=&estacion=`. Los errores, como `ProblemDetail` (RFC 9457).
+- `GET /api/directo?nucleo=51` → el directo por Server-Sent Events: una instantánea al conectarse y después solo los cambios, con un latido cada 15 s.
+- Un ejemplo de cada respuesta, con datos reales, en [`docs/api/`](docs/api/).
+
 En Windows, usa `mvnw.cmd` en vez de `./mvnw` si no trabajas con Git Bash, y asegúrate de que `JAVA_HOME` apunta al JDK 25.
 
 ## Pruebas
@@ -87,6 +94,12 @@ Prueba manual con el ZIP real de Renfe (no corre en CI; escribe las cifras en `b
 ```bash
 curl -o datos/gtfs/fomento_transit.zip https://ssl.renfe.com/ftransit/Fichero_CER_FOMENTO/fomento_transit.zip
 cd backend && ./mvnw test -Dtest=ImportacionRealManualTests -Dhorario.zip=../datos/gtfs/fomento_transit.zip
+```
+
+Prueba de carga del directo (200 clientes SSE durante 90 s, con la aplicación arrancada con `./mvnw spring-boot:run`; un programa de un solo fichero, sin herramientas nuevas):
+
+```bash
+java backend/carga/CargaSse.java http://localhost:8080 200 90 51,10,40,20,60
 ```
 
 La prueba de integración levanta `postgis/postgis:18-3.7` con Testcontainers, aplica las migraciones de Flyway y comprueba PostGIS, `/actuator/health` y `/api/estado`. Las de la importación del horario usan un GTFS pequeño de ejemplo (`backend/src/test/resources/gtfs/ejemplo/`) servido por un servidor HTTP local. La CI de GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) ejecuta lo mismo en cada push y pull request.

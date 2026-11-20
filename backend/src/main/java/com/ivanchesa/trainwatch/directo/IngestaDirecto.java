@@ -19,6 +19,7 @@ import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -44,7 +45,8 @@ import io.micrometer.core.instrument.MeterRegistry;
  * <li>{@code trip_updates}: retrasos y cancelaciones; los retrasos finales que se cierran van a {@code retrasos};</li>
  * <li>{@code vehicle_positions}: el estado de cada tren; los que cambian van a {@code posiciones};</li>
  * <li>{@code alerts}: sustituyen a los avisos anteriores;</li>
- * <li>se reestima la posición de todos los trenes y se calcula el resumen.</li>
+ * <li>se reestima la posición de todos los trenes y se calcula el resumen;</li>
+ * <li>se publica {@link CicloDirectoTerminado}: el directo por SSE manda los cambios (fase 4).</li>
  * </ol>
  * Primero los retrasos, para que las posiciones usen el retraso de la misma muestra. Un 304 no procesa nada. Si un
  * feed falla, los otros siguen.
@@ -75,6 +77,7 @@ public class IngestaDirecto {
     private final DirectoProperties propiedades;
     private final Clock reloj;
     private final MeterRegistry metricas;
+    private final ApplicationEventPublisher eventos;
 
     private final AtomicReference<ResumenDirecto> resumen;
     private volatile Instant ultimaMuestraAvisos;
@@ -90,7 +93,8 @@ public class IngestaDirecto {
     private static final int MAXIMO_POSICIONES_PENDIENTES = 50_000;
 
     public IngestaDirecto(ClienteFeeds cliente, EstadoDirecto estado, HorarioDirectoJdbc horario,
-            RepositorioDirecto repositorio, DirectoProperties propiedades, Clock reloj, MeterRegistry metricas) {
+            RepositorioDirecto repositorio, DirectoProperties propiedades, Clock reloj, MeterRegistry metricas,
+            ApplicationEventPublisher eventos) {
         this.cliente = cliente;
         this.estado = estado;
         this.horario = horario;
@@ -98,6 +102,7 @@ public class IngestaDirecto {
         this.propiedades = propiedades;
         this.reloj = reloj;
         this.metricas = metricas;
+        this.eventos = eventos;
         this.resumen = new AtomicReference<>(ResumenDirecto.vacio(reloj.instant()));
         this.detectorAvisos = new DetectorMuestrasIncompletas(propiedades.fraccionIncompleta(),
                 propiedades.muestrasParaDesaparecer());
@@ -155,12 +160,18 @@ public class IngestaDirecto {
 
         descargar(Feed.AVISOS).ifPresent(this::procesarAvisos);
 
+        Instant fin = reloj.instant();
         try {
-            Instant fin = reloj.instant();
             estado.reestimar(fin);
             resumen.set(calcularResumen(fin));
         } catch (RuntimeException e) {
             error(null, "resumen", e);
+        }
+        // Fase 4: el directo por SSE manda los cambios. Si falla, la ingesta sigue: es otro consumidor del estado.
+        try {
+            eventos.publishEvent(new CicloDirectoTerminado(fin));
+        } catch (RuntimeException e) {
+            error(null, "difusion", e);
         }
     }
 

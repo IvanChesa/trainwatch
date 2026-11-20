@@ -1,0 +1,74 @@
+{
+  "secuencia": 23,
+  "nucleo": 51,
+  "generado": "2026-11-20T14:56:56.2152515+01:00",
+  "ultimoDato": "2026-11-20T14:56:40+01:00",
+  "trenes": [
+    {
+      "id": "5123V15013R15",
+      "linea": "R15",
+      "nucleo": 51,
+      "estado": "EN_ORIGEN",
+      "destino": "Reus",
+      "sinHorario": false,
+      "lat": 41.38419,
+      "lon": 2.18562,
+      "fuentePosicion": "RECORRIDO",
+      "rumbo": 113,
+      "retrasoMin": 0,
+      "proximaParada": {
+        "id": "71802",
+        "nombre": "Barcelona-Passeig de Gràcia",
+        "llegadaProgramada": "2026-11-20T15:25:00+01:00",
+        "llegadaEstimada": "2026-11-20T15:25:00+01:00"
+      },
+      "salida": {
+        "programada": "2026-11-20T15:15:00+01:00",
+        "estimada": "2026-11-20T15:15:00+01:00"
+      },
+      "actualizado": "2026-11-20T14:56:37+01:00"
+    },
+    {
+      "id": "5123V15033R15",
+      "linea": "R15",
+      "nucleo": 51,
+      "estado": "EN_MARCHA",
+      "destino": "Reus",
+      "sinHorario": false,
+      "lat": 41.17164,
+      "lon": 1.48645,
+      "fuentePosicion": "RECORRIDO",
+      "rumbo": 251,
+      "retrasoMin": 5,
+      "proximaParada": {
+        "id": "71503",
+        "nombre": "Torredembarra",
+        "llegadaProgramada": "2026-11-20T14:58:00+01:00",
+        "llegadaEstimada": "2026-11-20T15:03:00+01:00"
+      },
+      "salida": null,
+      "actualizado": "2026-11-20T14:56:37+01:00"
+    },
+    {
+      "id": "5123V15043R13",
+      "linea": "R13",
+      "nucleo": 51,
+      "estado": "EN_MARCHA",
+      "destino": "La Plana-Picamoixons",
+      "sinHorario": false,
+      "lat": 41.37954,
+      "lon": 2.14116,
+      "fuentePosicion": "RECORRIDO",
+      "rumbo": 239,
+      "retrasoMin": 0,
+      "proximaParada": {
+        "id": "71600",
+        "nombre": "Sant Vicenç de Calders",
+        "llegadaProgramada": "2026-11-20T15:45:00+01:00",
+        "llegadaEstimada": "2026-11-20T15:45:00+01:00"
+      },
+      "salida": null,
+      "actualizado": "2026-11-20T14:56:37+01:00"
+    }
+  ]
+}

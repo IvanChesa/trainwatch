@@ -1,0 +1,185 @@
+{
+  "id": "71801",
+  "nombre": "Barcelona-Sants",
+  "lat": 41.3798632,
+  "lon": 2.14101688,
+  "lineas": [
+    {
+      "nucleo": 51,
+      "linea": "R1",
+      "color": "#7DBCEC",
+      "colorTexto": "#FFFFFF"
+    },
+    {
+      "nucleo": 51,
+      "linea": "R11",
+      "color": "#0069AA",
+      "colorTexto": "#FFFFFF"
+    },
+    {
+      "nucleo": 51,
+      "linea": "R13",
+      "color": "#146520",
+      "colorTexto": "#FFFFFF"
+    },
+    {
+      "nucleo": 51,
+      "linea": "R14",
+      "color": "#6C60A8",
+      "colorTexto": "#FFFFFF"
+    },
+    {
+      "nucleo": 51,
+      "linea": "R15",
+      "color": "#978571",
+      "colorTexto": "#FFFFFF"
+    },
+    {
+      "nucleo": 51,
+      "linea": "R16",
+      "color": "#B52B46",
+      "colorTexto": "#FFFFFF"
+    },
+    {
+      "nucleo": 51,
+      "linea": "R17",
+      "color": "#F3B12E",
+      "colorTexto": "#FFFFFF"
+    },
+    {
+      "nucleo": 51,
+      "linea": "R2",
+      "color": "#26A741",
+      "colorTexto": "#FFFFFF"
+    },
+    {
+      "nucleo": 51,
+      "linea": "R2N",
+      "color": "#D0DF00",
+      "colorTexto": "#FFFFFF"
+    },
+    {
+      "nucleo": 51,
+      "linea": "R2S",
+      "color": "#146520",
+      "colorTexto": "#FFFFFF"
+    },
+    {
+      "nucleo": 51,
+      "linea": "R4",
+      "color": "#F7A30D",
+      "colorTexto": "#FFFFFF"
+    },
+    {
+      "nucleo": 51,
+      "linea": "R7",
+      "color": "#24A842",
+      "colorTexto": "#FFFFFF"
+    }
+  ],
+  "proximos": [
+    {
+      "id": "5123V15062R17",
+      "linea": "R17",
+      "nucleo": 51,
+      "destino": "Barcelona Estació de França",
+      "salidaProgramada": "2026-11-20T14:39:00+01:00",
+      "salidaEstimada": "2026-11-20T14:47:00+01:00",
+      "retrasoMin": 8,
+      "enDirecto": true,
+      "estado": "EN_MARCHA"
+    },
+    {
+      "id": "5123V28524R2",
+      "linea": "R2",
+      "nucleo": 51,
+      "destino": "Granollers Centre",
+      "salidaProgramada": "2026-11-20T14:50:00+01:00",
+      "salidaEstimada": "2026-11-20T14:52:00+01:00",
+      "retrasoMin": 2,
+      "enDirecto": true,
+      "estado": "EN_MARCHA"
+    },
+    {
+      "id": "5123V77538R4",
+      "linea": "R4",
+      "nucleo": 51,
+      "destino": "Sant Vicenç de Calders",
+      "salidaProgramada": "2026-11-20T14:52:00+01:00",
+      "salidaEstimada": "2026-11-20T14:52:00+01:00",
+      "retrasoMin": 0,
+      "enDirecto": true,
+      "estado": "EN_MARCHA"
+    },
+    {
+      "id": "5123V25647R1",
+      "linea": "R1",
+      "nucleo": 51,
+      "destino": "Maçanet-Massanes",
+      "salidaProgramada": "2026-11-20T14:55:00+01:00",
+      "salidaEstimada": "2026-11-20T14:56:00+01:00",
+      "retrasoMin": 1,
+      "enDirecto": true,
+      "estado": "EN_MARCHA"
+    },
+    {
+      "id": "5123V25742R1",
+      "linea": "R1",
+      "nucleo": 51,
+      "destino": "L'Hospitalet de Llobregat",
+      "salidaProgramada": "2026-11-20T14:58:00+01:00",
+      "salidaEstimada": "2026-11-20T14:58:00+01:00",
+      "retrasoMin": 0,
+      "enDirecto": true,
+      "estado": "EN_MARCHA"
+    }
+  ],
+  "avisos": [
+    {
+      "id": "AVISO_521824",
+      "texto": "Servicio ferroviario entre Lleida Pirineus - Les Borges Blanques y entre La Plana Picamoixons - Barcelona Estació de França. Servicio alternativo por carretera entre Lleida Pirineus - La Plana Picamoixons.",
+      "inicio": "2026-10-25T08:05:00+01:00",
+      "fin": null,
+      "nucleos": [
+        51
+      ],
+      "lineas": [
+        "R13",
+        "R14"
+      ],
+      "estaciones": []
+    },
+    {
+      "id": "AVISO_525563",
+      "texto": "Por obras de Adif en el entorno de Castelldefels, del 12 de noviembre al 14 de diciembre se modifica temporalmente el servicio de la línea R2. Los trenes Granollers Centre - Castelldefels iniciarán y finalizarán su recorrido en Gavà.",
+      "inicio": "2026-11-11T12:20:00+01:00",
+      "fin": null,
+      "nucleos": [
+        51
+      ],
+      "lineas": [
+        "R1",
+        "R11",
+        "R13",
+        "R14",
+        "R15",
+        "R16",
+        "R17",
+        "R2",
+        "R2N",
+        "R2S",
+        "R3",
+        "R4",
+        "R7",
+        "R8",
+        "RG1",
+        "RL3",
+        "RL4",
+        "RT1",
+        "RT2"
+      ],
+      "estaciones": []
+    }
+  ],
+  "consultado": "2026-11-20T14:57:02.7477898+01:00"
+}

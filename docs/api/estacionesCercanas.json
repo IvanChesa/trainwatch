@@ -1,0 +1,37 @@
+[
+  {
+    "id": "78805",
+    "nombre": "Barcelona Plaça de Catalunya",
+    "lat": 41.3879231,
+    "lon": 2.16970383,
+    "distanciaM": 105
+  },
+  {
+    "id": "71802",
+    "nombre": "Barcelona-Passeig de Gràcia",
+    "lat": 41.3920862,
+    "lon": 2.16533862,
+    "distanciaM": 686
+  },
+  {
+    "id": "78804",
+    "nombre": "Barcelona Arc de Triomf",
+    "lat": 41.3919048,
+    "lon": 2.18063916,
+    "distanciaM": 1043
+  },
+  {
+    "id": "79400",
+    "nombre": "Barcelona Estació de França",
+    "lat": 41.3844866,
+    "lon": 2.18534785,
+    "distanciaM": 1314
+  },
+  {
+    "id": "71801",
+    "nombre": "Barcelona-Sants",
+    "lat": 41.3798632,
+    "lon": 2.14101688,
+    "distanciaM": 2551
+  }
+]

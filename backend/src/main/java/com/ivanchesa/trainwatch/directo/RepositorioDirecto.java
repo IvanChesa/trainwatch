@@ -73,10 +73,11 @@ public class RepositorioDirecto {
         }
         jdbc.batchUpdate("""
                 INSERT INTO retrasos (fecha_servicio, trip_id, stop_sequence, stop_id, route_id, linea, nucleo, minutos,
-                    registrado, inferido)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    registrado, inferido, llegada_programada)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (fecha_servicio, trip_id, stop_sequence)
-                DO UPDATE SET minutos = EXCLUDED.minutos, registrado = EXCLUDED.registrado, inferido = EXCLUDED.inferido
+                DO UPDATE SET minutos = EXCLUDED.minutos, registrado = EXCLUDED.registrado, inferido = EXCLUDED.inferido,
+                    llegada_programada = coalesce(EXCLUDED.llegada_programada, retrasos.llegada_programada)
                 WHERE retrasos.inferido OR NOT EXCLUDED.inferido""", retrasos, 500,
                 (ps, r) -> {
                     ps.setDate(1, Date.valueOf(r.fechaServicio()));
@@ -89,6 +90,7 @@ public class RepositorioDirecto {
                     ps.setInt(8, r.minutos());
                     ps.setTimestamp(9, Timestamp.from(r.registrado()));
                     ps.setBoolean(10, r.inferido());
+                    ps.setTimestamp(11, r.llegadaProgramada() == null ? null : Timestamp.from(r.llegadaProgramada()));
                 });
         return retrasos.size();
     }
