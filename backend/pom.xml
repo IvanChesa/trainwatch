@@ -21,6 +21,8 @@
 	</licenses>
 	<properties>
 		<java.version>25</java.version>
+		<gtfs-realtime-bindings.version>0.2.0</gtfs-realtime-bindings.version>
+		<resilience4j.version>2.4.0</resilience4j.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -50,6 +52,27 @@
 		<dependency>
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
+		<!-- Fase 3: decodificación de GTFS Realtime (MobilityData) y resiliencia de las descargas -->
+		<dependency>
+			<groupId>org.mobilitydata</groupId>
+			<artifactId>gtfs-realtime-bindings</artifactId>
+			<version>${gtfs-realtime-bindings.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.github.resilience4j</groupId>
+			<artifactId>resilience4j-circuitbreaker</artifactId>
+			<version>${resilience4j.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.github.resilience4j</groupId>
+			<artifactId>resilience4j-retry</artifactId>
+			<version>${resilience4j.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.github.resilience4j</groupId>
+			<artifactId>resilience4j-micrometer</artifactId>
+			<version>${resilience4j.version}</version>
 		</dependency>
 
 		<dependency>

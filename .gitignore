@@ -1,6 +1,8 @@
 # Datos crudos de la prueba técnica (feeds .pb grabados y GTFS descargado)
 spike/datos/
 *.pb
+# Excepción: 9 muestras pequeñas (244 KB) como datos de prueba de la fase 3, con su cita en el README de la carpeta
+!backend/src/test/resources/gtfsrt/*.pb
 fomento_transit.zip
 # GTFS descargado para las pruebas manuales de la fase 2
 datos/
