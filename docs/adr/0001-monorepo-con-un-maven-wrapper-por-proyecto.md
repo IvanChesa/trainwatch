@@ -2,6 +2,8 @@
 
 **Fecha:** 20-11-2026 · **Estado:** aceptada · **Fase:** 1
 
+> **Nota (20-11, fase 4r):** el frontend es ahora React con Vite ([ADR 0011](0011-react-en-lugar-de-angular.md)). La decisión del monorepo no cambia.
+
 ## Contexto
 
 El repositorio tiene que alojar el backend (Spring Boot), el frontend (Angular), la infraestructura (Docker Compose y, en la fase 7, Terraform) y la prueba técnica de la fase 0 (`spike/`), que ya tiene su propio `pom.xml` y su Maven Wrapper (Maven 3.9.16). No hay Maven instalado en el equipo: todo va por el wrapper.

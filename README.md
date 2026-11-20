@@ -4,14 +4,14 @@ Mapa con los trenes de Cercanías y Rodalies moviéndose en directo, con su retr
 
 > **Proyecto personal, no oficial.** No tiene relación con Renfe ni con Adif.
 
-> **Estado:** en desarrollo. Están hechas la prueba técnica de los datos (fase 0), los cimientos del proyecto (fase 1: backend, frontend, PostGIS, pruebas y CI) y la importación nocturna del horario de Renfe (fase 2). El plan está en [`docs/PLAN.md`](docs/PLAN.md) y los informes de cada fase, en [`docs/informes/`](docs/informes/).
+> **Estado:** en desarrollo. Están hechas la prueba técnica de los datos (fase 0), los cimientos del proyecto (fase 1: backend, frontend, PostGIS, pruebas y CI), la importación nocturna del horario de Renfe (fase 2) y la ingesta en directo (fase 3). El frontend pasó de Angular a React (fase 4r). El plan está en [`docs/PLAN.md`](docs/PLAN.md) y los informes de cada fase, en [`docs/informes/`](docs/informes/).
 
 ## Arquitectura (prevista)
 
 ```
 Renfe GTFS-RT (cada ~20 s) ──► Ingesta (Spring Boot, @Scheduled + Resilience4j)
                                    │  decodifica protobuf, cruza con el GTFS estático
-                                   ├─► estado actual en memoria ──► SSE ──► navegador (Angular + MapLibre)
+                                   ├─► estado actual en memoria ──► SSE ──► navegador (React + MapLibre)
                                    └─► PostgreSQL + PostGIS
                                          · posiciones (48 h, particionadas por día)
                                          · retraso final de cada tren en cada parada (histórico)
@@ -28,7 +28,7 @@ Las decisiones de arquitectura están en [`docs/adr/`](docs/adr/).
 | Carpeta | Qué hay |
 |---|---|
 | `backend/` | Java 25 y Spring Boot 4.2 (Web, Actuator, Spring Data JDBC, Flyway, Spring Batch, validación). Maven con wrapper |
-| `frontend/` | Angular 22, standalone y con signals. Pruebas con Vitest |
+| `frontend/` | React 19 con Vite 8 y TypeScript estricto. Pruebas con Vitest y Testing Library; lint con oxlint |
 | `infra/` | Docker Compose con PostgreSQL 18 y PostGIS 3.7. Terraform llegará en la fase 7 |
 | `spike/` | Prueba técnica de la fase 0 (Java sin Spring) |
 | `docs/` | Plan, ADR, informes de cada fase y guías |
@@ -48,16 +48,17 @@ docker compose --env-file .env -f infra/docker-compose.yml up -d
 cd backend
 ./mvnw spring-boot:run
 
-# 4. Frontend en http://localhost:4200 (en otra terminal)
+# 4. Frontend en http://localhost:5173 (en otra terminal); /api pasa por el proxy de Vite al backend
 cd frontend
 npm ci
-npm start
+npm run dev
 ```
 
 Para comprobar que funciona:
 
 - `http://localhost:8080/api/estado` → `{"aplicacion":"TrainWatch","version":"0.0.1-SNAPSHOT","hora":"…"}`
 - `http://localhost:8080/actuator/health` → `"status":"UP"`, con `db` en `UP`.
+- `http://localhost:5173` → la página «en construcción» con la versión y la hora del backend, o «Backend no disponible» si no está arrancado.
 
 Al arrancar con la base de datos vacía, el backend descarga e importa el horario de Renfe en segundo plano (unos 15 s). Después lo hace cada noche a las 04:30 y a las 06:30, hora de Madrid, solo si el fichero ha cambiado. El estado del horario:
 
@@ -76,8 +77,9 @@ En Windows, usa `mvnw.cmd` en vez de `./mvnw` si no trabajas con Git Bash, y ase
 
 ```bash
 cd backend && ./mvnw verify                       # unitarias + integración con Testcontainers (necesita Docker)
-cd frontend && npm test -- --watch=false          # Vitest
-cd frontend && npm run build
+cd frontend && npm run lint                       # oxlint
+cd frontend && npm test                           # Vitest y Testing Library
+cd frontend && npm run build                      # tsc y Vite
 ```
 
 Prueba manual con el ZIP real de Renfe (no corre en CI; escribe las cifras en `backend/target/importacion-real.txt`):

@@ -12,3 +12,4 @@ Un fichero por decisión: `NNNN-titulo-corto.md`, con contexto, decisión, alter
 - [0008 · El estado del directo vive en memoria; la base de datos guarda el historial](0008-estado-del-directo-en-memoria.md)
 - [0009 · Particiones diarias para `posiciones` y mensuales para `retrasos`, gestionadas por la aplicación](0009-particiones-diarias-y-mensuales.md)
 - [0010 · La posición del tren se estima con el horario, el retraso y el recorrido](0010-posicion-estimada-sobre-el-recorrido.md)
+- [0011 · React en lugar de Angular](0011-react-en-lugar-de-angular.md) (sustituye a la elección de Angular del plan)

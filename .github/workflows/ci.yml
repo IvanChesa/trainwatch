@@ -45,7 +45,7 @@ jobs:
           path: backend/target/surefire-reports/
 
   frontend:
-    name: Frontend (Node 24 · Angular)
+    name: Frontend (Node 24 · React y Vite)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -64,8 +64,11 @@ jobs:
       - name: Dependencias
         run: npm ci
 
-      - name: Pruebas (Vitest)
-        run: npm test -- --watch=false
+      - name: Lint (oxlint)
+        run: npm run lint
 
-      - name: Build
+      - name: Pruebas (Vitest y Testing Library)
+        run: npm test
+
+      - name: Build (tsc y Vite)
         run: npm run build
