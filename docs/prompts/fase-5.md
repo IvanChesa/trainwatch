@@ -3,14 +3,23 @@ Eres la sesión de programación de **TrainWatch**, la fase 5 («El mapa»). Tra
 **Lee primero**, enteros:
 - `CLAUDE.md`;
 - `docs/PLAN.md`, sobre todo «Cambios tras la fase 0», §2 y la fase 5 en §6;
-- los informes de las fases 0 a 4;
+- los informes de las fases 0 a 4 y el de la 7 (despliegue);
 - el contrato de la API en `docs/api/`.
 
-Construye sobre lo fusionado en `main`. Si la fase 4 no está fusionada, **para** y explica por qué en `docs/informes/fase-5.md`.
+Construye sobre lo fusionado en `main`. Si la fase 4 o la 7 no están fusionadas, **para** y explica por qué en `docs/informes/fase-5.md`.
 
 ## Objetivo
 
 La web en **React** (`frontend/`, con React 19, Vite y TypeScript desde la tarea `React.md`) que se enseña en una entrevista: un mapa con los trenes **moviéndose en directo**, que se entiende en 5 segundos.
+
+## Lo que ya hay (fase 7: TrainWatch está en producción desde el 20-11)
+
+- **La API real** funciona en `https://trainwatch-api.ivanchesa.com`, recogiendo datos las 24 h. Su CORS admite `https://trainwatch.ivanchesa.com` y `http://localhost:5173`, así que en local puedes probar contra ella además de contra tu backend.
+- **URL de la API:** sale de `VITE_API_URL` (`frontend/src/api/base.ts`, función `rutaApi`). En producción la pone la CI; en local, el proxy de Vite.
+- **Publicación:** al fusionar en `main`, `.github/workflows/despliegue.yml` publica la web sola en Cloudflare Pages. **No toques la infraestructura** (`infra/`, Terraform, workflows de despliegue) ni hagas push: lo hace la sesión de control.
+- **CSP:** la web tiene cabeceras de seguridad estrictas en `frontend/public/_headers`, que hoy solo admiten la API. Añade lo justo para el mapa y nada más: el proveedor de teselas y estilos (OpenFreeMap) en `connect-src`, `img-src` y, si hace falta, `font-src`; y `blob:` en `worker-src` (y donde lo pida MapLibre). Comprueba en el navegador que no hay errores de CSP, también con la build de producción (`vite preview`).
+- **Directo lleno:** `/api/directo` responde 503 con `Retry-After` cuando se llega al máximo de conexiones, y `EventSource` no reintenta solo tras un 503 (ver `docs/api/README.md`). El frontend tiene que **reabrir el directo** con espera creciente.
+- **Estado de los datos:** `/api/directo/estado` da también `guardadoAlDia` y `pendientes`. Para el aviso «datos de hace X min» usa la antigüedad del último dato.
 
 ## Qué construir
 
@@ -53,7 +62,7 @@ La web en **React** (`frontend/`, con React 19, Vite y TypeScript desde la tarea
    - **e2e con Playwright** contra la API **simulada** con los JSON de `docs/api/` y un SSE falso: el mapa carga, los trenes aparecen y se mueven, las fichas se abren, la lista funciona y el teclado también;
    - **Lighthouse en móvil ≥ 90** en las cuatro categorías: el mapa pesa, así que apunta lo que lo frena;
    - capturas a 375 y 1440 px en `docs/capturas/fase-5/`.
-7. **Prueba con datos reales:** con el backend en local y la ingesta funcionando, abre Rodalies y comprueba que los trenes se mueven. Captura y nota en el informe.
+7. **Prueba con datos reales:** con el frontend en local contra la API de producción (o tu backend en local con la ingesta), abre Rodalies y comprueba que los trenes se mueven. Captura y nota en el informe.
 
 ## Cómo trabajar
 
