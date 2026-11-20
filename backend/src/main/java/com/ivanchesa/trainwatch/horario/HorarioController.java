@@ -85,6 +85,21 @@ public class HorarioController {
 
     private static Intento intento(Importacion i) {
         Long ms = i.fin() == null ? null : java.time.Duration.between(i.inicio(), i.fin()).toMillis();
-        return new Intento(i.inicio(), i.fin(), ms, i.motivo().name(), i.resultado().name(), i.error());
+        return new Intento(i.inicio(), i.fin(), ms, i.motivo().name(), i.resultado().name(), errorPublico(i.error()));
+    }
+
+    /**
+     * El error que enseña el estado, que es público: solo los problemas del fichero de Renfe
+     * ({@link GtfsInvalidoException}, que dicen qué fichero y qué línea), nunca SQL, rutas ni trazas internas. El
+     * detalle completo queda en {@code importacion_horario} y en el registro de la aplicación.
+     */
+    static String errorPublico(String error) {
+        if (error == null) {
+            return null;
+        }
+        String marca = GtfsInvalidoException.class.getSimpleName() + ": ";
+        int i = error.indexOf(marca);
+        return i >= 0 ? "Horario de Renfe no válido: " + error.substring(i + marca.length())
+                : "Error interno de la importación (detalle en el registro de la aplicación)";
     }
 }

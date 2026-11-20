@@ -39,6 +39,8 @@ Después, en otra transacción y fuera del camino crítico, `DROP SCHEMA horario
 ## Consecuencias
 
 - **No puede haber claves foráneas que crucen el límite del esquema `horario`**: al renombrarlo, apuntarían al esquema viejo y el `DROP … CASCADE` las borraría. Las tablas de las fases 3 y 6 (posiciones, retrasos) guardan `trip_id` y `stop_id` como texto. Dentro de `horario` tampoco hay claves foráneas (`LIKE` no las copia); en su lugar, la validación cuenta las horas de paso sin viaje o sin parada (0 en el horario real del 20-11).
-- Hace falta espacio para dos horarios a la vez durante la importación (unos 400 MB con índices).
+- Hace falta espacio para dos horarios a la vez durante la importación: el horario real del 20-11 ocupa **313 MB** con sus índices, así que unos 630 MB durante unos segundos.
+- **Una sola importación a la vez, también entre instancias:** un *advisory lock* de PostgreSQL (`pg_try_advisory_lock`) rodea la importación entera y el cierre de las importaciones interrumpidas al arrancar. Dos instancias (por ejemplo, durante un despliegue) no pisan el mismo `horario_carga`.
+- **Migraciones y carga a la vez:** si una migración nueva cambia `horario.*` mientras una instancia vieja está cargando, la carga se clonó con la estructura anterior y el cambio la deshace sin avisar. Regla de despliegue (fase 7): no desplegar una migración que toque `horario` entre las 04:25 y las 07:00, o pararlo con el *advisory lock* también en Flyway.
 - El registro de importaciones (`importacion_horario`) está en `public`, fuera del cambio.
 - La comprobación previa al cambio rechaza un horario vacío o con menos del 50 % de los viajes del actual (`trainwatch.horario.minimo-relativo`): un fichero cortado no sustituye a uno bueno.

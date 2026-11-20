@@ -17,7 +17,7 @@ Lo que tienes que saber explicar de esta fase en una entrevista. Es la primera c
 | **Flyway define el esquema; la importación lo copia** (`LIKE … INCLUDING ALL`, `pg_get_indexdef`) | Una sola definición: una migración futura se propaga sola a la siguiente carga | Repetir el DDL en un fichero aparte para la carga |
 | **`geometry(…, 4326)` + índice sobre `::geography`** ([ADR 0005](../adr/0005-geometry-4326-con-indice-geography.md)) | `ST_LineLocatePoint` solo existe para `geometry`; las distancias en metros usan el índice de expresión | Todo `geography`, o UTM (España tiene tres husos) |
 | **Repositorio de Batch en memoria + tabla propia** | La importación siempre empieza de cero (15 s): no hay nada que reanudar. El historial útil (ETag, vigencia, filas) va en `importacion_horario` | `spring-boot-starter-batch-jdbc` y sus seis tablas `BATCH_*` |
-| **Token en cabecera para el disparo manual** | Un único endpoint que escribe; comparación en tiempo constante; sin token, 404 | Spring Security (cuando haya más), o un comando (otra JVM no vería el cerrojo) |
+| **Token en cabecera para el disparo manual** | Un único endpoint que escribe; comparación en tiempo constante; sin token, 404 | Spring Security (cuando haya más), o un comando (arrancaría otra JVM entera junto a la que ya está en marcha) |
 | **Validar antes de cambiar** | Un fichero cortado no sustituye a uno bueno: se rechaza si trae < 50 % de los viajes actuales o alguna tabla vacía | Confiar en el fichero |
 
 ## 3. Cómo funciona por dentro
@@ -61,8 +61,8 @@ Para qué: el feed en directo pone los trenes en las estaciones (fase 0). Para d
 
 **Resultado con el horario real del 20-11: encajan 106.111 de 113.488 viajes de tren (93,5 %).** Los que no encajan, y por qué (lo comprobé viaje a viaje):
 
-- **Recorridos que no cubren toda la línea** (5.766 viajes con alguna parada a más de 200 m). Por ejemplo, la C6 de Valencia: el recorrido acaba en Castelló y los trenes siguen hasta 69 km más allá. O la R2 de Rodalies, cuyo recorrido no llega a varias estaciones del extremo.
-- **Viajes que vuelven sobre sus pasos** (1.004). Por ejemplo, un R11 que llega a la última estación y vuelve a la anterior.
+- **Recorridos que no cubren toda la línea** (5.766 viajes con alguna parada a más de 200 m). Por ejemplo, la C6 de Valencia: el recorrido acaba en Castelló de la Plana y los trenes siguen hasta Vinaròs, a 69 km. O la R2 de Rodalies, cuyo recorrido no llega a varias estaciones del extremo.
+- **Viajes que vuelven sobre sus pasos** (1.004). Por ejemplo, un R11 que llega a Cerbère y vuelve a Portbou.
 - **Viajes de una sola parada** (607): no hay orden que comprobar.
 
 La fase 3 usará la interpolación por recorrido solo si `forma_encaja`; si no, en línea recta entre estaciones.
@@ -78,4 +78,7 @@ La fase 3 usará la interpolación por recorrido solo si `forma_encaja`; si no, 
 - **«¿Por qué `COPY` y no `saveAll` de un repositorio?»** Un `INSERT` por fila son 1,8 M idas y vueltas. `COPY` manda las filas en un flujo y PostgreSQL las escribe sin planificar una sentencia por fila.
 - **«¿Qué pasa con las horas después de medianoche?»** El GTFS escribe `24:10:00` para un tren que llega pasada la medianoche de su día de servicio. Se guarda en segundos desde la medianoche del día de servicio (87.000), no como `TIME`, que no admite 24:10.
 - **«¿Y los espacios de relleno?»** Todos los campos se recortan al leer (`FilaCsv.get`), y un campo solo con espacios es `NULL`. La prueba usa un GTFS de ejemplo con los mismos rellenos que el de Renfe.
+- **«¿Y si hay dos instancias de la aplicación?»** Un *advisory lock* de PostgreSQL (`pg_try_advisory_lock`) en una conexión propia rodea la importación: la segunda instancia ve que está cogido y no importa. Dentro de la JVM, un `AtomicBoolean` que se toma antes de encolar, para que dos `POST` seguidos no encolen dos importaciones.
+- **«¿Qué pasa si Renfe se queda colgado a mitad de la descarga?»** `HttpRequest.timeout` solo limita la espera de las cabeceras. Por eso la descarga va con `sendAsync(…).get(5 min)` y se cancela al agotarse. Lo encontró la revisión independiente y hay una prueba con un servidor que se queda parado.
+- **«¿Los 25 m de tolerancia son metros de verdad?»** Aproximadamente: `ST_LineLocatePoint` sobre `geometry` en grados da la fracción en el plano de grados, y se multiplica por la longitud geodésica. En tramos este-oeste un grado de longitud mide unos 0,77 de uno de latitud. Para una tolerancia de unos pocos metros, sobre estaciones a kilómetros, da igual; si hiciera falta precisión, se proyectaría a UTM.
 - **«¿Cómo pruebas la descarga sin depender de Renfe?»** Con un servidor HTTP del JDK (`com.sun.net.httpserver`) dentro de la prueba, que sirve el ZIP de ejemplo con su ETag y contesta 304. La prueba comprueba qué cabecera recibió.

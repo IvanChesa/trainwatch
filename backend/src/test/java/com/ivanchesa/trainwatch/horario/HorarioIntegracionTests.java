@@ -62,6 +62,9 @@ class HorarioIntegracionTests {
     @Autowired
     JdbcClient jdbc;
 
+    @Autowired
+    javax.sql.DataSource dataSource;
+
     @Value("${local.server.port}")
     int puerto;
 
@@ -275,6 +278,50 @@ class HorarioIntegracionTests {
             Thread.sleep(50);
         }
         assertThat(ultimoResultado()).isEqualTo("SIN_CAMBIOS");
+    }
+
+    @Test
+    void dosDisparosSeguidosNoEncolanDosImportaciones() throws InterruptedException {
+        assertThat(importador.lanzarEnSegundoPlano(Motivo.MANUAL, true)).isTrue();
+        assertThat(importador.lanzarEnSegundoPlano(Motivo.MANUAL, true)).isFalse();
+        assertThat(importador.importar(Motivo.MANUAL, true).resultado()).isEqualTo(Resultado.EN_CURSO);
+        esperaAQueTermine();
+    }
+
+    @Test
+    void siOtraInstanciaEstaImportandoNoSeImporta() throws Exception {
+        try (var otra = dataSource.getConnection(); var st = otra.createStatement()) {
+            st.execute("SELECT pg_advisory_lock(" + ImportadorHorario.CLAVE_CERROJO + ")");
+            try {
+                RENFE.sirve(ServidorGtfs.zipDeEjemplo(), etagNuevo());
+                assertThat(importador.importar(Motivo.NOCTURNA, false).resultado()).isEqualTo(Resultado.EN_CURSO);
+            } finally {
+                st.execute("SELECT pg_advisory_unlock(" + ImportadorHorario.CLAVE_CERROJO + ")");
+            }
+        }
+        assertThat(importador.importar(Motivo.NOCTURNA, false).resultado()).isEqualTo(Resultado.CORRECTA);
+    }
+
+    @Test
+    void unErrorInternoNoSeEnsenaEnElEstado() {
+        long id = jdbc.sql("INSERT INTO importacion_horario (motivo, inicio, fin, resultado, error) VALUES"
+                + " ('MANUAL', now(), now(), 'FALLIDA', 'PSQLException: ERROR: disk full en /var/lib/x') RETURNING id")
+                .query(Long.class).single();
+        cliente.get().uri("/api/horario/estado").exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.ultimoIntento.error").value(String.class, e -> assertThat(e).startsWith("Error interno")
+                        .doesNotContain("PSQL").doesNotContain("/var"));
+        assertThat(jdbc.sql("SELECT error FROM importacion_horario WHERE id = :id").param("id", id)
+                .query(String.class).single()).contains("disk full");
+    }
+
+    private void esperaAQueTermine() throws InterruptedException {
+        long limite = System.currentTimeMillis() + 30_000;
+        while (importador.enCurso() && System.currentTimeMillis() < limite) {
+            Thread.sleep(50);
+        }
+        assertThat(importador.enCurso()).isFalse();
     }
 
     private Map<String, Long> filas() {

@@ -1,5 +1,9 @@
 package com.ivanchesa.trainwatch.horario;
 
+import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 
@@ -40,20 +44,40 @@ public class ProgramacionHorario {
         this.reloj = reloj;
     }
 
+    /** Encola la importación en su propio hilo: el del programador queda libre para otras tareas (fase 3). */
     @Scheduled(cron = "${trainwatch.horario.cron:0 30 4,6 * * *}", zone = "Europe/Madrid")
     void nocturna() {
-        importador.importar(Motivo.NOCTURNA, false);
+        if (!importador.lanzarEnSegundoPlano(Motivo.NOCTURNA, false)) {
+            log.info("Importación nocturna descartada: ya hay una en marcha");
+        }
     }
 
     @EventListener(ApplicationReadyEvent.class)
     void alArrancar() {
-        int interrumpidas = registro.cerrarInterrumpidas(OffsetDateTime.now(reloj));
-        if (interrumpidas > 0) {
-            log.warn("{} importaciones del horario quedaron a medias en la ejecución anterior", interrumpidas);
-        }
+        // Con el cerrojo de PostgreSQL: si otra instancia está importando, su fila EN_CURSO no está interrumpida.
+        importador.conCerrojoGlobal(() -> {
+            int interrumpidas = registro.cerrarInterrumpidas(OffsetDateTime.now(reloj));
+            if (interrumpidas > 0) {
+                log.warn("{} importaciones del horario quedaron a medias en la ejecución anterior", interrumpidas);
+            }
+            borrarZipsTemporales();
+        });
         if (propiedades.importarAlArrancar() && importador.horarioVacio()) {
             log.info("El horario está vacío: se importa ahora, en segundo plano");
             importador.lanzarEnSegundoPlano(Motivo.ARRANQUE, false);
+        }
+    }
+
+    /** ZIPs temporales que dejó una importación cortada en seco (la aplicación se paró a mitad de la descarga). */
+    private static void borrarZipsTemporales() {
+        Path temporal = Path.of(System.getProperty("java.io.tmpdir"));
+        try (DirectoryStream<Path> zips = Files.newDirectoryStream(temporal, "trainwatch-horario-*.zip")) {
+            for (Path zip : zips) {
+                Files.deleteIfExists(zip);
+                log.info("Borrado el ZIP temporal huérfano {}", zip);
+            }
+        } catch (IOException e) {
+            log.warn("No se pudieron revisar los ZIP temporales en {}: {}", temporal, e.getMessage());
         }
     }
 }

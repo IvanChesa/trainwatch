@@ -10,8 +10,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.ReentrantLock;
+
+import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,12 +34,16 @@ import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PreDestroy;
 
 /**
- * Lanza el trabajo de importación, de una en una (un cerrojo impide dos a la vez), lo apunta en
- * {@code importacion_horario} y publica sus métricas en Micrometer:
+ * Lanza el trabajo de importación, de una en una, lo apunta en {@code importacion_horario} y publica sus métricas
+ * en Micrometer:
  * <ul>
  * <li>{@code trainwatch.horario.importacion} (timer, etiqueta {@code resultado}): duración de cada importación;</li>
- * <li>{@code trainwatch.horario.filas} (gauge, etiqueta {@code tabla}): filas del horario en uso.</li>
+ * <li>{@code trainwatch.horario.filas} (gauge, etiqueta {@code tabla}): filas de cada tabla del horario en uso;</li>
+ * <li>{@code trainwatch.horario.calidad} (gauge, etiqueta {@code medida}): viajes que encajan en su recorrido, etc.</li>
  * </ul>
+ * Dos cerrojos: {@code ocupado}, en la JVM, que se toma antes de encolar (dos disparos seguidos no encolan dos
+ * importaciones); y un <em>advisory lock</em> de PostgreSQL ({@link #CLAVE_CERROJO}), por si hubiera dos instancias
+ * de la aplicación contra la misma base de datos (por ejemplo, durante un despliegue).
  */
 @Service
 public class ImportadorHorario {
@@ -54,13 +60,18 @@ public class ImportadorHorario {
     private final EsquemaCarga esquema;
     private final Clock reloj;
     private final MeterRegistry metricas;
-    private final ReentrantLock cerrojo = new ReentrantLock();
+    /** Clave del advisory lock de PostgreSQL para la importación del horario (un número cualquiera, fijo). */
+    static final long CLAVE_CERROJO = 20_261_120_002L;
+
+    private final DataSource dataSource;
+    private final AtomicBoolean ocupado = new AtomicBoolean();
     private final ExecutorService segundoPlano = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().name("importacion-horario").daemon(true).factory());
     private final Map<String, AtomicLong> filasEnUso = new ConcurrentHashMap<>();
 
     public ImportadorHorario(JobOperator operador, Job importacionHorario, RegistroImportaciones registro,
-            EsquemaCarga esquema, Clock reloj, MeterRegistry metricas) {
+            EsquemaCarga esquema, Clock reloj, MeterRegistry metricas, DataSource dataSource) {
+        this.dataSource = dataSource;
         this.operador = operador;
         this.trabajo = importacionHorario;
         this.registro = registro;
@@ -71,7 +82,7 @@ public class ImportadorHorario {
     }
 
     public boolean enCurso() {
-        return cerrojo.isLocked();
+        return ocupado.get();
     }
 
     public boolean horarioVacio() {
@@ -80,10 +91,23 @@ public class ImportadorHorario {
 
     /** Lanza la importación en otro hilo. Devuelve false si ya había una en marcha. */
     public boolean lanzarEnSegundoPlano(Motivo motivo, boolean forzar) {
-        if (enCurso()) {
+        if (!ocupado.compareAndSet(false, true)) {
             return false;
         }
-        segundoPlano.submit(() -> importar(motivo, forzar));
+        try {
+            segundoPlano.submit(() -> {
+                try {
+                    conCerrojoDeBaseDeDatos(motivo, forzar);
+                } catch (RuntimeException e) {
+                    log.error("Importación del horario ({}) cortada: {}", motivo, e.getMessage(), e);
+                } finally {
+                    ocupado.set(false);
+                }
+            });
+        } catch (RuntimeException e) {
+            ocupado.set(false);
+            throw e;
+        }
         return true;
     }
 
@@ -92,16 +116,56 @@ public class ImportadorHorario {
      * devuelve {@link Resultado#EN_CURSO}.
      */
     public Informe importar(Motivo motivo, boolean forzar) {
-        if (!cerrojo.tryLock()) {
+        if (!ocupado.compareAndSet(false, true)) {
             log.info("Importación del horario ({}) descartada: ya hay una en marcha", motivo);
             return new Informe(Resultado.EN_CURSO, Duration.ZERO, Map.of(), null);
         }
-        long t0 = System.nanoTime();
         try {
-            return ejecutar(motivo, forzar, t0);
+            return conCerrojoDeBaseDeDatos(motivo, forzar);
         } finally {
-            cerrojo.unlock();
+            ocupado.set(false);
         }
+    }
+
+    /**
+     * Ejecuta {@code accion} con el advisory lock de la importación cogido en una conexión propia (los advisory
+     * locks de sesión son de la conexión). Devuelve false, sin ejecutarla, si lo tiene otra instancia.
+     */
+    boolean conCerrojoGlobal(Runnable accion) {
+        try (java.sql.Connection conexion = dataSource.getConnection()) {
+            boolean cogido;
+            try (var st = conexion.prepareStatement("SELECT pg_try_advisory_lock(?)")) {
+                st.setLong(1, CLAVE_CERROJO);
+                try (var rs = st.executeQuery()) {
+                    rs.next();
+                    cogido = rs.getBoolean(1);
+                }
+            }
+            if (!cogido) {
+                return false;
+            }
+            try {
+                accion.run();
+            } finally {
+                try (var st = conexion.prepareStatement("SELECT pg_advisory_unlock(?)")) {
+                    st.setLong(1, CLAVE_CERROJO);
+                    st.execute();
+                }
+            }
+            return true;
+        } catch (java.sql.SQLException e) {
+            throw new IllegalStateException("No se pudo usar el cerrojo de la importación en PostgreSQL", e);
+        }
+    }
+
+    private Informe conCerrojoDeBaseDeDatos(Motivo motivo, boolean forzar) {
+        Informe[] informe = new Informe[1];
+        long t0 = System.nanoTime();
+        if (!conCerrojoGlobal(() -> informe[0] = ejecutar(motivo, forzar, t0))) {
+            log.info("Importación del horario ({}) descartada: otra instancia está importando", motivo);
+            return new Informe(Resultado.EN_CURSO, Duration.ZERO, Map.of(), null);
+        }
+        return informe[0];
     }
 
     private Informe ejecutar(Motivo motivo, boolean forzar, long t0) {
@@ -174,10 +238,12 @@ public class ImportadorHorario {
         if (filas == null) {
             return;
         }
-        filas.forEach((tabla, n) -> filasEnUso.computeIfAbsent(tabla, t -> {
+        filas.forEach((clave, n) -> filasEnUso.computeIfAbsent(clave, c -> {
             AtomicLong valor = new AtomicLong();
-            Gauge.builder("trainwatch.horario.filas", valor, AtomicLong::get)
-                    .description("Filas del horario en uso").tag("tabla", t).register(metricas);
+            boolean esTabla = EsquemaCarga.TABLAS.contains(c);
+            Gauge.builder(esTabla ? "trainwatch.horario.filas" : "trainwatch.horario.calidad", valor, AtomicLong::get)
+                    .description(esTabla ? "Filas de cada tabla del horario en uso" : "Cifras de calidad del horario en uso")
+                    .tag(esTabla ? "tabla" : "medida", c).register(metricas);
             return valor;
         }).set(n));
     }

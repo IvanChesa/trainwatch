@@ -1,8 +1,9 @@
 ZIP: 15564301 bytes
-Primera importación (base vacía): CORRECTA en 15149 ms
-Segunda importación (con horario cargado): CORRECTA en 16520 ms
-Tercera (mismo ETag): SIN_CAMBIOS en 7 ms
+Primera importación (base vacía): CORRECTA en 15227 ms
+Segunda importación (con horario cargado): CORRECTA en 16761 ms
+Tercera (mismo ETag): SIN_CAMBIOS en 18 ms
 Filas y calidad: {stops=1167, routes=277, calendar=450, trips=130297, stop_times=1793333, shapes=144, parada_forma=2513, transfers=19, viajes_tren=113488, viajes_autobus=16809, viajes_tren_con_recorrido=113488, viajes_tren_sin_recorrido=0, viajes_tren_encajan=106111, viajes_tren_menos_de_2_paradas=607, viajes_tren_sin_orden=1004, viajes_tren_lejos_del_recorrido=5766, horas_de_paso_sin_viaje=0, horas_de_paso_sin_parada=0}
+Tamaño del esquema horario (tablas e índices): 313 MB
 Encaje de los viajes de tren en su recorrido, por núcleo:
   {nucleo=10, viajes=35903, con_recorrido=35903, encajan=35301, sin_orden=179, lejos=423, pct=98.3}
   {nucleo=20, viajes=12327, con_recorrido=12327, encajan=10557, sin_orden=0, lejos=1770, pct=85.6}
@@ -45,45 +46,45 @@ Un viaje de ejemplo de cada recorrido que no encaja (parada: posición · metros
   {shape_id=51_R2, trip_id=5123V25400R2, paradas=71700: 0.000 · 21649 | 71701: 0.000 · 14711 | 71703: 0.000 · 6795 | 71704: 0.000 · 2080 | 71705: 0.004 · 36 | 71706: 0.082 · 31 | 71709: 0.117 · 23 | 71707: 0.245 · 7 | 71708: 0.325 · 16 | 71801: 0.404 · 43 | 71802: 0.457 · 37 | 79009: 0.512 · 33 | 79004: 0.572 · 16 | 79005: 0.676 · 16 | 79011: 0.734 · 11 | 79006: 0.791 · 14 | 79007: 0.856 · 9 | 79100: 0.999 · 29 | 79109: 1.000 · 1921 | 79101: 1.000 · 6747 | 79102: 1.000 · 10302 | 79103: 1.000 · 15721 | 79104: 1.000 · 19122 | 79105: 1.000 · 24407 | 79106: 1.000 · 27015 | 79107: 1.000 · 32720 | 79200: 1.000 · 37133}
   {shape_id=51_R4, trip_id=5123V33518R4, paradas=78600: 1.000 · 15}
 Distancia de las paradas a su recorrido (parada_forma): {"p50": 15.247442245483398, "p90": 2225.2724609375, "p99": 151119.45125000027, "mas_de_200": 281}
-Las 5 estaciones más cercanas a la plaza de Catalunya:
-    Limit (actual time=0.053..0.059 rows=5.00 loops=1)
-      Buffers: shared hit=7
-      ->  Index Scan using stops_ubicacion_geog_idx on stops (actual time=0.052..0.058 rows=5.00 loops=1)
-            Order By: ((ubicacion)::geography <-> '0101000020E61000005C8FC2F5285C0140A8C64B3789B14440'::geography)
-            Index Searches: 1
-            Buffers: shared hit=7
-    Planning:
-      Buffers: shared hit=20 read=5 dirtied=1
-    Planning Time: 0.175 ms
-    Execution Time: 0.102 ms
 Próximas salidas de Lleida Pirineus (78805) entre las 08:00 y las 10:00:
-    Sort (actual time=1.428..1.509 rows=965.00 loops=1)
+    Sort (actual time=2.030..2.095 rows=965.00 loops=1)
       Sort Key: salida_s
       Sort Method: quicksort  Memory: 62kB
-      Buffers: shared hit=117 read=289
-      ->  Bitmap Heap Scan on stop_times st (actual time=0.111..1.304 rows=965.00 loops=1)
+      Buffers: shared hit=332 read=74
+      ->  Bitmap Heap Scan on stop_times st (actual time=0.156..1.909 rows=965.00 loops=1)
             Recheck Cond: ((stop_id = '78805'::text) AND (salida_s >= 28800) AND (salida_s <= 36000))
             Heap Blocks: exact=397
-            Buffers: shared hit=117 read=289
-            ->  Bitmap Index Scan on stop_times_salidas_idx (actual time=0.075..0.076 rows=965.00 loops=1)
+            Buffers: shared hit=332 read=74
+            ->  Bitmap Index Scan on stop_times_salidas_idx (actual time=0.115..0.116 rows=965.00 loops=1)
                   Index Cond: ((stop_id = '78805'::text) AND (salida_s >= 28800) AND (salida_s <= 36000))
                   Index Searches: 1
                   Buffers: shared hit=1 read=8
     Planning:
-      Buffers: shared hit=8
-    Planning Time: 0.082 ms
-    Execution Time: 1.551 ms
+      Buffers: shared hit=11
+    Planning Time: 0.120 ms
+    Execution Time: 2.144 ms
+Las 5 estaciones más cercanas a la plaza de Catalunya:
+    Limit (actual time=7.855..7.865 rows=5.00 loops=1)
+      Buffers: shared hit=152 read=17
+      ->  Index Scan using stops_ubicacion_geog_idx on stops (actual time=7.854..7.862 rows=5.00 loops=1)
+            Order By: ((ubicacion)::geography <-> '0101000020E61000005C8FC2F5285C0140A8C64B3789B14440'::geography)
+            Index Searches: 1
+            Buffers: shared hit=152 read=17
+    Planning:
+      Buffers: shared hit=48 read=6 dirtied=1
+    Planning Time: 11.648 ms
+    Execution Time: 7.892 ms
 Paradas de un viaje en orden:
-    Index Scan using stop_times_pkey on stop_times (actual time=0.199..0.200 rows=0.00 loops=1)
+    Index Scan using stop_times_pkey on stop_times (actual time=0.185..0.185 rows=0.00 loops=1)
       Index Cond: (trip_id = (InitPlan 1).col1)
       Index Searches: 1
       Buffers: shared hit=334 read=1
       InitPlan 1
-        ->  Limit (actual time=0.173..0.173 rows=1.00 loops=1)
+        ->  Limit (actual time=0.156..0.157 rows=1.00 loops=1)
               Buffers: shared hit=332
-              ->  Seq Scan on trips (actual time=0.172..0.172 rows=1.00 loops=1)
+              ->  Seq Scan on trips (actual time=0.156..0.156 rows=1.00 loops=1)
                     Buffers: shared hit=332
     Planning:
       Buffers: shared hit=5
-    Planning Time: 0.136 ms
-    Execution Time: 0.211 ms
+    Planning Time: 0.109 ms
+    Execution Time: 0.195 ms

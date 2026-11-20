@@ -33,6 +33,10 @@ public final class ServidorGtfs implements AutoCloseable {
     private volatile byte[] zip = new byte[0];
     private volatile String etag = "\"0\"";
     public final List<String> ifNoneMatchRecibidos = new CopyOnWriteArrayList<>();
+    /** Contesta siempre 200, como un servidor que no entiende If-None-Match. */
+    public volatile boolean ignoraCondicionales;
+    /** Manda las cabeceras y 10 bytes, y se queda parado: un servidor atascado a mitad de la descarga. */
+    public volatile boolean atascado;
 
     public ServidorGtfs() {
         try {
@@ -45,7 +49,19 @@ public final class ServidorGtfs implements AutoCloseable {
             ifNoneMatchRecibidos.add(ifNoneMatch == null ? "" : ifNoneMatch);
             intercambio.getResponseHeaders().add("ETag", etag);
             intercambio.getResponseHeaders().add("Last-Modified", LAST_MODIFIED);
-            if (etag.equals(ifNoneMatch)) {
+            if (atascado) {
+                intercambio.sendResponseHeaders(200, 1_000_000);
+                intercambio.getResponseBody().write(new byte[10]);
+                intercambio.getResponseBody().flush();
+                try {
+                    Thread.sleep(15_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                intercambio.close();
+                return;
+            }
+            if (!ignoraCondicionales && etag.equals(ifNoneMatch)) {
                 intercambio.sendResponseHeaders(304, -1);
             } else {
                 byte[] cuerpo = zip;
@@ -57,6 +73,7 @@ public final class ServidorGtfs implements AutoCloseable {
             }
             intercambio.close();
         });
+        servidor.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
         servidor.start();
     }
 

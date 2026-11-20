@@ -6,6 +6,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +26,9 @@ import org.springframework.stereotype.Component;
 public class DescargaHorario {
 
     private static final Logger log = LoggerFactory.getLogger(DescargaHorario.class);
+
+    /** Tamaño máximo del ZIP: hoy son 15,6 MB; más de 200 MB no es un horario de Cercanías. */
+    static final long BYTES_MAXIMOS = 200L * 1024 * 1024;
 
     private final HorarioProperties propiedades;
     private final HttpClient cliente;
@@ -57,7 +64,19 @@ public class DescargaHorario {
         }
         Path destino = Files.createTempFile("trainwatch-horario-", ".zip");
         try {
-            HttpResponse<Path> respuesta = cliente.send(peticion.build(), HttpResponse.BodyHandlers.ofFile(destino));
+            // HttpRequest.timeout solo limita la espera de las cabeceras, no la del cuerpo: si el servidor se queda a
+            // medias, send() esperaría para siempre con la importación ocupada. Se limita el tiempo total.
+            CompletableFuture<HttpResponse<Path>> futuro =
+                    cliente.sendAsync(peticion.build(), HttpResponse.BodyHandlers.ofFile(destino));
+            HttpResponse<Path> respuesta;
+            try {
+                respuesta = futuro.get(propiedades.tiempoMaximoDescarga().toMillis(), TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                futuro.cancel(true);
+                throw new IOException("La descarga del horario no terminó en " + propiedades.tiempoMaximoDescarga());
+            } catch (ExecutionException e) {
+                throw e.getCause() instanceof IOException io ? io : new IOException(e.getCause());
+            }
             String etag = respuesta.headers().firstValue("ETag").orElse(null);
             String lastModified = respuesta.headers().firstValue("Last-Modified").orElse(null);
             int estado = respuesta.statusCode();
@@ -69,12 +88,17 @@ public class DescargaHorario {
             if (estado != 200) {
                 throw new IOException("La descarga del horario devolvió HTTP " + estado + " (" + propiedades.url() + ")");
             }
-            if (!forzar && etag != null && etag.equals(etagAnterior)) {
+            boolean mismoEtag = etag != null && etag.equals(etagAnterior);
+            boolean mismaFechaSinEtag = etag == null && lastModified != null && lastModified.equals(lastModifiedAnterior);
+            if (!forzar && (mismoEtag || mismaFechaSinEtag)) {
                 Files.deleteIfExists(destino);
-                log.info("Horario sin cambios (mismo ETag {})", etag);
+                log.info("Horario sin cambios (200 con el mismo ETag {} o Last-Modified {})", etag, lastModified);
                 return new Resultado(false, null, etag, lastModified, 0);
             }
             long bytes = Files.size(destino);
+            if (bytes > BYTES_MAXIMOS) {
+                throw new IOException("El horario descargado ocupa " + bytes + " bytes, más del máximo (" + BYTES_MAXIMOS + ")");
+            }
             log.info("Horario descargado: {} bytes, ETag {}, Last-Modified {}", bytes, etag, lastModified);
             return new Resultado(true, destino, etag, lastModified, bytes);
         } catch (IOException | InterruptedException | RuntimeException e) {
