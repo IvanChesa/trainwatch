@@ -200,6 +200,15 @@ public class ImportadorHorario {
             error = mensaje(e);
         }
 
+        boolean despuesDelCambio = resultado == Resultado.FALLIDA && cambioHecho(id);
+        if (despuesDelCambio) {
+            // Algo falló después del paso «cambio» (la limpieza, el repositorio de Spring Batch): el horario nuevo
+            // ya está en uso y apuntado como CORRECTO en la misma transacción. No se desdice (fase 3b).
+            log.warn("Importación del horario {}: falló después del cambio ({}); el horario nuevo queda en uso", id,
+                    error);
+            resultado = Resultado.CORRECTA;
+            error = null;
+        }
         if (resultado == Resultado.FALLIDA) {
             try {
                 esquema.borrar(EsquemaCarga.CARGA);
@@ -213,11 +222,17 @@ public class ImportadorHorario {
         Map<String, Long> filas = resultado == Resultado.CORRECTA
                 ? (Map<String, Long>) contexto.get(ImportacionJobConfig.CLAVE_FILAS) : null;
         Duration duracion = Duration.ofNanos(System.nanoTime() - t0);
-        registro.terminar(id, OffsetDateTime.now(reloj), resultado,
-                contexto.getString(ImportacionJobConfig.CLAVE_ETAG, null),
-                contexto.getString(ImportacionJobConfig.CLAVE_LAST_MODIFIED, null),
-                fecha(contexto, ImportacionJobConfig.CLAVE_VIGENCIA_DESDE),
-                fecha(contexto, ImportacionJobConfig.CLAVE_VIGENCIA_HASTA), filas, error);
+        if (despuesDelCambio) {
+            // El paso «cambio» ya lo apuntó todo; el contexto del trabajo puede venir vacío. Solo falta la hora de fin.
+            registro.terminarDespuesDelCambio(id, OffsetDateTime.now(reloj));
+            filas = registro.ultimaCorrecta().map(RegistroImportaciones.Importacion::filas).orElse(filas);
+        } else {
+            registro.terminar(id, OffsetDateTime.now(reloj), resultado,
+                    contexto.getString(ImportacionJobConfig.CLAVE_ETAG, null),
+                    contexto.getString(ImportacionJobConfig.CLAVE_LAST_MODIFIED, null),
+                    fecha(contexto, ImportacionJobConfig.CLAVE_VIGENCIA_DESDE),
+                    fecha(contexto, ImportacionJobConfig.CLAVE_VIGENCIA_HASTA), filas, error);
+        }
         Timer.builder("trainwatch.horario.importacion").description("Duración de la importación del horario")
                 .tag("resultado", resultado.name()).register(metricas).record(duracion);
         if (filas != null) {
@@ -232,6 +247,16 @@ public class ImportadorHorario {
                     filas == null ? "" : ": " + filas);
         }
         return new Informe(resultado, duracion, filas == null ? Map.of() : filas, error);
+    }
+
+    /** Si el paso «cambio» llegó a confirmarse: lo dice el propio registro, escrito en su transacción. */
+    private boolean cambioHecho(long id) {
+        try {
+            return registro.resultado(id).orElse(null) == Resultado.CORRECTA;
+        } catch (RuntimeException e) {
+            log.warn("No se pudo leer el resultado de la importación {}", id, e);
+            return false;
+        }
     }
 
     private void publicarFilas(Map<String, Long> filas) {

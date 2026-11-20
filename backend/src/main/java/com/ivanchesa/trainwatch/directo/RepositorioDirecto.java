@@ -26,7 +26,11 @@ public class RepositorioDirecto {
         this.jdbc = jdbc;
     }
 
-    /** Una fila por tren que ha cambiado. Devuelve las filas escritas. */
+    /**
+     * Una fila por tren que ha cambiado. Devuelve las filas escritas. En una transacción (fase 3b): la cola de
+     * pendientes se escribe entera o nada, así que un reintento no duplica los lotes que ya habían entrado.
+     */
+    @Transactional
     public int guardarPosiciones(List<Tren> trenes) {
         if (trenes.isEmpty()) {
             return 0;
@@ -59,18 +63,21 @@ public class RepositorioDirecto {
 
     /**
      * Los retrasos finales cerrados. Si la misma parada se cierra dos veces (un reinicio, un viaje que vuelve atrás
-     * en el feed), manda la última.
+     * en el feed), manda la última, salvo que la nueva sea inferida y la que había no: un cierre visto no lo pisa uno
+     * deducido (ADR 0012).
      */
+    @Transactional
     public int guardarRetrasos(List<RetrasoFinal> retrasos) {
         if (retrasos.isEmpty()) {
             return 0;
         }
         jdbc.batchUpdate("""
                 INSERT INTO retrasos (fecha_servicio, trip_id, stop_sequence, stop_id, route_id, linea, nucleo, minutos,
-                    registrado)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    registrado, inferido)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (fecha_servicio, trip_id, stop_sequence)
-                DO UPDATE SET minutos = EXCLUDED.minutos, registrado = EXCLUDED.registrado""", retrasos, 500,
+                DO UPDATE SET minutos = EXCLUDED.minutos, registrado = EXCLUDED.registrado, inferido = EXCLUDED.inferido
+                WHERE retrasos.inferido OR NOT EXCLUDED.inferido""", retrasos, 500,
                 (ps, r) -> {
                     ps.setDate(1, Date.valueOf(r.fechaServicio()));
                     ps.setString(2, r.tripId());
@@ -81,6 +88,7 @@ public class RepositorioDirecto {
                     setInt(ps, 7, r.nucleo());
                     ps.setInt(8, r.minutos());
                     ps.setTimestamp(9, Timestamp.from(r.registrado()));
+                    ps.setBoolean(10, r.inferido());
                 });
         return retrasos.size();
     }

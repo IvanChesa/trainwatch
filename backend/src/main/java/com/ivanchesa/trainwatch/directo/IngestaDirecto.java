@@ -14,7 +14,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.IntSupplier;
+import java.util.function.ToIntFunction;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -47,11 +47,21 @@ import io.micrometer.core.instrument.MeterRegistry;
  * <li>se reestima la posición de todos los trenes y se calcula el resumen.</li>
  * </ol>
  * Primero los retrasos, para que las posiciones usen el retraso de la misma muestra. Un 304 no procesa nada. Si un
- * feed falla, los otros siguen; si falla la base de datos, el estado en memoria sigue y las filas de ese ciclo se
- * pierden (se cuenta en {@code trainwatch.directo.errores}).
+ * feed falla, los otros siguen.
  *
- * <p>El programador de Spring tiene dos hilos ({@code spring.task.scheduling.pool.size}): la ingesta no espera a otras
- * tareas programadas.
+ * <p><b>Si falla la base de datos (fase 3b).</b>
+ * <ul>
+ * <li>Al <i>leer</i> el horario: el viaje que no se puede buscar se salta en esa muestra y se cuenta
+ * ({@code trainwatch.directo.viajes.sin.resolver}). Si el procesado de una muestra falla entero, el estado no cambia
+ * y el {@code ETag} no se confirma ({@link ClienteFeeds#confirmar}): el ciclo siguiente vuelve a traer la muestra.</li>
+ * <li>Al <i>escribir</i>: las filas de {@code retrasos} y {@code posiciones} esperan en una cola acotada y se
+ * reintentan en cada ciclo; los avisos no se dan por recibidos hasta escribirlos. El mapa en directo sigue al día.</li>
+ * </ul>
+ * Los tiempos máximos de la base de datos ({@code application.properties}: Hikari, {@code socketTimeout} y
+ * {@code statement_timeout}) hacen que una base de datos colgada sea un error en segundos, no un ciclo parado.
+ *
+ * <p>Las particiones las mantiene {@link GestorParticiones} en su propia tarea programada: un {@code DROP} esperando
+ * un cerrojo no para la ingesta. El programador de Spring tiene tres hilos ({@code spring.task.scheduling.pool.size}).
  */
 @Component
 public class IngestaDirecto {
@@ -62,7 +72,6 @@ public class IngestaDirecto {
     private final EstadoDirecto estado;
     private final HorarioDirectoJdbc horario;
     private final RepositorioDirecto repositorio;
-    private final GestorParticiones particiones;
     private final DirectoProperties propiedades;
     private final Clock reloj;
     private final MeterRegistry metricas;
@@ -76,15 +85,16 @@ public class IngestaDirecto {
      */
     private final List<RetrasoFinal> retrasosPendientes = new ArrayList<>();
     private static final int MAXIMO_PENDIENTES = 100_000;
+    /** Lo mismo para las posiciones (fase 3b): unas 340 filas por minuto a mediodía, así que caben unas 2 h. */
+    private final List<Tren> posicionesPendientes = new ArrayList<>();
+    private static final int MAXIMO_POSICIONES_PENDIENTES = 50_000;
 
     public IngestaDirecto(ClienteFeeds cliente, EstadoDirecto estado, HorarioDirectoJdbc horario,
-            RepositorioDirecto repositorio, GestorParticiones particiones, DirectoProperties propiedades, Clock reloj,
-            MeterRegistry metricas) {
+            RepositorioDirecto repositorio, DirectoProperties propiedades, Clock reloj, MeterRegistry metricas) {
         this.cliente = cliente;
         this.estado = estado;
         this.horario = horario;
         this.repositorio = repositorio;
-        this.particiones = particiones;
         this.propiedades = propiedades;
         this.reloj = reloj;
         this.metricas = metricas;
@@ -103,47 +113,47 @@ public class IngestaDirecto {
 
     /** Un ciclo completo. Público para las pruebas; {@code synchronized} para que nunca vayan dos a la vez. */
     public synchronized void ciclo() {
-        Instant ahora = reloj.instant();
         try {
-            horario.refrescarSiCambia(ahora);
-            particiones.mantenerSiToca(ahora);
+            horario.refrescarSiCambia(reloj.instant());
         } catch (RuntimeException e) {
             error(null, "base_de_datos", e);
         }
 
-        descargar(Feed.RETRASOS).ifPresent(muestra -> {
+        descargar(Feed.RETRASOS).ifPresent(d -> {
             Instant ahoraRetrasos = reloj.instant(); // la descarga puede haber tardado (reintentos)
-            ResultadoRetrasos r = procesar(Feed.RETRASOS, () -> estado.procesarRetrasos(muestra, ahoraRetrasos));
-            if (r != null && r.nueva()) {
+            ResultadoRetrasos r = procesar(Feed.RETRASOS, () -> estado.procesarRetrasos(d.muestra(), ahoraRetrasos));
+            if (r == null) {
+                return; // sin confirmar: el ciclo siguiente vuelve a traer la muestra
+            }
+            cliente.confirmar(d);
+            if (r.nueva()) {
                 contarMuestra(Feed.RETRASOS, r.completa());
                 metricas.counter("trainwatch.directo.retrasos.sin.cerrar").increment(r.sinCerrar());
-                retrasosPendientes.addAll(r.cerrados());
+                metricas.counter("trainwatch.directo.retrasos.inferidos").increment(r.inferidos());
+                contarSinResolver(Feed.RETRASOS, r.sinResolver());
+                encolar(retrasosPendientes, r.cerrados(), MAXIMO_PENDIENTES, "retrasos");
             }
         });
-        guardarRetrasosPendientes();
-        descargar(Feed.POSICIONES).ifPresent(muestra -> {
+        guardarPendientes("retrasos", retrasosPendientes, repositorio::guardarRetrasos);
+
+        descargar(Feed.POSICIONES).ifPresent(d -> {
             Instant ahoraPosiciones = reloj.instant();
             ResultadoPosiciones r = procesar(Feed.POSICIONES,
-                    () -> estado.procesarPosiciones(muestra, ahoraPosiciones));
-            if (r != null && r.nueva()) {
+                    () -> estado.procesarPosiciones(d.muestra(), ahoraPosiciones));
+            if (r == null) {
+                return;
+            }
+            cliente.confirmar(d);
+            if (r.nueva()) {
                 contarMuestra(Feed.POSICIONES, r.completa());
                 metricas.counter("trainwatch.directo.trenes.desaparecidos").increment(r.desaparecidos());
-                guardar("posiciones", () -> repositorio.guardarPosiciones(r.cambios()));
+                contarSinResolver(Feed.POSICIONES, r.sinResolver());
+                encolar(posicionesPendientes, r.cambios(), MAXIMO_POSICIONES_PENDIENTES, "posiciones");
             }
         });
-        descargar(Feed.AVISOS).ifPresent(muestra -> {
-            long cabecera = muestra.getHeader().getTimestamp();
-            Instant previa = ultimaMuestraAvisos;
-            if (previa == null || cabecera == 0 || cabecera != previa.getEpochSecond()) {
-                ultimaMuestraAvisos = Instant.ofEpochSecond(cabecera);
-                // Una muestra de avisos vacia o con muchos menos no borra los que hay (como las incompletas).
-                boolean completa = detectorAvisos.completa(muestra.getEntityCount());
-                contarMuestra(Feed.AVISOS, completa);
-                if (completa) {
-                    guardar("avisos", () -> repositorio.sustituirAvisos(avisosDe(muestra, reloj.instant())));
-                }
-            }
-        });
+        guardarPendientes("posiciones", posicionesPendientes, repositorio::guardarPosiciones);
+
+        descargar(Feed.AVISOS).ifPresent(this::procesarAvisos);
 
         try {
             Instant fin = reloj.instant();
@@ -154,17 +164,31 @@ public class IngestaDirecto {
         }
     }
 
+    /**
+     * El resumen del último ciclo, con la antigüedad del último dato calculada <i>ahora</i> (fase 3b): si la ingesta
+     * se queda parada, la antigüedad sigue creciendo y se nota.
+     */
     public ResumenDirecto resumen() {
-        return resumen.get();
+        // El último dato, del estado (no del resumen): si el resumen no se pudo calcular, el dato sigue al día.
+        return resumen.get().alInstante(reloj.instant(), estado.ultimaMuestraPosiciones());
+    }
+
+    /** Filas que esperan a que la base de datos vuelva (para las pruebas). */
+    int pendientes(String tabla) {
+        return switch (tabla) {
+            case "retrasos" -> retrasosPendientes.size();
+            case "posiciones" -> posicionesPendientes.size();
+            default -> throw new IllegalArgumentException(tabla);
+        };
     }
 
     // ---------------------------------------------------------------- pasos
 
-    private Optional<FeedMessage> descargar(Feed feed) {
+    private Optional<Descarga> descargar(Feed feed) {
         try {
             Descarga d = cliente.descargar(feed);
             contarDescarga(feed, String.valueOf(d.estado()));
-            return Optional.ofNullable(d.muestra());
+            return d.nueva() ? Optional.of(d) : Optional.empty();
         } catch (CallNotPermittedException e) {
             contarDescarga(feed, "circuito_abierto");
             metricas.counter("trainwatch.directo.errores", "feed", feed.etiqueta(), "tipo", "circuito_abierto")
@@ -185,29 +209,96 @@ public class IngestaDirecto {
         }
     }
 
-    private void guardar(String tabla, IntSupplier escritura) {
-        try {
-            int filas = escritura.getAsInt();
-            metricas.counter("trainwatch.directo.filas", "tabla", tabla).increment(filas);
-        } catch (RuntimeException e) {
-            error(null, "base_de_datos", e);
+    /**
+     * Avisos: una muestra nueva sustituye a los anteriores. No se da por recibida (ni se confirma su {@code ETag})
+     * hasta que se ha escrito: si la base de datos falla, se repite en el ciclo siguiente.
+     */
+    private void procesarAvisos(Descarga d) {
+        FeedMessage muestra = d.muestra();
+        long cabecera = muestra.getHeader().getTimestamp();
+        Instant previa = ultimaMuestraAvisos;
+        if (previa != null && cabecera != 0 && cabecera == previa.getEpochSecond()) {
+            cliente.confirmar(d); // la misma muestra: nada que hacer
+            return;
+        }
+        // Una muestra de avisos vacia o con muchos menos no borra los que hay (como las incompletas).
+        DetectorMuestrasIncompletas.Evaluacion evaluacion = detectorAvisos.evaluar(muestra.getEntityCount());
+        if (evaluacion.completa()) {
+            try {
+                int filas = repositorio.sustituirAvisos(avisosDe(muestra, reloj.instant()));
+                metricas.counter("trainwatch.directo.filas", "tabla", "avisos").increment(filas);
+            } catch (RuntimeException e) {
+                error(null, "base_de_datos", e);
+                return;
+            }
+        }
+        detectorAvisos.aceptar(evaluacion);
+        ultimaMuestraAvisos = Instant.ofEpochSecond(cabecera);
+        contarMuestra(Feed.AVISOS, evaluacion.completa());
+        cliente.confirmar(d);
+    }
+
+    /** Añade a una cola de pendientes; si pasa del máximo, se descartan las más viejas (y se cuentan). */
+    private <T> void encolar(List<T> cola, List<T> nuevas, int maximo, String tabla) {
+        cola.addAll(nuevas);
+        if (cola.size() > maximo) {
+            int sobran = cola.size() - maximo;
+            cola.subList(0, sobran).clear();
+            metricas.counter("trainwatch.directo.filas.descartadas", "tabla", tabla).increment(sobran);
         }
     }
 
-    private void guardarRetrasosPendientes() {
-        if (retrasosPendientes.isEmpty()) {
+    /**
+     * Escribe lo pendiente de una tabla, en una transacción. Si falla, se queda en la cola para el ciclo siguiente.
+     * Si falla porque alguna fila no cabe en ninguna partición (no se arreglará sola reintentando), se escriben de una
+     * en una para apartar esas filas y contarlas: si no, una sola fila imposible bloquearía la cola entera.
+     */
+    private <T> void guardarPendientes(String tabla, List<T> cola, ToIntFunction<List<T>> escritura) {
+        if (cola.isEmpty()) {
             return;
         }
         try {
-            int filas = repositorio.guardarRetrasos(List.copyOf(retrasosPendientes));
-            metricas.counter("trainwatch.directo.filas", "tabla", "retrasos").increment(filas);
-            retrasosPendientes.clear();
+            int filas = escritura.applyAsInt(List.copyOf(cola));
+            metricas.counter("trainwatch.directo.filas", "tabla", tabla).increment(filas);
+            cola.clear();
         } catch (RuntimeException e) {
-            error(null, "base_de_datos", e);
-            if (retrasosPendientes.size() > MAXIMO_PENDIENTES) {
-                retrasosPendientes.subList(0, retrasosPendientes.size() - MAXIMO_PENDIENTES).clear();
+            if (!sinParticion(e)) {
+                error(null, "base_de_datos", e);
+                return;
+            }
+            log.warn("Ingesta en directo: filas de {} sin particion; se apartan de una en una", tabla, e);
+            List<T> quedan = new ArrayList<>();
+            int escritas = 0;
+            int apartadas = 0;
+            for (int i = 0; i < cola.size(); i++) {
+                T fila = cola.get(i);
+                try {
+                    escritas += escritura.applyAsInt(List.of(fila));
+                } catch (RuntimeException otra) {
+                    if (sinParticion(otra)) {
+                        apartadas++;
+                    } else {
+                        error(null, "base_de_datos", otra);
+                        quedan.addAll(cola.subList(i, cola.size()));
+                        break;
+                    }
+                }
+            }
+            cola.clear();
+            cola.addAll(quedan);
+            metricas.counter("trainwatch.directo.filas", "tabla", tabla).increment(escritas);
+            metricas.counter("trainwatch.directo.filas.descartadas", "tabla", tabla).increment(apartadas);
+        }
+    }
+
+    /** La fila no cabe en ninguna particion: SQLSTATE 23514. */
+    private static boolean sinParticion(Throwable e) {
+        for (Throwable c = e; c != null; c = c.getCause()) {
+            if (c instanceof java.sql.SQLException sql && "23514".equals(sql.getSQLState())) {
+                return true;
             }
         }
+        return false;
     }
 
     ResumenDirecto calcularResumen(Instant ahora) {
@@ -314,6 +405,11 @@ public class IngestaDirecto {
         }
         Gauge.builder("trainwatch.directo.trenes.sin.horario", this, i -> i.resumen().sinHorario())
                 .description("Trenes en directo cuyo viaje no está en el horario").register(metricas);
+        Gauge.builder("trainwatch.directo.pendientes", this, i -> i.retrasosPendientes.size()).tag("tabla", "retrasos")
+                .description("Filas que esperan a que la base de datos vuelva").register(metricas);
+        Gauge.builder("trainwatch.directo.pendientes", this, i -> i.posicionesPendientes.size())
+                .tag("tabla", "posiciones").description("Filas que esperan a que la base de datos vuelva")
+                .register(metricas);
     }
 
     private double antiguedad(Feed feed) {
@@ -329,6 +425,10 @@ public class IngestaDirecto {
         metricas.counter("trainwatch.directo.descargas", "feed", feed.etiqueta(), "resultado", resultado).increment();
     }
 
+    private void contarSinResolver(Feed feed, int n) {
+        metricas.counter("trainwatch.directo.viajes.sin.resolver", "feed", feed.etiqueta()).increment(n);
+    }
+
     private void contarMuestra(Feed feed, boolean completa) {
         metricas.counter("trainwatch.directo.muestras", "feed", feed.etiqueta(), "completa", String.valueOf(completa))
                 .increment();
@@ -337,7 +437,7 @@ public class IngestaDirecto {
     private void error(Feed feed, String tipo, Exception e) {
         Counter.builder("trainwatch.directo.errores").tag("feed", feed == null ? "-" : feed.etiqueta()).tag("tipo", tipo)
                 .register(metricas).increment();
-        log.warn("Ingesta en directo, error de {}{}: {}", tipo, feed == null ? "" : " en " + feed.etiqueta(),
-                e.toString());
+        // Con la excepción como último argumento: SLF4J escribe la traza entera (fase 3b).
+        log.warn("Ingesta en directo, error de {}{}", tipo, feed == null ? "" : " en " + feed.etiqueta(), e);
     }
 }

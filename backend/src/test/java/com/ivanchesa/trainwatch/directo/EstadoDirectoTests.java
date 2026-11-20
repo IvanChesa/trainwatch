@@ -1,6 +1,7 @@
 package com.ivanchesa.trainwatch.directo;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 import java.io.IOException;
@@ -14,6 +15,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -47,12 +53,32 @@ class EstadoDirectoTests {
     static final Recorrido RECTO = new Recorrido("51_R4", new double[] { 0.60, 0.61, 0.62 },
             new double[] { 41.6, 41.6, 41.6 }, false);
 
-    /** Horario falso: un mapa de viajes. */
+    /**
+     * Horario falso: un mapa de viajes. {@code fallan}: viajes cuya búsqueda falla como si la base de datos no
+     * contestara; {@code revientan}: viajes cuya búsqueda lanza un error inesperado (no una excepción de la base de
+     * datos), para probar que una muestra que falla a mitad no deja el estado a medias.
+     */
     static class HorarioFalso implements FuenteHorario {
-        final Map<String, Viaje> viajes = new HashMap<>();
+        final Map<String, Viaje> viajes = new ConcurrentHashMap<>();
+        final Set<String> fallan = ConcurrentHashMap.newKeySet();
+        final Set<String> revientan = ConcurrentHashMap.newKeySet();
+        final AtomicInteger llamadasFallidas = new AtomicInteger();
+
+        @Override
+        public boolean enCache(String tripId) {
+            // Como la caché de verdad, que guarda también los que no existen (SPECIAL_...): todo menos los que fallan.
+            return !fallan.contains(tripId) && !revientan.contains(tripId);
+        }
 
         @Override
         public Viaje viaje(String tripId) {
+            if (fallan.contains(tripId)) {
+                llamadasFallidas.incrementAndGet();
+                throw new IllegalStateException("La base de datos no contesta (" + tripId + ")");
+            }
+            if (revientan.contains(tripId)) {
+                throw new AssertionError("Fallo inesperado a mitad de la muestra (" + tripId + ")");
+            }
             return viajes.get(tripId);
         }
 
@@ -360,11 +386,29 @@ class EstadoDirectoTests {
         }
 
         @Test
-        void unaMuestraIncompletaNoCierraLaUltimaParada() {
+        void tresMuestrasIncompletasNoCierranLaUltimaParadaYTresCompletasSi() {
+            // Fase 3b: con una sola ausencia tampoco cerraría una muestra completa (hacen falta 3); la prueba tiene
+            // que llegar a 3 para distinguir los dos casos.
             estado.procesarRetrasos(retrasos(hora(10, 15), con(rellenoTu(29), tu("51T1", "C", 240))), hora(10, 15));
-            ResultadoRetrasos r = estado.procesarRetrasos(retrasos(hora(10, 16), rellenoTu(15)), hora(10, 16));
-            assertThat(r.completa()).isFalse();
-            assertThat(r.cerrados()).isEmpty();
+            List<ResultadoRetrasos> incompletas = new ArrayList<>();
+            for (int i = 1; i <= 3; i++) {
+                incompletas.add(estado.procesarRetrasos(retrasos(hora(10, 16, i * 20), rellenoTu(15)),
+                        hora(10, 16, i * 20)));
+            }
+            // Dos incompletas y la tercera, aceptada como nivel nuevo: es la primera ausencia que cuenta.
+            assertThat(incompletas).extracting(ResultadoRetrasos::completa).containsExactly(false, false, true);
+            assertThat(incompletas).allSatisfy(r -> assertThat(r.cerrados()).isEmpty());
+
+            EstadoDirecto otro = new EstadoDirecto(horario, MADRID, 3, 0.8);
+            otro.procesarRetrasos(retrasos(hora(10, 15), con(rellenoTu(29), tu("51T1", "C", 240))), hora(10, 15));
+            List<RetrasoFinal> cerrados = new ArrayList<>();
+            for (int i = 1; i <= 3; i++) {
+                ResultadoRetrasos r = otro.procesarRetrasos(retrasos(hora(10, 16, i * 20), rellenoTu(29)),
+                        hora(10, 16, i * 20));
+                assertThat(r.completa()).isTrue();
+                cerrados.addAll(r.cerrados());
+            }
+            assertThat(cerrados).singleElement().satisfies(f -> assertThat(f.stopId()).isEqualTo("C"));
         }
 
         @Test
@@ -532,6 +576,335 @@ class EstadoDirectoTests {
         }
     }
 
+    // ---------------------------------------------------------------- fase 3b
+
+    @Nested
+    class TresMuestrasIncompletas {
+
+        @Test
+        void noBorranUnTrenYTresCompletasSi() {
+            // Una sola ausencia no borraría ni con una muestra completa: hay que llegar a 3 para que la prueba
+            // distinga «incompleta» de «completa».
+            estado.procesarPosiciones(posiciones(hora(10, 5), con(relleno(29), vp("51T1", "A", 41.6, 0.60))),
+                    hora(10, 5));
+            for (int i = 1; i <= 3; i++) {
+                estado.procesarPosiciones(posiciones(hora(10, 5, i * 20), relleno(15)), hora(10, 5, i * 20));
+            }
+            assertThat(estado.tren("51T1")).isNotNull();
+            assertThat(estado.tren("51T1").ausencias()).isEqualTo(1); // solo la tercera, aceptada como nivel nuevo
+
+            EstadoDirecto otro = new EstadoDirecto(horario, MADRID, 3, 0.8);
+            otro.procesarPosiciones(posiciones(hora(10, 5), con(relleno(29), vp("51T1", "A", 41.6, 0.60))),
+                    hora(10, 5));
+            int desaparecidos = 0;
+            for (int i = 1; i <= 3; i++) {
+                ResultadoPosiciones r = otro.procesarPosiciones(posiciones(hora(10, 5, i * 20), relleno(29)),
+                        hora(10, 5, i * 20));
+                assertThat(r.completa()).isTrue();
+                desaparecidos += r.desaparecidos();
+            }
+            assertThat(otro.tren("51T1")).isNull();
+            assertThat(desaparecidos).isEqualTo(1);
+        }
+    }
+
+    @Nested
+    class FalloDeLaBaseDeDatosAMitadDeUnaMuestra {
+
+        @Test
+        void unViajeQueNoSePuedeBuscarSeSaltaSinCambiosNiAusencias() {
+            estado.procesarPosiciones(posiciones(hora(10, 5), con(relleno(9), vp("51T1", "A", 41.6, 0.60))),
+                    hora(10, 5));
+            // Falta en dos muestras completas: lleva 2 ausencias, a una de desaparecer.
+            estado.procesarPosiciones(posiciones(hora(10, 6), relleno(9)), hora(10, 6));
+            estado.procesarPosiciones(posiciones(hora(10, 7), relleno(9)), hora(10, 7));
+            assertThat(estado.tren("51T1").ausencias()).isEqualTo(2);
+            horario.fallan.add("51T1");
+            for (int i = 1; i <= 3; i++) {
+                ResultadoPosiciones r = estado.procesarPosiciones(
+                        posiciones(hora(10, 8, i * 20), con(relleno(9), vp("51T1", "B", 41.6, 0.61))),
+                        hora(10, 8, i * 20));
+                assertThat(r.nueva()).isTrue();
+                assertThat(r.sinResolver()).isEqualTo(1);
+                assertThat(r.cambios()).noneMatch(t -> t.id().equals("51T1"));
+            }
+            // Ni se ha movido (el horario no contesta) ni ha desaparecido (estaba en el feed).
+            Tren t = estado.tren("51T1");
+            assertThat(t.stopId()).isEqualTo("A");
+            assertThat(t.ausencias()).isZero();
+            assertThat(estado.trenes()).hasSize(10);
+
+            horario.fallan.clear();
+            ResultadoPosiciones r = estado.procesarPosiciones(
+                    posiciones(hora(10, 9), con(relleno(9), vp("51T1", "B", 41.6, 0.61))), hora(10, 9));
+            assertThat(r.sinResolver()).isZero();
+            assertThat(estado.tren("51T1").stopId()).isEqualTo("B");
+        }
+
+        @Test
+        void trasElPrimerFalloNoSeVuelveAPreguntarALaBaseDeDatosEnEsaMuestra() {
+            // Con la base de datos colgada, cada pregunta esperaría su plazo (5-30 s). Tras la primera, los viajes que
+            // no están en caché se dan por no resueltos sin preguntar; los que están en caché, se procesan.
+            List<VehiclePosition> vps = new ArrayList<>(List.of(vp("51T1", "A", 41.6, 0.60)));
+            for (int i = 0; i < 20; i++) {
+                horario.fallan.add("NUEVO" + i);
+                vps.add(vp("NUEVO" + i, "A", 41.6, 0.60));
+            }
+            ResultadoPosiciones r = estado.procesarPosiciones(posiciones(hora(10, 5), vps), hora(10, 5));
+            assertThat(horario.llamadasFallidas.get()).isEqualTo(1);
+            assertThat(r.sinResolver()).isEqualTo(20);
+            assertThat(estado.tren("51T1")).isNotNull();
+        }
+
+        @Test
+        void unTrenQueNoSePuedeCalcularSeSaltaSinCongelarElFeed() {
+            // Un viaje con datos rotos (una parada sin stop_id) hace fallar el cálculo de ese tren.
+            horario.viajes.put("51T9", new Viaje("51T9", "51T0004R4", "R4", 51, "C", DIA, List.of(
+                    new ParadaViaje(1, null, "?", 41.6, 0.60, s(10, 0), s(10, 0), null),
+                    new ParadaViaje(2, "A", "A", 41.6, 0.61, s(10, 10), s(10, 10), null)), null, 1));
+            ResultadoPosiciones r = estado.procesarPosiciones(posiciones(hora(10, 5),
+                    List.of(vp("51T1", "A", 41.6, 0.60), vp("51T9", "A", 41.6, 0.60))), hora(10, 5));
+            assertThat(r.nueva()).isTrue();
+            assertThat(r.sinResolver()).isEqualTo(1);
+            assertThat(estado.tren("51T1")).isNotNull();
+            assertThat(estado.tren("51T9")).isNull();
+        }
+
+        @Test
+        void unViajeQueCambiaDeVersionEnElHorarioSeVuelveABuscarPorParada() {
+            // Seguimiento en B (índice 1 del viaje viejo, A-B-C). El horario nuevo alarga el viaje: X-A-Y-B-Z-C.
+            estado.procesarRetrasos(retrasos(hora(10, 8), List.of(tu("51T1", "B", 120))), hora(10, 8));
+            horario.viajes.put("51T1", new Viaje("51T1", "51T0004R4", "R4", 51, "C", DIA, List.of(
+                    new ParadaViaje(1, "X", "X", 41.6, 0.59, s(9, 50), s(9, 50), null),
+                    new ParadaViaje(2, "A", "A", 41.6, 0.60, s(10, 0), s(10, 0), null),
+                    new ParadaViaje(3, "Y", "Y", 41.6, 0.605, s(10, 5), s(10, 5), null),
+                    new ParadaViaje(4, "B", "B", 41.6, 0.61, s(10, 10), s(10, 11), null),
+                    new ParadaViaje(5, "Z", "Z", 41.6, 0.615, s(10, 15), s(10, 15), null),
+                    new ParadaViaje(6, "C", "C", 41.6, 0.62, s(10, 20), s(10, 20), null)), null, 1));
+            // Va a C (índice 5 del nuevo). Con los índices del viejo, cerraría paradas que no son (o se saldría).
+            ResultadoRetrasos r = estado.procesarRetrasos(retrasos(hora(10, 18), List.of(tu("51T1", "C", 180))),
+                    hora(10, 18));
+            assertThat(r.cerrados()).extracting(RetrasoFinal::stopId, RetrasoFinal::stopSequence, RetrasoFinal::inferido)
+                    .containsExactly(org.assertj.core.groups.Tuple.tuple("B", 4, false),
+                            org.assertj.core.groups.Tuple.tuple("Z", 5, true));
+            assertThat(r.sinResolver()).isZero();
+        }
+
+        @Test
+        void unaMarcaAbsurdaConLaCabeceraSinMarcaSeAcotaConLaHora() {
+            // Cabecera 0 y tren sin marca: antes, 1970, fuera de toda partición.
+            FeedMessage m = FeedMessage.newBuilder()
+                    .setHeader(FeedHeader.newBuilder().setGtfsRealtimeVersion("2.0").setTimestamp(0))
+                    .addEntity(FeedEntity.newBuilder().setId("1").setVehicle(vp("51T1", "A", 41.6, 0.60))).build();
+            estado.procesarPosiciones(m, hora(10, 5));
+            assertThat(estado.tren("51T1").marca()).isEqualTo(hora(10, 5));
+        }
+
+        @Test
+        void elCierreDeUnaParadaNoSePierdeSiElHorarioFallaJustoAlPasarla() {
+            estado.procesarRetrasos(retrasos(hora(10, 8), List.of(tu("51T1", "B", 120))), hora(10, 8));
+            horario.fallan.add("51T1");
+            ResultadoRetrasos conFallo = estado.procesarRetrasos(retrasos(hora(10, 13), List.of(tu("51T1", "C", 180))),
+                    hora(10, 13));
+            assertThat(conFallo.sinResolver()).isEqualTo(1);
+            assertThat(conFallo.cerrados()).isEmpty();
+
+            horario.fallan.clear();
+            ResultadoRetrasos r = estado.procesarRetrasos(retrasos(hora(10, 14), List.of(tu("51T1", "C", 180))),
+                    hora(10, 14));
+            // La muestra siguiente lo pone al día: B se cierra con su último retraso (2 min). Como ese retraso es de
+            // hace dos muestras (la de en medio se saltó), se marca como inferido.
+            assertThat(r.cerrados()).singleElement().satisfies(f -> {
+                assertThat(f.stopId()).isEqualTo("B");
+                assertThat(f.minutos()).isEqualTo(2);
+                assertThat(f.inferido()).isTrue();
+            });
+        }
+
+        @Test
+        void siFallaElProcesadoEnteroElEstadoNoCambiaYLaMuestraSePuedeRepetir() {
+            horario.viajes.put("51T2", viaje("51T2", RECTO, 1, 0.0, 0.5, 1.0));
+            estado.procesarRetrasos(retrasos(hora(10, 8), List.of(tu("51T1", "B", 120), tu("51T2", "B", 0))),
+                    hora(10, 8));
+            estado.procesarPosiciones(posiciones(hora(10, 8), List.of(vp("51T1", "A", 41.6, 0.60),
+                    vp("51T2", "A", 41.6, 0.60))), hora(10, 8));
+
+            // A mitad de las dos muestras, un fallo inesperado (no de la base de datos): nada se aplica, tampoco lo
+            // del 51T1, que va antes en la muestra.
+            Instant ultimaAntes = estado.ultimaMuestraPosiciones();
+            horario.revientan.add("51T2");
+            FeedMessage tus = retrasos(hora(10, 13), List.of(tu("51T1", "C", 180), tu("51T2", "C", 60)));
+            FeedMessage vps = posiciones(hora(10, 13), List.of(vp("51T1", "B", 41.6, 0.61),
+                    vp("51T2", "B", 41.6, 0.61)));
+            assertThatThrownBy(() -> estado.procesarRetrasos(tus, hora(10, 13))).isInstanceOf(AssertionError.class);
+            assertThatThrownBy(() -> estado.procesarPosiciones(vps, hora(10, 13))).isInstanceOf(AssertionError.class);
+            assertThat(estado.tren("51T1").stopId()).isEqualTo("A");
+            assertThat(estado.ultimaMuestraPosiciones()).isEqualTo(ultimaAntes);
+
+            // La misma muestra, otra vez (la ingesta no confirmó su ETag): sigue siendo nueva y ahora se aplica.
+            horario.revientan.clear();
+            ResultadoRetrasos r = estado.procesarRetrasos(tus, hora(10, 13));
+            assertThat(r.nueva()).isTrue();
+            assertThat(r.cerrados()).extracting(RetrasoFinal::tripId).containsExactlyInAnyOrder("51T1", "51T2");
+            assertThat(estado.procesarPosiciones(vps, hora(10, 13)).nueva()).isTrue();
+            assertThat(estado.tren("51T1").stopId()).isEqualTo("B");
+        }
+    }
+
+    @Nested
+    class ParadasSaltadas {
+
+        @Test
+        void siSeSaltaParadasEntreDosMuestrasLasIntermediasSeCierranComoInferidas() {
+            estado.procesarRetrasos(retrasos(hora(9, 58), List.of(tu("51T1", "A", 60))), hora(9, 58));
+            // La muestra siguiente ya va a C: B no se ha visto nunca como próxima parada.
+            ResultadoRetrasos r = estado.procesarRetrasos(retrasos(hora(10, 12), List.of(tu("51T1", "C", 180))),
+                    hora(10, 12));
+            assertThat(r.cerrados()).extracting(RetrasoFinal::stopId, RetrasoFinal::minutos, RetrasoFinal::inferido)
+                    .containsExactly(org.assertj.core.groups.Tuple.tuple("A", 1, false),
+                            org.assertj.core.groups.Tuple.tuple("B", 1, true));
+            assertThat(r.inferidos()).isEqualTo(1);
+            assertThat(r.sinCerrar()).isZero();
+        }
+
+        @Test
+        void sinRetrasoConocidoLasSaltadasCuentanComoSinCerrar() {
+            TripUpdate sinRetraso = TripUpdate.newBuilder().setTrip(TripDescriptor.newBuilder().setTripId("51T1"))
+                    .addStopTimeUpdate(StopTimeUpdate.newBuilder().setStopId("A")).build();
+            estado.procesarRetrasos(retrasos(hora(9, 58), List.of(sinRetraso)), hora(9, 58));
+            ResultadoRetrasos r = estado.procesarRetrasos(retrasos(hora(10, 12), List.of(tu("51T1", "C", 180))),
+                    hora(10, 12));
+            assertThat(r.cerrados()).isEmpty();
+            assertThat(r.sinCerrar()).isEqualTo(2);
+        }
+
+        @Test
+        void unViajeQueDesapareceAMitadYVuelveMasAdelanteCierraLoQueFaltaComoInferido() {
+            estado.procesarRetrasos(retrasos(hora(9, 58), con(rellenoTu(9), tu("51T1", "A", 120))), hora(9, 58));
+            List<RetrasoFinal> cerrados = new ArrayList<>();
+            for (int i = 1; i <= 3; i++) {
+                cerrados.addAll(estado.procesarRetrasos(retrasos(hora(10, 1, i * 20), rellenoTu(9)),
+                        hora(10, 1, i * 20)).cerrados());
+            }
+            assertThat(cerrados).isEmpty(); // desaparece a mitad: no se sabe nada aún
+            assertThat(estado.retirados()).isEqualTo(1);
+
+            // Vuelve yendo a C: A y B se cierran con el último retraso que se conocía (2 min), las dos inferidas
+            // porque ese retraso es de antes de desaparecer.
+            ResultadoRetrasos r = estado.procesarRetrasos(retrasos(hora(10, 15), con(rellenoTu(9), tu("51T1", "C", 300))),
+                    hora(10, 15));
+            assertThat(r.cerrados()).extracting(RetrasoFinal::stopId, RetrasoFinal::minutos, RetrasoFinal::inferido)
+                    .containsExactly(org.assertj.core.groups.Tuple.tuple("A", 2, true),
+                            org.assertj.core.groups.Tuple.tuple("B", 2, true));
+            assertThat(r.inferidos()).isEqualTo(2);
+            assertThat(estado.retirados()).isZero();
+
+            // Y sigue como cualquier otro: al desaparecer en C, C se cierra con su retraso (visto).
+            List<RetrasoFinal> alFinal = new ArrayList<>();
+            for (int i = 1; i <= 3; i++) {
+                alFinal.addAll(estado.procesarRetrasos(retrasos(hora(10, 21, i * 20), rellenoTu(9)),
+                        hora(10, 21, i * 20)).cerrados());
+            }
+            assertThat(alFinal).singleElement().satisfies(f -> {
+                assertThat(f.stopId()).isEqualTo("C");
+                assertThat(f.minutos()).isEqualTo(5);
+                assertThat(f.inferido()).isFalse();
+            });
+        }
+
+        @Test
+        void siVuelveDespuesDeLaRetencionEmpiezaDeCero() {
+            EstadoDirecto corto = new EstadoDirecto(horario, MADRID, 3, 0.8, java.time.Duration.ofMinutes(10));
+            corto.procesarRetrasos(retrasos(hora(9, 58), con(rellenoTu(9), tu("51T1", "A", 120))), hora(9, 58));
+            for (int i = 1; i <= 3; i++) {
+                corto.procesarRetrasos(retrasos(hora(9, 59, i * 10), rellenoTu(9)), hora(9, 59, i * 10));
+            }
+            assertThat(corto.retirados()).isEqualTo(1);
+            ResultadoRetrasos r = corto.procesarRetrasos(retrasos(hora(10, 15), con(rellenoTu(9), tu("51T1", "C", 300))),
+                    hora(10, 15));
+            assertThat(r.cerrados()).isEmpty();
+            assertThat(corto.retirados()).isZero();
+            // Su parada pendiente (A) no se pierde sin rastro: cuenta como sin cerrar al caducar.
+            assertThat(r.sinCerrar()).isEqualTo(1);
+        }
+    }
+
+    @Nested
+    class Concurrencia {
+
+        /**
+         * Un escritor procesa muestras sin parar mientras cuatro lectores leen como lo hará la API de la fase 4. Ningún
+         * lector ve un error ni un tren a medias: su parada, su índice y su estado cuadran siempre entre sí.
+         */
+        @Test
+        void losLectoresNoVenNuncaUnTrenAMedias() throws InterruptedException {
+            int viajes = 50;
+            for (int v = 0; v < viajes; v++) {
+                horario.viajes.put("51C" + v, viaje("51C" + v, RECTO, 1, 0.0, 0.5, 1.0));
+            }
+            AtomicBoolean parar = new AtomicBoolean();
+            List<Throwable> errores = new CopyOnWriteArrayList<>();
+            AtomicInteger lecturas = new AtomicInteger();
+            CountDownLatch empezar = new CountDownLatch(1);
+            List<Thread> lectores = new ArrayList<>();
+            for (int l = 0; l < 4; l++) {
+                lectores.add(Thread.ofPlatform().start(() -> {
+                    try {
+                        empezar.await();
+                        while (!parar.get()) {
+                            for (Tren t : estado.trenes()) {
+                                coherente(t);
+                            }
+                            Tren uno = estado.tren("51C7");
+                            if (uno != null) {
+                                coherente(uno);
+                            }
+                            Map<EstadoTren, Integer> porEstado = estado.trenesPorEstado();
+                            assertThat(porEstado.values().stream().mapToInt(Integer::intValue).sum())
+                                    .isBetween(0, viajes);
+                            lecturas.incrementAndGet();
+                        }
+                    } catch (Throwable e) {
+                        errores.add(e);
+                    }
+                }));
+            }
+            empezar.countDown();
+            String[] paradas = { "A", "B", "C" };
+            Instant t0 = hora(10, 0);
+            for (int i = 0; i < 1_500; i++) {
+                Instant ahora = t0.plusSeconds(i);
+                List<VehiclePosition> vps = new ArrayList<>();
+                List<TripUpdate> tus = new ArrayList<>();
+                for (int v = 0; v < viajes; v++) {
+                    String parada = paradas[(i + v) % 3];
+                    vps.add(vp("51C" + v, parada, 41.6, parada.equals("A") ? 0.60 : parada.equals("B") ? 0.61 : 0.62));
+                    tus.add(tu("51C" + v, parada, 60 * (i % 5)));
+                }
+                estado.procesarRetrasos(retrasos(ahora, tus), ahora);
+                estado.procesarPosiciones(posiciones(ahora, vps), ahora);
+                estado.reestimar(ahora);
+            }
+            parar.set(true);
+            for (Thread t : lectores) {
+                t.join(5_000);
+            }
+            assertThat(errores).isEmpty();
+            assertThat(lecturas.get()).isPositive();
+            assertThat(estado.trenes()).hasSize(viajes);
+        }
+
+        void coherente(Tren t) {
+            assertThat(t.viaje()).isNotNull();
+            assertThat(t.indiceParada()).isEqualTo(t.viaje().indiceDe(t.stopId(), 0));
+            assertThat(t.stopSequence()).isEqualTo(t.indiceParada() + 1);
+            if (t.estado() == EstadoTren.TERMINADO) {
+                assertThat(t.stopId()).isEqualTo("C");
+            }
+            assertThat(t.estimada()).isNotNull();
+        }
+    }
+
     // ---------------------------------------------------------------- muestras reales
 
     static FeedMessage muestra(String nombre) throws IOException {
@@ -556,7 +929,28 @@ class EstadoDirectoTests {
         // La última trae un tercio menos: incompleta, y no desaparece nadie.
         assertThat(resultados.get(3).completa()).isFalse();
         assertThat(resultados.get(3).desaparecidos()).isZero();
-        assertThat(real.trenes().size()).isGreaterThanOrEqualTo(337);
+        int trenes = real.trenes().size();
+        assertThat(trenes).isGreaterThanOrEqualTo(337);
         assertThat(real.tren("4023V24219C1").stopId()).isEqualTo("69103");
+
+        // Fase 3b: la misma muestra incompleta, dos veces más (con cabeceras nuevas). Tres incompletas seguidas no
+        // borran a nadie: la tercera se acepta como el nivel nuevo y es solo la primera ausencia de los que faltan.
+        FeedMessage incompleta = muestra("20261120T092915Z_vehicle_positions.pb");
+        long cabeceraReal = incompleta.getHeader().getTimestamp();
+        List<ResultadoPosiciones> mas = new ArrayList<>();
+        for (int i = 1; i <= 4; i++) {
+            FeedMessage m = FeedMessage.newBuilder(incompleta).setHeader(FeedHeader.newBuilder(incompleta.getHeader())
+                    .setTimestamp(cabeceraReal + 20L * i)).build();
+            mas.add(real.procesarPosiciones(m, Instant.ofEpochSecond(cabeceraReal + 20L * i)));
+        }
+        assertThat(mas.get(0).completa()).isFalse();
+        assertThat(mas.get(0).desaparecidos()).isZero();
+        assertThat(mas.get(1).completa()).isTrue(); // la tercera incompleta seguida: nivel nuevo
+        // Los que solo faltan en las incompletas llevan, como mucho, una ausencia: el C1 sigue.
+        assertThat(real.tren("4023V24219C1")).isNotNull();
+        // Con el nivel nuevo ya son completas: a la tercera ausencia, los que faltan desaparecen.
+        assertThat(mas.get(3).desaparecidos()).isGreaterThan(50);
+        int desaparecidos = mas.stream().mapToInt(ResultadoPosiciones::desaparecidos).sum();
+        assertThat(real.trenes()).hasSize(trenes - desaparecidos);
     }
 }

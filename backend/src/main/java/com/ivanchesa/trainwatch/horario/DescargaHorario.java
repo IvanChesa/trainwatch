@@ -13,7 +13,10 @@ import java.util.concurrent.TimeoutException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import com.ivanchesa.trainwatch.CuerpoLimitado;
 
 /**
  * Descarga condicional del ZIP: manda el {@code ETag} y el {@code Last-Modified} de la última importación correcta.
@@ -32,8 +35,16 @@ public class DescargaHorario {
 
     private final HorarioProperties propiedades;
     private final HttpClient cliente;
+    private final long bytesMaximos;
 
+    @Autowired
     public DescargaHorario(HorarioProperties propiedades) {
+        this(propiedades, BYTES_MAXIMOS);
+    }
+
+    /** Con otro tamaño máximo (para las pruebas). */
+    DescargaHorario(HorarioProperties propiedades, long bytesMaximos) {
+        this.bytesMaximos = bytesMaximos;
         this.propiedades = propiedades;
         this.cliente = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NORMAL)
@@ -66,8 +77,10 @@ public class DescargaHorario {
         try {
             // HttpRequest.timeout solo limita la espera de las cabeceras, no la del cuerpo: si el servidor se queda a
             // medias, send() esperaría para siempre con la importación ocupada. Se limita el tiempo total.
-            CompletableFuture<HttpResponse<Path>> futuro =
-                    cliente.sendAsync(peticion.build(), HttpResponse.BodyHandlers.ofFile(destino));
+            // El tamaño máximo se mira con Content-Length y mientras se escribe a disco (fase 3b): un fichero enorme no
+            // llega a ocupar el disco entero antes de rechazarlo.
+            CompletableFuture<HttpResponse<Path>> futuro = cliente.sendAsync(peticion.build(),
+                    CuerpoLimitado.de(HttpResponse.BodyHandlers.ofFile(destino), bytesMaximos));
             HttpResponse<Path> respuesta;
             try {
                 respuesta = futuro.get(propiedades.tiempoMaximoDescarga().toMillis(), TimeUnit.MILLISECONDS);
@@ -75,7 +88,16 @@ public class DescargaHorario {
                 futuro.cancel(true);
                 throw new IOException("La descarga del horario no terminó en " + propiedades.tiempoMaximoDescarga());
             } catch (ExecutionException e) {
-                throw e.getCause() instanceof IOException io ? io : new IOException(e.getCause());
+                Throwable causa = e.getCause();
+                if (causa instanceof Error error) {
+                    throw error;
+                }
+                if (causa instanceof CuerpoLimitado.CuerpoDemasiadoGrande
+                        || causa instanceof IOException && causa.getCause() instanceof CuerpoLimitado.CuerpoDemasiadoGrande) {
+                    throw new IOException("El horario pasa del tamaño máximo (" + bytesMaximos + " bytes): "
+                            + causa.getMessage(), causa);
+                }
+                throw causa instanceof IOException io ? io : new IOException(causa);
             }
             String etag = respuesta.headers().firstValue("ETag").orElse(null);
             String lastModified = respuesta.headers().firstValue("Last-Modified").orElse(null);
@@ -96,9 +118,6 @@ public class DescargaHorario {
                 return new Resultado(false, null, etag, lastModified, 0);
             }
             long bytes = Files.size(destino);
-            if (bytes > BYTES_MAXIMOS) {
-                throw new IOException("El horario descargado ocupa " + bytes + " bytes, más del máximo (" + BYTES_MAXIMOS + ")");
-            }
             log.info("Horario descargado: {} bytes, ETag {}, Last-Modified {}", bytes, etag, lastModified);
             return new Resultado(true, destino, etag, lastModified, bytes);
         } catch (IOException | InterruptedException | RuntimeException e) {

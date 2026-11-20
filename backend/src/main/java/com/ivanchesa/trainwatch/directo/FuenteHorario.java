@@ -13,6 +13,14 @@ public interface FuenteHorario {
     /** El viaje, o {@code null} si no está en el horario (por ejemplo, las circulaciones {@code SPECIAL_…}). */
     Viaje viaje(String tripId);
 
+    /**
+     * Si el viaje ya está en memoria, de modo que {@link #viaje} contesta sin ir a la base de datos (fase 3b: con la
+     * base de datos caída, solo se piden los que están en caché). Por defecto, no.
+     */
+    default boolean enCache(String tripId) {
+        return false;
+    }
+
     /** Los núcleos con trenes en el horario (sin los de solo autobús). */
     Set<Integer> nucleos();
 
