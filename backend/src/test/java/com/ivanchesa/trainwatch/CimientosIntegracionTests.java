@@ -49,6 +49,16 @@ class CimientosIntegracionTests {
     }
 
     @Test
+    void postgisLoActivaFlywayYNoLaImagen() {
+        // El contenedor arranca sin el script de inicio de la imagen (TestcontainersConfiguration): si la
+        // migración no hiciera CREATE EXTENSION, la prueba anterior fallaría. Aquí se comprueba además que
+        // no queda ninguna de las extensiones extra que crea ese script.
+        var extensiones = jdbc.sql("SELECT extname FROM pg_extension WHERE extname <> 'plpgsql' ORDER BY extname")
+                .query(String.class).list();
+        assertThat(extensiones).containsExactly("postgis");
+    }
+
+    @Test
     void laTablaDePruebaGuardaGeometriaEnWgs84() {
         Integer srid = jdbc.sql("SELECT ST_SRID(posicion) FROM prueba_cimientos WHERE nombre = 'Lleida Pirineus'")
                 .query(Integer.class).single();

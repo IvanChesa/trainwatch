@@ -12,10 +12,11 @@ La fase 1 necesita una base de datos local, la misma en las pruebas y en la CI, 
 2. **Volumen con nombre** `datos-postgis` montado en `/var/lib/postgresql`. Desde PostgreSQL 18, la imagen oficial guarda los datos en `/var/lib/postgresql/18/docker`; montar en `/var/lib/postgresql/data`, como en las versiones anteriores, deja los datos fuera del volumen.
 3. **Puerto solo en `127.0.0.1`**, para no abrir la base de datos a la red local.
 4. **Perfiles de Spring:**
-   - `local` (el de por defecto, con `spring.profiles.default=local`): lee la conexión de variables de entorno `TRAINWATCH_DB_*`, con valores por defecto para todo menos la clave. Importa el fichero `.env` de la raíz si existe (`spring.config.import=optional:file:../.env[.properties]`), así Compose y Spring leen el mismo fichero;
+   - **sin perfil por defecto:** sin perfil no hay base de datos configurada y la aplicación no arranca, en vez de arrancar como `local` por error en un servidor. `./mvnw spring-boot:run` activa `local` (configurado en el `spring-boot-maven-plugin`);
+   - `local`: lee la conexión de variables de entorno `TRAINWATCH_DB_*`, con valores por defecto para todo menos la clave. Importa el fichero `.env` de la raíz si existe (`spring.config.import=optional:file:../.env[.properties]`), así Compose y Spring leen el mismo fichero;
    - `test`: la conexión la pone Testcontainers con `@ServiceConnection`, sin URL ni clave en ningún fichero.
 5. **`.env.example` en el repo, `.env` fuera** (`.gitignore`). La clave no tiene valor por defecto: si falta, Compose se para con un mensaje y Spring no conecta.
-6. **Flyway activa PostGIS** con `CREATE EXTENSION IF NOT EXISTS postgis` en la primera migración. La imagen `postgis/postgis` ya la activa en la base de datos inicial, pero la migración garantiza lo mismo en cualquier otro PostgreSQL (por ejemplo, uno gestionado en la nube en la fase 7).
+6. **Flyway activa PostGIS** con `CREATE EXTENSION IF NOT EXISTS postgis` en la primera migración, y no la imagen. La imagen `postgis/postgis` trae un script de arranque (`/docker-entrypoint-initdb.d/10_postgis.sh`) que crea `postgis`, `postgis_topology`, `fuzzystrmatch` y `postgis_tiger_geocoder` en la base de datos inicial. Se sustituye por uno vacío en Compose (`infra/postgis/10_postgis.sh`) y en Testcontainers, para que el esquema salga solo de las migraciones, como en cualquier otro PostgreSQL (por ejemplo, uno gestionado en la nube en la fase 7), y para que la prueba falle si la migración deja de activar PostGIS.
 
 ## Alternativas
 
@@ -28,4 +29,4 @@ La fase 1 necesita una base de datos local, la misma en las pruebas y en la CI, 
 
 - Si se cambia la versión de la imagen, hay que cambiarla en los dos sitios.
 - Sin Docker no se pueden ejecutar las pruebas de integración (ni en local ni en la CI). `ubuntu-latest` trae Docker, así que en GitHub Actions funciona sin configurar nada.
-- `/actuator/health` enseña los componentes (`db`, `diskSpace`…) pero no sus detalles; solo se exponen `health` e `info` por HTTP.
+- `/actuator/health` enseña los componentes (`db`, `diskSpace`…) solo a usuarios autorizados (`when-authorized`); los perfiles `local` y `test` los enseñan a todos. Nunca enseña los detalles. Solo se exponen `health` e `info` por HTTP.

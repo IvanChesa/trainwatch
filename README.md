@@ -44,7 +44,7 @@ cp .env.example .env
 # 2. Base de datos (PostgreSQL + PostGIS) en localhost:5432
 docker compose --env-file .env -f infra/docker-compose.yml up -d
 
-# 3. Backend en http://localhost:8080 (perfil local; lee el .env de la raíz)
+# 3. Backend en http://localhost:8080 (spring-boot:run activa el perfil local, que lee el .env de la raíz)
 cd backend
 ./mvnw spring-boot:run
 

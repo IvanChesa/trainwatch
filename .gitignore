@@ -15,6 +15,9 @@ target/
 .DS_Store
 Thumbs.db
 
+# Registros (por ejemplo, los del Agent SDK en docs/informes/)
+*.log
+
 # Entorno y secretos
 .env
 .env.*

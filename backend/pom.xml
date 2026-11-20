@@ -109,6 +109,12 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<!-- ./mvnw spring-boot:run arranca con el perfil local (PostGIS de infra/docker-compose.yml) -->
+					<profiles>
+						<profile>local</profile>
+					</profiles>
+				</configuration>
 				<executions>
 					<execution>
 						<!-- Genera META-INF/build-info.properties: /api/estado lee de ahí la versión -->
