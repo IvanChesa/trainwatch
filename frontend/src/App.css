@@ -35,6 +35,12 @@ h1 {
   color: #374151;
 }
 
+.datos {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
 .pie {
   padding: 1rem 1.5rem;
   text-align: center;

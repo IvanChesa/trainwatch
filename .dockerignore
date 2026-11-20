@@ -1,0 +1,8 @@
+# Contexto de la imagen del backend (backend/Dockerfile se construye desde la raíz): solo backend/ y docs/api/.
+*
+!backend/mvnw
+!backend/pom.xml
+!backend/.mvn/
+!backend/src/
+!docs/api/
+backend/src/test/

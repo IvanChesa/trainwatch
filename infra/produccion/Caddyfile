@@ -1,0 +1,55 @@
+# TrainWatch · Caddy delante del backend (fase 7, ADR 0018).
+# Cloudflare (modo «Full (strict)») ──HTTPS──► Caddy :443 ──HTTP──► backend:8080 (red interna de Docker)
+{
+	# Sin API de administración, sin el puerto 80 y sin certificados automáticos: el certificado es el de origen de
+	# Cloudflare (lo escribe desplegar.sh desde Key Vault).
+	admin off
+	auto_https off
+}
+
+{$HOST_API}:443 {
+	tls /etc/caddy/tls/origen.pem /etc/caddy/tls/origen.key {
+		# Authenticated Origin Pulls: solo se acepta la conexión si el cliente presenta el certificado de Cloudflare.
+		# Quien llegue a la IP sin pasar por Cloudflare no completa ni el TLS.
+		client_auth {
+			mode require_and_verify
+			trust_pool file /etc/caddy/cloudflare-origin-pull-ca.pem
+		}
+	}
+
+	# Cabeceras de seguridad de toda la API. La API solo devuelve JSON y eventos: no carga nada ni se enmarca.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "geolocation=(), camera=(), microphone=(), interest-cohort=()"
+		Cross-Origin-Resource-Policy "cross-origin"
+		Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+		-Server
+		-X-Powered-By
+	}
+
+	# La documentación de la API (Swagger UI) sí carga sus scripts, estilos e imágenes del mismo origen.
+	@documentacion path /api/docs /api/docs/*
+	header @documentacion Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+
+	# Desde fuera solo se lee: el disparo manual de la importación (POST) se hace desde la máquina, por el 8080.
+	@escritura not method GET HEAD OPTIONS
+	respond @escritura "Método no permitido" 405
+
+	# Solo la API: ni Actuator (va por el 8081, que no se publica) ni nada más.
+	@fuera not path /api /api/*
+	respond @fuera "No encontrado" 404
+
+	reverse_proxy backend:8080 {
+		# El SSE (/api/directo) sale evento a evento: sin búfer en Caddy.
+		flush_interval -1
+	}
+
+	# Registro de acceso en JSON. La IP real del visitante va en la cabecera Cf-Connecting-Ip.
+	log {
+		output stdout
+		format json
+	}
+}

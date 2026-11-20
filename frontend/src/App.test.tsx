@@ -15,6 +15,31 @@ describe('App', () => {
     expect(screen.getByRole('note')).toHaveTextContent('no oficial');
     expect(screen.getByRole('contentinfo')).toHaveTextContent('Datos: Renfe (CC BY 4.0)');
     await screen.findByText('Backend no disponible');
+    await screen.findByText('Estado de los datos no disponible.');
+  });
+
+  it('enseña el estado de los datos en directo', async () => {
+    const fetchSimulado = vi.fn((url: string) =>
+      Promise.resolve(
+        url.endsWith('/api/directo/estado')
+          ? respuestaJson({
+              ultimoDato: '2026-11-20T17:30:00Z',
+              antiguedadS: 12,
+              trenes: 404,
+              nucleos: [
+                { nucleo: 51, nombre: 'Rodalies de Catalunya', estado: 'EN_DIRECTO' },
+                { nucleo: 10, nombre: 'Madrid', estado: 'EN_DIRECTO' },
+                { nucleo: 60, nombre: 'Bilbao', estado: 'SIN_DATOS_EN_DIRECTO' },
+              ],
+            })
+          : respuestaJson({ aplicacion: 'TrainWatch', version: '0.0.1', hora: '2026-11-20T18:30:12+01:00' }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchSimulado);
+    render(<App />);
+
+    expect(await screen.findByText('Último dato de Renfe hace 12 s: 404 trenes en 2 núcleos.')).toBeInTheDocument();
+    expect(fetchSimulado).toHaveBeenCalledWith('/api/directo/estado', expect.anything());
   });
 
   it('enseña la versión y la hora del backend', async () => {

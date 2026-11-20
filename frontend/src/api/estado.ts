@@ -1,3 +1,5 @@
+import { rutaApi } from './base';
+
 /** Respuesta de `GET /api/estado` del backend (`EstadoController`). */
 export interface EstadoBackend {
   aplicacion: string;
@@ -7,11 +9,12 @@ export interface EstadoBackend {
 }
 
 /**
- * Pide el estado al backend. En desarrollo, `/api` pasa por el proxy de Vite hacia `localhost:8080`.
+ * Pide el estado al backend. En desarrollo, `/api` pasa por el proxy de Vite hacia `localhost:8080`; en producción,
+ * va a `VITE_API_URL` (`base.ts`).
  * Lanza un error si la respuesta no es 2xx o no tiene la forma esperada.
  */
 export async function obtenerEstado(signal?: AbortSignal): Promise<EstadoBackend> {
-  const respuesta = await fetch('/api/estado', { signal, headers: { Accept: 'application/json' } });
+  const respuesta = await fetch(rutaApi('/api/estado'), { signal, headers: { Accept: 'application/json' } });
   if (!respuesta.ok) {
     throw new Error(`El backend respondió ${respuesta.status}`);
   }

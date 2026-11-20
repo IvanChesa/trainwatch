@@ -1,0 +1,60 @@
+#cloud-config
+# TrainWatch · preparación de la máquina (fase 7). Solo lo que no cambia entre despliegues: Docker, swap, registros
+# rotados, SSH apagado y la configuración que sale de Terraform. El resto (compose, Caddy, copias) lo instala cada
+# despliegue desde el repo (infra/produccion/desplegar.sh), así que cambiarlo no obliga a recrear la máquina.
+package_update: true
+package_upgrade: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - jq
+  - curl
+  - unattended-upgrades
+
+write_files:
+  # Registros de los contenedores: como mucho 5 ficheros de 10 MB por contenedor.
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "10m", "max-file": "5" },
+        "live-restore": true
+      }
+  # El diario del sistema, como mucho 200 MB.
+  - path: /etc/systemd/journald.conf.d/trainwatch.conf
+    permissions: "0644"
+    content: |
+      [Journal]
+      SystemMaxUse=200M
+  # Lo que la máquina necesita saber de Terraform. Nada secreto: los secretos se leen de Key Vault al desplegar.
+  - path: /etc/trainwatch/maquina.env
+    permissions: "0644"
+    content: |
+      KEY_VAULT=${key_vault}
+      IDENTIDAD=${identidad}
+      CUENTA_COPIAS=${cuenta_copias}
+      CONTENEDOR_COPIAS=${contenedor}
+      HOST_POSTGRES=${host_postgres}
+      USUARIO_BD=${usuario_bd}
+      BASE_DE_DATOS=${base_de_datos}
+      HOST_API=${host_api}
+      VERSION_CLIENTE_PG=${version_cliente}
+  - path: /etc/sysctl.d/90-trainwatch.conf
+    permissions: "0644"
+    content: |
+      vm.swappiness=10
+
+runcmd:
+  # 2 GB de swap en el disco del sistema: con 1 GiB de memoria, un pico (la importación del horario) no debe
+  # acabar en el OOM killer. Con swappiness 10 solo se usa si hace falta.
+  - [sh, -c, "test -f /swapfile || (fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile)"]
+  - [sh, -c, "swapon /swapfile || true"]
+  - [sh, -c, "grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab"]
+  - [sysctl, --system]
+  # Sin SSH: el puerto está cerrado en Azure y, además, el servicio apagado. Se administra con «az vm run-command».
+  - [systemctl, disable, --now, ssh.socket, ssh.service]
+  - [systemctl, restart, systemd-journald]
+  - [systemctl, enable, --now, docker]
+  - [mkdir, -p, /opt/trainwatch, /etc/trainwatch/tls]
+  - [chmod, "0700", /etc/trainwatch/tls]

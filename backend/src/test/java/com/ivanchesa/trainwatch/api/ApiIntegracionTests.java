@@ -241,6 +241,9 @@ class ApiIntegracionTests {
         try (ClienteSse sse = new ClienteSse(directo(40), null)) {
             assertThat(sse.estado()).isEqualTo(200);
             assertThat(sse.respuesta.headers().firstValue("Content-Type").orElseThrow()).startsWith("text/event-stream");
+            // Fase 7: que ningún proxy (Caddy, Cloudflare) lo guarde, lo comprima ni lo acumule en un búfer.
+            assertThat(sse.respuesta.headers().firstValue("Cache-Control").orElseThrow()).isEqualTo("no-cache, no-transform");
+            assertThat(sse.respuesta.headers().firstValue("X-Accel-Buffering").orElseThrow()).isEqualTo("no");
             ClienteSse.Evento primero = sse.siguiente(Duration.ofSeconds(5));
             assertThat(primero.nombre()).isEqualTo("instantanea");
             assertThat(primero.reintento()).isBetween(3000L, 6000L);

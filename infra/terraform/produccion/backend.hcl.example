@@ -1,0 +1,3 @@
+# Copia en backend.hcl (fuera del repo) con las salidas de ../estado: terraform -chdir=../estado output
+resource_group_name  = "rg-trainwatch-estado"
+storage_account_name = "sttwestadoXXXXXX"

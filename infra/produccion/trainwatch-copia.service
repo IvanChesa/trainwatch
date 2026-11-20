@@ -1,0 +1,9 @@
+[Unit]
+Description=TrainWatch: copia lógica de la base de datos a Blob Storage
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/trainwatch/copia.sh
+# Si falla, queda en el diario: journalctl -u trainwatch-copia

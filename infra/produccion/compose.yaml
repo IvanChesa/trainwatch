@@ -1,0 +1,59 @@
+# TrainWatch · producción (fase 7, ADR 0017 y 0018). Lo instala y lo arranca desplegar.sh en /opt/trainwatch.
+# - caddy: el único puerto abierto (443), HTTPS con el certificado de origen de Cloudflare, cabeceras de seguridad
+#   y el SSE sin búferes;
+# - backend: la imagen de GHCR (TRAINWATCH_IMAGEN, por digest, en /opt/trainwatch/.env). Solo en localhost: el 8080
+#   para Caddy y para la máquina, y el 8081 (Actuator) para la máquina.
+# PostgreSQL no está aquí: es Azure Database for PostgreSQL Flexible Server, en la red privada.
+name: trainwatch
+
+x-registros: &registros
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  caddy:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./cloudflare-origin-pull-ca.pem:/etc/caddy/cloudflare-origin-pull-ca.pem:ro
+      - /etc/trainwatch/tls:/etc/caddy/tls:ro
+      - caddy-datos:/data
+      - caddy-config:/config
+    environment:
+      HOST_API: ${HOST_API:?Falta HOST_API}
+    mem_limit: 96m
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    logging: *registros
+
+  backend:
+    image: ${TRAINWATCH_IMAGEN:?Falta TRAINWATCH_IMAGEN}
+    restart: unless-stopped
+    # Secretos y conexión a la base de datos: los escribe desplegar.sh desde Key Vault (permisos 600, solo root).
+    env_file: /etc/trainwatch/backend.env
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+    # Medido en la fase 7 (docs/informes/fase-7.md, §3): con la ingesta y la importación del horario, el proceso
+    # usa ~550 MB con el heap en el 60 % del límite. La máquina tiene 1 GiB y 2 GB de swap.
+    mem_limit: 640m
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 30s
+    logging: *registros
+
+volumes:
+  caddy-datos:
+  caddy-config:

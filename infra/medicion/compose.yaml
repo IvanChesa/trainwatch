@@ -1,0 +1,45 @@
+# TrainWatch · medición del consumo (fase 7, ADR 0017). Reproduce en local la arquitectura elegida con sus límites:
+# el backend con la imagen de producción en una máquina de 1 vCPU (B1s/B2ats v2) y PostGIS con 1 vCPU y 2 GiB
+# (PostgreSQL Flexible Server B1ms). Base de datos nueva y vacía: al arrancar se importa el horario (el pico).
+# Uso, desde la raíz del repo (ver medir.sh):
+#   docker build -f backend/Dockerfile -t trainwatch-backend:medicion .
+#   docker compose -f infra/medicion/compose.yaml up -d
+name: trainwatch-medicion
+
+services:
+  postgis:
+    image: postgis/postgis:18-3.7
+    cpus: 1
+    mem_limit: 2g
+    environment:
+      POSTGRES_DB: trainwatch
+      POSTGRES_USER: trainwatch
+      POSTGRES_PASSWORD: medicion-local
+    volumes:
+      - datos-medicion:/var/lib/postgresql
+      - ../postgis/10_postgis.sh:/docker-entrypoint-initdb.d/10_postgis.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trainwatch -d trainwatch"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    image: trainwatch-backend:medicion
+    depends_on:
+      postgis:
+        condition: service_healthy
+    cpus: 1
+    # El mismo límite que en el servidor (infra/produccion/compose.yaml).
+    mem_limit: ${TRAINWATCH_MEMORIA_BACKEND:-640m}
+    environment:
+      TRAINWATCH_DB_URL: jdbc:postgresql://postgis:5432/trainwatch
+      TRAINWATCH_DB_USER: trainwatch
+      TRAINWATCH_DB_PASSWORD: medicion-local
+      TRAINWATCH_ADMIN_TOKEN: medicion-local
+    ports:
+      - "127.0.0.1:18080:8080"
+      - "127.0.0.1:18081:8081"
+
+volumes:
+  datos-medicion:
