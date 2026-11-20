@@ -23,7 +23,7 @@ Precios de la API pública de Azure (`prices.azure.com`, `spaincentral`, en dól
 | Copias gestionadas de PostgreSQL (≤ 32 GB) | 0 $ | 0 $ |
 | IP pública estática Standard | **3,65 $** | **3,65 $** (no entra en la oferta) |
 | Zona DNS privada de PostgreSQL | **0,50 $** | **0,50 $** |
-| Blob Storage: estado de Terraform y copias (< 2 GB) | ~0,04 $ | 0 $ (5 GB) |
+| Blob Storage: estado de Terraform y copias lógicas (14 días; de ~0,3 GB hoy a unos pocos GB a final de año) | céntimos | 0 $ casi todo el año (5 GB) |
 | Key Vault (unas decenas de operaciones al mes) | < 0,01 $ | 0 $ (10.000 operaciones) |
 | Diagnóstico de arranque (almacenamiento gestionado, unos MB) | céntimos | céntimos |
 | Tráfico de salida (< 100 GB/mes) | 0 $ | 0 $ |
@@ -36,11 +36,7 @@ Precios de la API pública de Azure (`prices.azure.com`, `spaincentral`, en dól
 
 ## 0 · Herramientas (sesión)
 
-Terraform 1.17 ya está instalado (`winget install Hashicorp.Terraform`). Falta la CLI de Azure, que es gratis:
-
-```bash
-winget install --id Microsoft.AzureCLI -e
-```
+Terraform 1.17 (`winget install Hashicorp.Terraform`) y la CLI de Azure ya están instalados; los dos son gratis. La CLI está en `C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd`: desde Git Bash falla por los espacios de la ruta, así que se usa desde PowerShell (o se añade esa carpeta al `PATH`).
 
 ## 1 · Azure: inicio de sesión (Iván)
 
@@ -56,7 +52,14 @@ az postgres flexible-server list-skus -l spaincentral --query "[].supportedServe
 az vm list-usage -l spaincentral --query "[?contains(name.value, 'BASv2') || name.value=='cores']" -o table
 ```
 
-Si `B2ats_v2` o `B1ms` no están en `spaincentral`, se para y se decide con Iván (la otra región permitida más cercana es `italynorth`).
+Comprobado en la parte A (20-11, solo lectura, con el `az login` de Iván):
+- regiones permitidas: `italynorth`, `spaincentral`, `switzerlandnorth`, `francecentral` y `denmarkeast`;
+- en `spaincentral`, **B2ats_v2 está disponible salvo en la zona 1** (la máquina se crea sin zona) y **B1s no** (`NotAvailableForSubscription`);
+- PostgreSQL Flexible Server: versiones 11 a 18 y Burstable **B1ms**; el proveedor `Microsoft.DBforPostgreSQL` ya está registrado;
+- **`Microsoft.Compute`, `Network`, `KeyVault`, `Storage` y `ManagedIdentity` no están registrados**: el `az provider register` de arriba hace falta (es gratis), y hasta entonces `az vm list-usage` no enseña la cuota;
+- un `terraform plan` de solo lectura (estado local, sin registrar proveedores) da **52 recursos que crear** y ningún error.
+
+Si algo de esto ha cambiado, se para y se decide con Iván (la otra región permitida más cercana es `italynorth`).
 
 ## 2 · Cloudflare: tokens (Iván)
 
@@ -189,13 +192,13 @@ Se para todo (`terraform destroy`, abajo) y se decide con Iván. Opciones, de m�
 `revisar.sh` (arriba) enseña lo que hay que mirar:
 - **salud** y componentes (`db`, disco);
 - **directo:** antigüedad del último dato (< 60 s de día), trenes, núcleos sin datos en directo, estado de los circuitos;
-- **ingesta** (fases 3 y 3b): `trainwatch.directo.errores` no debe crecer; `.descargas`, `.filas` y `.trenes`;
+- **ingesta** (fases 3 y 3b): `trainwatch.directo.errores` no debe crecer; `.descargas`, `.filas` y `.trenes`; en `/api/directo/estado`, `pendientes` a 0 y `guardadoAlDia` reciente (si no, la base de datos no está guardando);
 - **SSE** (fase 4): `trainwatch.api.directo.conexiones`, `.rechazadas` (debe ser 0), `.desconectados`, `.reconexiones`;
 - **máquina:** memoria, swap, disco y errores del backend en 24 h;
 - **base de datos:** tamaño, retrasos y posiciones de ayer, para la captura de 24 h;
 - **la última copia.**
 
-Además, la vigilancia de GitHub Actions avisa por correo si la API cae o los datos tienen más de 5 minutos. GitHub desactiva los workflows programados de un repo público tras **60 días sin actividad**: si el repo se queda quieto tanto tiempo, hay que volver a activarlo.
+Además, la vigilancia de GitHub Actions avisa por correo si la API cae, si los datos tienen más de 5 minutos o si hace más de 5 minutos que no se guarda todo en la base de datos. Si una actualización de seguridad pide reiniciar (el núcleo), la máquina se reinicia sola a las 02:00 UTC: puede salir un aviso suelto a esa hora. GitHub desactiva los workflows programados de un repo público tras **60 días sin actividad**: si el repo se queda quieto tanto tiempo, hay que volver a activarlo.
 
 ## Restaurar una copia
 

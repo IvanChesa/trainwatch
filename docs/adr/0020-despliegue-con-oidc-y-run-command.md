@@ -39,3 +39,5 @@ Al fusionar en `main` hay que compilar, probar, publicar la imagen y desplegar l
 - Antes de la parte B no hay variables: los trabajos de la API y la web se saltan y `main` sigue en verde.
 - El paquete de GHCR hay que hacerlo **público** una vez (paso de la parte B), para que la máquina lo descargue sin credenciales.
 - `run-command` admite un comando a la vez y devuelve como mucho 4 KB de salida: `desplegar.sh` escribe poco y termina con la marca.
+- **Cadena de suministro:** los trabajos con poder (root en la máquina por `run-command`, el token de Pages, `packages: write`) ejecutan acciones de terceros. Por eso todas las acciones están **fijadas por SHA** (con la versión en un comentario) y Dependabot propone las nuevas cada semana; y las imágenes auxiliares (Caddy, el cliente de PostgreSQL), **por digest**.
+- **El token de Pages** («Cloudflare Pages: Edit») vale para todos los proyectos de Pages de la cuenta, también los de `ivanchesa.com`, `torno` y `tierra-luna-sol`: Cloudflare no deja limitarlo a un proyecto. Solo lo usa el trabajo `web`, en el entorno protegido. Si se quisiera evitar, la alternativa es la integración de Pages con GitHub (ver arriba).

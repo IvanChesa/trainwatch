@@ -33,20 +33,20 @@ La aceptación del plan (**7 días seguidos en marcha**) es de la parte B.
 | Pieza | Detalle |
 |---|---|
 | **Arquitectura** | [ADR 0017](../adr/0017-maquina-pequena-y-postgresql-gestionado.md): máquina **B2ats_v2** (2 vCPU AMD, 1 GiB, disco P6) con Caddy y el backend en Docker Compose, y **PostgreSQL Flexible Server B1ms** (PostgreSQL 18, PostGIS, 32 GB) en una subred delegada sin IP pública. Cuatro opciones comparadas con precios de la API y la oferta gratuita comprobada |
-| **Imagen** | `backend/Dockerfile`: tres etapas (JDK 25 para compilar, capas de Spring Boot, **JRE 25** para ejecutar), usuario `trainwatch` (uid 10001) sin privilegios, `MaxRAMPercentage=60`, Serial GC, `ExitOnOutOfMemoryError`. Se construye desde la raíz (el `pom.xml` copia `docs/api/`); `.dockerignore` deja fuera todo menos `backend/` y `docs/api/`. 532 MB |
+| **Imagen** | `backend/Dockerfile`: tres etapas (JDK 25 para compilar, capas de Spring Boot, **JRE 25** para ejecutar), usuario `trainwatch` (uid 10001) sin privilegios, `MaxRAMPercentage=50`, Serial GC, `ExitOnOutOfMemoryError`. Se construye desde la raíz (el `pom.xml` copia `docs/api/`); `.dockerignore` deja fuera todo menos `backend/` y `docs/api/`. 532 MB |
 | **Perfil `prod`** | `application-prod.properties`: conexión por variables (`TRAINWATCH_DB_*`, con `sslmode=verify-full`), pool de 6, `forward-headers-strategy=native` (detrás de Caddy), apagado ordenado de 20 s y **Actuator en el puerto 8081**, que no se publica, con `health`, `info` y `metrics` y la sonda `readiness` |
 | **SSE** | `DirectoSseController` manda `Cache-Control: no-cache, no-transform` y `X-Accel-Buffering: no`; Caddy, `flush_interval -1`; latido de 15 s frente a los 100 s de Cloudflare |
 | **Producción** (`infra/produccion/`) | `compose.yaml` (Caddy 2.11.9 y el backend por digest, con límites de memoria, sistema de ficheros de solo lectura, sin capacidades, `no-new-privileges` y registros rotados), `Caddyfile` (certificado de origen, **Authenticated Origin Pulls** de `trainwatch-api` con CA propia, cabeceras de seguridad, solo `GET`/`HEAD`/`OPTIONS` y solo `/api/*`), `desplegar.sh` (secretos de Key Vault, arranque, espera a la sonda y **vuelta a la imagen anterior** si falla), `copia.sh` con su temporizador y `revisar.sh` (lo que hay que mirar cada día) |
-| **Terraform** (`infra/terraform/`) | `estado/` (cuenta de almacenamiento del estado, sin claves compartidas, con versionado y cerrojo) y `produccion/` (43 recursos: red, grupo de seguridad, IP, máquina con cloud-init, PostgreSQL, Key Vault, dos identidades administradas, credencial federada, rol propio, cuenta de copias y Cloudflare). `azurerm` 5.14, `cloudflare` 5.29, `.terraform.lock.hcl` en el repo. Claves de PostgreSQL y del token de administración **efímeras** y de solo escritura: no pasan por el estado. [ADR 0019](../adr/0019-terraform-con-estado-remoto-en-azure.md) |
+| **Terraform** (`infra/terraform/`) | `estado/` (cuenta de almacenamiento del estado, sin claves compartidas, con versionado y cerrojo) y `produccion/` (52 recursos: red, grupo de seguridad, IP, máquina con cloud-init, PostgreSQL, Key Vault, dos identidades administradas, credencial federada, dos roles propios, cuenta de copias y Cloudflare). `azurerm` 5.14, `cloudflare` 5.29, `.terraform.lock.hcl` en el repo. Claves de PostgreSQL y del token de administración como valores **de solo escritura** (no salen en el plan); el token, además, efímero (ni siquiera en el estado). [ADR 0019](../adr/0019-terraform-con-estado-remoto-en-azure.md) |
 | **HTTPS** | [ADR 0018](../adr/0018-https-con-cloudflare-y-caddy.md): certificado de origen de Cloudflare (15 años) pedido por Terraform y guardado en Key Vault; certificado de cliente de Authenticated Origin Pulls solo para `trainwatch-api`, firmado por una CA propia; grupo de seguridad con el 443 solo desde los rangos de Cloudflare (leídos de su API); sin SSH (puerto cerrado y servicio apagado) |
 | **Despliegue** | [ADR 0020](../adr/0020-despliegue-con-oidc-y-run-command.md): `despliegue.yml` en cada push a `main`: `ci.yml` (reutilizado), imagen a GHCR, la API por **OIDC con identidad administrada federada** y `az vm run-command`, y la web con **wrangler** a Cloudflare Pages. Los trabajos de Azure y Pages se saltan mientras no haya variables |
-| **CI** | `ci.yml` añade el trabajo «Infraestructura»: `terraform fmt -check` y `validate` de las dos raíces, ShellCheck de los scripts, `caddy validate` con un certificado de usar y tirar y `docker compose config`. Ya no corre en push a `main` (lo hace el despliegue) |
-| **Vigilancia** | `vigilancia.yml` cada 15 min con `infra/vigilancia/comprobar.sh`: falla si la API no responde, si la ingesta lleva más de 5 min sin terminar un ciclo o si el último dato tiene más de 5 min (de 01:00 a 05:00 solo avisa). Se activa con `VIGILANCIA_ACTIVA=true` |
-| **Copias** | [ADR 0021](../adr/0021-copias-gestionadas-y-pg-dump-nocturno.md): las gestionadas de PostgreSQL (14 días) y `pg_dump` cada noche a las 03:15 a Blob Storage (30 días), sin los datos de `posiciones` |
+| **CI** | Acciones fijadas por SHA y Dependabot para actualizarlas. `ci.yml` añade el trabajo «Infraestructura»: `terraform fmt -check` y `validate` de las dos raíces, ShellCheck de los scripts, `caddy validate` con un certificado de usar y tirar y `docker compose config`. Ya no corre en push a `main` (lo hace el despliegue) |
+| **Vigilancia** | `vigilancia.yml` cada 15 min con `infra/vigilancia/comprobar.sh`: falla si la API no responde, si la ingesta lleva más de 5 min sin terminar un ciclo, si hace más de 5 min que no se guarda todo en la base de datos (`guardadoAlDia`, nuevo en `/api/directo/estado`, con `pendientes`) o si el último dato tiene más de 5 min (de 01:00 a 05:00 esto último solo avisa). Se activa con `VIGILANCIA_ACTIVA=true` |
+| **Copias** | [ADR 0021](../adr/0021-copias-gestionadas-y-pg-dump-nocturno.md): las gestionadas de PostgreSQL (14 días) y `pg_dump` cada noche a las 03:15 a Blob Storage (14 días), sin los datos de `posiciones`, subido con un rol que no puede borrar |
 | **Web** | La página provisional enseña también el **estado de los datos** (`/api/directo/estado`: «Último dato de Renfe hace 12 s: 404 trenes en 2 núcleos», o que no están al día). `VITE_API_URL` para la API en producción; `public/_headers` con CSP y demás cabeceras para Pages |
 | **Medición** | `infra/medicion/` (compose con los límites de producción y `medir.sh`) para repetir las cifras del §3 |
 | **Guía** | [`docs/despliegue.md`](../despliegue.md): la parte B paso a paso, el coste, las comprobaciones, qué mirar cada día, cómo restaurar, cómo desmontarlo y qué hacer cuando se acabe el crédito |
-| **Herramientas** | Terraform 1.17.1 instalado con `winget` (gratis). La CLI de Azure no hace falta hasta la parte B |
+| **Herramientas** | Terraform 1.17.1 instalado con `winget` (gratis). La CLI de Azure la instaló la sesión de control; aquí solo se usó para leer (regiones, tamaños, versiones y proveedores) y para un `terraform plan` sin estado remoto |
 
 ## 3. Cifras
 
@@ -57,7 +57,7 @@ La aceptación del plan (**7 días seguidos en marcha**) es de la parte B.
 | `./mvnw verify` | **125 pruebas, 0 fallos, 1 omitida** (la manual de la fase 2). Antes, 121. Nuevas: `ProduccionIntegracionTests` (4: Actuator no está en el puerto público y sí en el de gestión, con `readiness` y métricas pero sin `env` ni `heapdump`; las cabeceras `X-Forwarded-*` dan `https://trainwatch-api.ivanchesa.com` en OpenAPI; pool de 6) y, en `ApiIntegracionTests`, las cabeceras `Cache-Control: no-cache, no-transform` y `X-Accel-Buffering: no` del SSE |
 | `npm run lint` · `npm test` · `npm run build` | En verde; **13 pruebas** (antes, 9): el estado de los datos en la página y `directo.test.ts` (antigüedad, aviso a los 5 min, sin datos). Con `VITE_API_URL`, el build llama a `https://trainwatch-api.ivanchesa.com` |
 | `terraform fmt -check` y `validate` | En verde en `estado/` y `produccion/` |
-| `terraform plan` de solo lectura | **43 recursos que crear, 0 cambios**, contra la suscripción real (con el `az login` de Iván), con estado local, sin registrar proveedores y con un token de Cloudflare falso, en una copia en la carpeta temporal; el plan se borró. Sin errores de validación del proveedor (PostgreSQL 18, B1ms, B2ats_v2, nombres) |
+| `terraform plan` de solo lectura | **52 recursos que crear, 0 cambios** (43 antes de la revisión), contra la suscripción real (con el `az login` de Iván), con estado local, sin registrar proveedores y con un token de Cloudflare falso, en una copia en la carpeta temporal; el plan se borró. Sin errores de validación del proveedor (PostgreSQL 18, B1ms, B2ats_v2, nombres) |
 | ShellCheck · actionlint | Sin avisos en los 5 scripts y en los 3 workflows (`rhysd/actionlint` 1.7.8) |
 | `caddy validate` | Configuración válida (Caddy 2.11.9) |
 | `comprobar.sh` (vigilancia) | Contra el backend local: pasa (último ciclo hace 5 s, último dato hace 9 s, 446 trenes); falla con un máximo de 1 s; falla si la API no responde |
@@ -80,8 +80,10 @@ La aceptación del plan (**7 días seguidos en marcha**) es de la parte B.
 | Errores en 25 min | **0** `ERROR` en el registro; circuitos cerrados; antigüedad máxima del dato, 25 s | — |
 | Trenes en memoria | 455-475 | — |
 | Caddy (en la prueba del compose de producción) | 12 MiB | — |
+| **Compose de producción** (solo lectura, `/tmp` en memoria), heap al 60 %: primera importación | **599 MiB** de 640 (sin reinicios, pero sin margen) | — |
+| **Compose de producción, heap al 50 % (configuración final)**: primera importación · nocturna | **415 · 430 MiB** de 640; 34,7 · 33,8 s; heap máximo 309 MiB | — |
 
-**Lectura:** el heap usado no pasa de ~140 MiB, pero la importación hace crecer el comprometido a ~365 MiB y Serial GC no lo devuelve; por eso el contenedor se queda en ~550 MiB después de la primera importación. Con 640 MiB de límite hay ~80 MiB de margen. En una máquina de 1 GiB caben el sistema y Docker (~250 MB, estimación), Caddy (12 MiB) y el backend (~560 MiB), con 2 GB de swap por si acaso. Si hiciera falta, bajar `MaxRAMPercentage` a 45 (~290 MiB de heap) seguiría dejando el doble del máximo usado.
+**Lectura:** el heap usado no pasa de ~140 MiB, pero la importación hace crecer el comprometido y Serial GC no lo devuelve: con el heap al 60 % (~384 MiB), el contenedor se quedaba en ~550 MiB. La revisión independiente señaló que la medición no usaba el sistema de ficheros de solo lectura ni el `/tmp` en memoria del compose de producción, donde el ZIP del horario (15,6 MB) cuenta como memoria: medido así, la primera importación llegó a **599 MiB de 640**. Por eso el heap queda al **50 %** (~310 MiB, el doble del máximo usado): **430 MiB como mucho**, con ~210 MiB de margen. En una máquina de 1 GiB caben el sistema y Docker (~250 MB, estimación), Caddy (12 MiB) y el backend, con 2 GB de swap por si acaso.
 
 PostGIS (495 MiB como mucho) cabe holgado en los 2 GiB de un B1ms. En un B2ats_v2 junto al backend (opción A) serían ~1,05 GiB solo entre los dos: no cabe.
 
@@ -141,7 +143,38 @@ Precios de la API pública (`prices.azure.com`, `spaincentral`, USD, consultados
 
 ## 4. Revisión independiente
 
-PENDIENTE
+Un subagente sin contexto de la conversación revisó el diff `main...fase-7-despliegue` con el encargo y el `CLAUDE.md`, sobre todo la seguridad y el coste. Tenía instrucciones de comprobar el código y no fiarse de los ADR ni de este informe. Solo leyó y validó en local: no ejecutó nada contra Azure, Cloudflare ni GitHub.
+
+Lo que dio por bueno:
+- la red (443 solo desde Cloudflare, sin SSH, PostgreSQL sin acceso público y con `verify-full`, cortafuegos en Key Vault y en las copias, sin claves compartidas);
+- Actuator solo en el 8081;
+- Caddy (405, 404, sin `Server`);
+- el SSE;
+- el OIDC limitado al entorno `produccion` y `id-token: write` solo en el trabajo de la API;
+- la imagen por digest y sin root;
+- el coste (~4,2 $/mes, sin recursos de pago escondidos);
+- la lista de la parte A, completa.
+
+**Todo lo de gravedad alta y media se corrigió.**
+
+| # | Hallazgo | Qué se hizo |
+|---|---|---|
+| 1 (alta) | El cambio a Authenticated Origin Pulls por nombre de host dejó una barra suelta en `ci.yml`: el YAML no era válido y rompía la CI y el despliegue, que la reutiliza | **Corregido** y comprobado con actionlint. Desde entonces, actionlint después de cada cambio en los workflows |
+| 2 (media) | Con la clave de PostgreSQL efímera, un `apply` que falla a medias deja claves distintas en el servidor y en Key Vault | **Corregido:** `random_password` normal, enviado como valor de solo escritura (no sale en el plan). [ADR 0019](../adr/0019-terraform-con-estado-remoto-en-azure.md) actualizado |
+| 3 (media) | Si la base de datos deja de escribir, la ingesta sigue y la vigilancia queda en verde mientras no se guarda nada | **Corregido:** `/api/directo/estado` da `guardadoAlDia` (el último ciclo sin nada pendiente) y `pendientes` por tabla, y `comprobar.sh` falla si `guardadoAlDia` tiene más de 5 min. Prueba en `DirectoIntegracionTests` (con la tabla renombrada, `guardadoAlDia` no avanza y `pendientes` cuenta las filas; al volver, avanza y queda a 0). `comprobar.sh` probado con los dos casos |
+| 4 (media) | Acciones de GitHub fijadas por etiqueta en trabajos con mucho poder (root en la máquina, token de Pages, `packages: write`) | **Corregido:** todas las acciones de los tres workflows, fijadas por SHA con la versión en un comentario, y `.github/dependabot.yml` para actualizarlas. Caddy y el cliente de PostgreSQL, por digest (`compose.yaml` y `infra/produccion/versiones.env`) |
+| 5 (media/baja) | Ajustes de toda la zona compartida (Authenticated Origin Pulls; «Always Use HTTPS» en la guía) | **Corregido** (ya en marcha cuando llegó la revisión): Authenticated Origin Pulls solo para `trainwatch-api`, con CA propia; la guía ya no toca nada de la zona («Always Use HTTPS» ya está activado) |
+| 6 (baja) | Si falla la descarga de la imagen, `.env` ya apunta a la nueva y la siguiente vuelta atrás iría a una imagen que nunca arrancó | **Corregido:** `docker compose pull` con la imagen nueva solo en el entorno, y `.env` se escribe después |
+| 7 (baja) | La clave de PostgreSQL y los tokens, en los argumentos de los procesos (`ps`, `docker inspect`) | **Corregido:** `PGPASSWORD` exportado y `-e PGPASSWORD` sin valor; la cabecera `Authorization` por un descriptor (`-H @<(...)`, probado) |
+| 8 (baja) | La máquina, expuesta a Internet, podía borrar sus propias copias | **Corregido:** rol propio con solo `blobs/write` y `blobs/add/action`; lo sobrescrito se recupera 7 días por el borrado temporal |
+| 9 (baja) | El estado de Terraform tiene claves privadas (origen, CA de Authenticated Origin Pulls, SSH) | **Documentado** en el ADR 0019: quien lee el estado puede fabricar certificados de cliente; solo lo lee Iván (Entra ID, sin claves compartidas) |
+| 10 (baja) | Con 30 días, las copias lógicas pasarían de los 5 GB gratis hacia el final del año | **Corregido:** 14 días, y la estimación de la guía y del ADR 0021, rehecha |
+| 11 (baja) | Si falla la copia, no avisa nadie | **Se deja:** `revisar.sh` lo enseña cada día. Mejora apuntada en el ADR 0021 |
+| 12 (baja) | Sin SSH y sin reinicio automático, los parches del núcleo no se aplicarían nunca | **Corregido:** `unattended-upgrades` reinicia si hace falta, a las 02:00 UTC |
+| Duda | El `/tmp` en memoria y el sistema de ficheros de solo lectura no estaban en la medición: el ZIP del horario cuenta como memoria del contenedor | **Medido, y tenía razón:** 599 MiB de 640 en la primera importación. El heap pasa al 50 % del límite: 415-430 MiB (§3) |
+| Duda | El rol de despliegue, asignado sobre la máquina, quizá no baste para seguir la operación de `run-command` ni para que `azure/login` vea la suscripción | **Pendiente de la parte B** (§6). Si falla, se amplía el ámbito del rol al grupo de recursos |
+| Duda | Authenticated Origin Pulls por nombre de host en el plan Free | **Pendiente de la parte B** (§6) |
+| Duda | El token de Pages vale para todos los proyectos de Pages de la cuenta | **Se deja y se documenta** en el ADR 0020: Cloudflare no deja limitarlo a un proyecto; solo lo usa el trabajo de la web, en el entorno protegido |
 
 ## 5. Decisiones tomadas sin consultar
 
@@ -157,9 +190,9 @@ PENDIENTE
 - **Caddy no deja pasar `POST`**: la importación manual del horario se hace desde la máquina (`curl -X POST 127.0.0.1:8080/...` con el token de Key Vault).
 - **La vigilancia tolera la noche** (01:00-05:00): si Renfe no publica muestras sin trenes, el último dato envejece sin que nada falle. Se confirma con la captura de 24 h.
 - **El trabajo de la CI ya no corre en push a `main`**: lo ejecuta `despliegue.yml` (con `workflow_call`), para no repetirlo.
-- **Copias lógicas a las 03:15** de Madrid, con 30 días; las gestionadas, 14 días (gratis hasta 32 GB).
+- **Copias lógicas a las 03:15** de Madrid, con 14 días; las gestionadas, 14 días (gratis hasta 32 GB).
 - **2 GB de swap** en la máquina, con `swappiness` 10.
-- **Contenedor del backend con 640 MiB** y heap al 60 % (§3).
+- **Contenedor del backend con 640 MiB** y heap al 50 % (§3).
 - **La web**: además de la página provisional que pedía el encargo, enseña el estado de los datos con el mismo umbral de 5 min que la vigilancia.
 
 ## 6. Parte B (pendiente)

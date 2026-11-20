@@ -39,7 +39,7 @@ USER trainwatch:trainwatch
 # Memoria: el heap es un porcentaje del límite del contenedor (mem_limit en el compose), no de la máquina.
 # Serial GC: con 1-2 vCPU y un heap pequeño es el que menos memoria y CPU gasta. Si se acaba la memoria,
 # el proceso termina y Docker lo reinicia, en vez de quedarse medio vivo.
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=60 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -XX:ReservedCodeCacheSize=64m -Xss512k" \
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=50 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -XX:ReservedCodeCacheSize=64m -Xss512k" \
     SPRING_PROFILES_ACTIVE=prod
 # 8080: la API (detrás de Caddy). 8081: Actuator, que no se publica (solo para la máquina).
 EXPOSE 8080 8081

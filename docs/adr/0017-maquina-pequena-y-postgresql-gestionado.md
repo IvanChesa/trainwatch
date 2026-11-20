@@ -12,11 +12,12 @@ La imagen de producción y PostGIS 18-3.7 con los límites de las máquinas cand
 
 | | Backend (contenedor) | PostGIS (contenedor) |
 |---|---:|---:|
-| Memoria en marcha | ~550 MiB (heap usado 40-140 MiB, comprometido 365 MiB; no-heap ~100 MiB) | ~300-350 MiB |
+| Memoria en marcha, con el heap al 60 % (primera medición) | ~550 MiB (heap usado 40-140 MiB, comprometido 365 MiB; no-heap ~100 MiB) | ~300-350 MiB |
 | Memoria en la importación del horario (36 s) | **559 MiB** como mucho (heap usado ≤ 141 MiB) | **495 MiB** como mucho |
 | CPU en marcha | mediana 0,1 % de una vCPU (media 3,4 %) | mediana 0,2 % (media 3 %) |
 | CPU en la importación | 60-100 % de una vCPU durante ~40 s | 100 % durante ~40 s |
 | Sin importación (arranque con el horario ya cargado) | 283 MiB | — |
+| **Configuración final** (compose de producción: solo lectura, `/tmp` en memoria, heap al **50 %**) | **415 MiB** en la primera importación y **430 MiB** en la nocturna; 34 s cada una | — |
 
 Y el disco: `posiciones` ronda 0,3-0,5 M filas al día y se guarda 48-72 h; `retrasos`, ~51.000 al día para siempre (~19 M al año). Con índices, unos pocos GB al año (informe §3).
 
@@ -47,7 +48,7 @@ Incluye **12 meses** de servicios gratis: **750 h/mes de B1s, B2pts_v2 y B2ats_v
 **El backend en una máquina B2ats_v2 (2 vCPU, 1 GiB, Ubuntu 24.04, disco P6) con Docker Compose (backend y Caddy), y la base de datos en Azure Database for PostgreSQL Flexible Server B1ms (PostgreSQL 18 con PostGIS 3.6, 32 GB), en una red privada.**
 
 - **Coste:** ~**4,2 $/mes** con la oferta gratuita (IP pública y zona DNS privada; lo demás, 0 $). ~50 $ en el año.
-- **Memoria del backend:** contenedor limitado a **640 MiB** y heap al **60 %** del límite (~384 MiB, Serial GC). La máquina tiene 1 GiB: el sistema y Docker (~250 MB), Caddy (~15 MB) y el backend (~550 MB) caben, con **2 GB de swap** para los picos.
+- **Memoria del backend:** contenedor limitado a **640 MiB** y heap al **50 %** del límite (~310 MiB, Serial GC; el usado no pasa de ~140 MiB). Con el 60 %, la primera importación llegaba a 599 MiB contando el ZIP en `/tmp` (en memoria): demasiado justo. Con el 50 %, 430 MiB como mucho. La máquina tiene 1 GiB: el sistema y Docker (~250 MB, estimación), Caddy (12 MiB) y el backend (≤ 430 MiB) caben, con **2 GB de swap** para los picos.
 - **B2ats_v2:** es la única de las tres gratuitas disponible aquí (B1s no lo está para la suscripción y está en fin de vida), y tiene 2 vCPU para la importación. La máquina se crea **sin zona** (la zona 1 no la admite).
 - **PostgreSQL gestionado:** copias automáticas con restauración a un instante (14 días), parches y TLS sin hacer nada, y la memoria de PostGIS fuera de la máquina de 1 GiB.
 

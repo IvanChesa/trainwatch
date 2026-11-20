@@ -43,8 +43,9 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
       - "127.0.0.1:8081:8081"
-    # Medido en la fase 7 (docs/informes/fase-7.md, §3): con la ingesta y la importación del horario, el proceso
-    # usa ~550 MB con el heap en el 60 % del límite. La máquina tiene 1 GiB y 2 GB de swap.
+    # Medido en la fase 7 (docs/informes/fase-7.md, §3), con este mismo compose (solo lectura y /tmp en memoria) y el
+    # heap al 50 % del límite (Dockerfile): 415-430 MiB como mucho en la importación del horario. La máquina tiene
+    # 1 GiB y 2 GB de swap.
     mem_limit: 640m
     read_only: true
     tmpfs:

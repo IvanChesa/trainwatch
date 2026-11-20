@@ -1,4 +1,4 @@
-# ADR 0021 · Copias: las gestionadas de PostgreSQL (14 días) y un `pg_dump` nocturno a Blob Storage (30 días)
+# ADR 0021 · Copias: las gestionadas de PostgreSQL (14 días) y un `pg_dump` nocturno a Blob Storage (14 días)
 
 **Fecha:** 20-11-2026 · **Estado:** aceptada · **Fase:** 7
 
@@ -11,9 +11,10 @@
 1. **Copias gestionadas de PostgreSQL Flexible Server**, con **14 días** de restauración a cualquier instante (`backup_retention_days = 14`). Son gratis hasta el 100 % del disco (32 GB). Sirven para el error de hoy (un `DELETE` de más, una migración que sale mal): se restaura a un servidor nuevo en el instante de antes.
 2. **`pg_dump` cada noche a Blob Storage**, para tener una copia **portable** que se puede restaurar en cualquier PostgreSQL con PostGIS (en local o en otra nube):
    - `trainwatch-copia.timer` a las **03:15 de Madrid**, antes de la importación del horario de las 04:30. `Persistent=true`: si la máquina estaba apagada, la hace al arrancar;
-   - `copia.sh` usa el cliente de PostgreSQL de la misma versión (`postgres:18-alpine`), TLS con el certificado comprobado, formato propio (`-Fc`, comprimido), sin propietarios, y **sin los datos de `posiciones`** (se regeneran solas); su estructura sí va;
-   - lo sube con la identidad administrada de la máquina (rol `Storage Blob Data Contributor` solo en el contenedor `copias`), sin claves;
-   - la cuenta de almacenamiento no admite claves compartidas, solo acepta la subred de la máquina y las IP de administración, y una regla de ciclo de vida **borra las copias a los 30 días**.
+   - `copia.sh` usa el cliente de PostgreSQL de la misma versión (`postgres:18-alpine`, fijado por digest en `infra/produccion/versiones.env`), TLS con el certificado comprobado, formato propio (`-Fc`, comprimido), sin propietarios, y **sin los datos de `posiciones`** (se regeneran solas); su estructura sí va;
+   - lo sube con la identidad administrada de la máquina, sin claves, con un **rol propio que solo puede escribir blobs, no borrarlos ni listarlos**, y solo en el contenedor `copias`: si alguien entra en la máquina (la única pieza expuesta a Internet), no puede borrar las copias, y lo que sobrescriba se recupera 7 días por el borrado temporal;
+   - la cuenta de almacenamiento no admite claves compartidas, solo acepta la subred de la máquina y las IP de administración, y una regla de ciclo de vida **borra las copias a los 14 días**.
+   - **Tamaño:** hoy, 15 MB (casi todo el horario). `retrasos` crece ~51.000 filas al día; en el formato comprimido de `pg_dump` serán unos cientos de MB a final de año (estimación, a afinar con datos reales). Catorce copias más siete en borrado temporal caben en los 5 GB gratis la mayor parte del año; al final, si se pasa, son céntimos (0,0184 $/GB al mes).
 3. **Procedimiento de restauración escrito** (`docs/despliegue.md`, «Restaurar una copia») y **probado en local** con una copia real de la base de datos de la medición (docs/informes/fase-7.md, §3).
 
 ## Alternativas
@@ -26,6 +27,6 @@
 ## Consecuencias
 
 - Hay dos niveles: «me he equivocado hace una hora» (gestionadas) y «necesito los datos fuera de Azure» (`pg_dump`).
-- Las copias lógicas caben en los 5 GB gratis de Blob Storage durante el año (cifras en el informe, §3).
+- Con 30 días de retención (la primera versión), hacia el final del año las copias pasarían de los 5 GB gratis (revisión independiente): por eso, 14.
 - Para restaurar en local hace falta la IP del portátil en `ips_administracion` y el rol `Storage Blob Data Reader` (Terraform se lo da a quien aplica).
 - Si `copia.sh` falla, queda en el diario de la máquina (`journalctl -u trainwatch-copia`) y `revisar.sh` lo enseña. No avisa por correo: anotado como mejora.
