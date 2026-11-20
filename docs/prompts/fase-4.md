@@ -3,9 +3,9 @@ Eres la sesión de programación de **TrainWatch**, la fase 4 («API y directo»
 **Lee primero**, enteros:
 - `CLAUDE.md`;
 - `docs/PLAN.md`, sobre todo «Cambios tras la fase 0», §2, §3 y la fase 4 en §6;
-- los informes `docs/informes/fase-0.md` a `fase-3.md`.
+- los informes `docs/informes/fase-0.md` a `fase-3.md`, y `fase-3b.md` (correcciones de la ingesta).
 
-Construye sobre lo fusionado en `main`. Si la fase 3 no está fusionada o `./mvnw verify` falla, **para** y explica por qué en `docs/informes/fase-4.md`.
+Construye sobre lo fusionado en `main`. Si las fases 3 y 3b no están fusionadas o `./mvnw verify` falla, **para** y explica por qué en `docs/informes/fase-4.md`.
 
 ## Objetivo
 
@@ -39,6 +39,21 @@ Exponer lo que ya recoge la ingesta con una **API REST documentada** y un **cana
    - de SSE: instantánea y después cambios;
    - **de carga en local:** **200 clientes SSE** a la vez durante 1-2 min, con memoria, CPU y latencia de los mensajes apuntadas en el informe. Puede ser un test JUnit o un programa pequeño; nada de herramientas nuevas de pago.
 6. **Contrato para el frontend:** un JSON de ejemplo por endpoint en `docs/api/`, que la fase 5 usará para sus pruebas con datos simulados.
+7. **Hora programada en `retrasos`.** Es un cambio pequeño en la ingesta, que pide la fase 6 (estadísticas).
+   - **El problema:**
+     - las estadísticas por franja horaria («a las 8:00 llega con 4 min») necesitan la hora **programada** de cada parada;
+     - `retrasos` no la guarda, y el horario de ese día se sustituye por la noche;
+     - `registrado` no sirve: es cuándo se cerró el retraso, no cuándo tocaba pasar.
+   - **El arreglo:**
+     - una migración de Flyway con la hora programada de llegada a la parada (por ejemplo, `llegada_programada TIMESTAMPTZ`), calculada con el horario del viaje y su `fecha_servicio`, como ya hace `Viaje` (cuidado con las horas de más de 24:00 y con el cambio de hora);
+     - la rellena la ingesta al cerrar cada parada, también las `inferido`;
+     - `NULL` en los trenes sin horario y en las filas antiguas.
+   - **Pruebas:**
+     - que el cierre normal y el inferido guardan la hora correcta;
+     - un viaje que pasa la medianoche;
+     - un tren sin horario.
+
+   Explícalo en el informe y en un ADR corto. La fase 6 hará los agregados.
 
 ## Cómo trabajar
 
@@ -55,7 +70,7 @@ Exponer lo que ya recoge la ingesta con una **API REST documentada** y un **cana
 - **Entorno:** `JAVA_HOME` al JDK 25. Docker Desktop arrancado.
 - **Límites:** no toques nada fuera de esta carpeta. Nada de pago. Sin push.
 - **Presupuesto limitado.**
-  - Si no llegas, este es el orden de prioridad: SSE con instantánea y cambios; trenes por núcleo; ficha del tren; estaciones; OpenAPI; prueba de carga; el resto.
+  - Si no llegas, este es el orden de prioridad: la hora programada en `retrasos` (punto 7: es pequeña y cuanto antes entre, antes se recogen datos completos); SSE con instantánea y cambios; trenes por núcleo; ficha del tren; estaciones; OpenAPI; prueba de carga; el resto.
   - Haz commits frecuentes.
 - **Al terminar:** resumen de 10 líneas como máximo:
   - qué funciona;
