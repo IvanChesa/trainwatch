@@ -24,9 +24,18 @@ const TEXTOS: Record<string, string> = {
   'CooperativeGesturesHandler.MobileHelpText': 'Usa dos dedos para mover el mapa',
 };
 
+/** Si OpenFreeMap no responde: un fondo liso, para que los trenes se sigan viendo. */
+const ESTILO_RESERVA = {
+  version: 8 as const,
+  sources: {},
+  layers: [{ id: 'fondo', type: 'background' as const, paint: { 'background-color': '#16181c' } }],
+};
+
 export interface PropsMapa {
   nucleo: Nucleo | null;
   trenes: readonly TrenMapa[];
+  /** Cuándo llegó el último evento del directo: solo entonces cuenta para el ritmo del movimiento (no al filtrar). */
+  recibido: number | null;
   linea: Linea | null;
   seleccionado: string | null;
   destacada: string | null;
@@ -48,6 +57,7 @@ export default function Mapa(props: PropsMapa) {
   const capaTrenes = useRef<CapaDeTrenes | null>(null);
   const capaLinea = useRef<CapaLinea | null>(null);
   const [listo, setListo] = useState(false);
+  const [sinFondo, setSinFondo] = useState(false);
   const ultimas = useRef(props);
   ultimas.current = props;
 
@@ -77,6 +87,15 @@ export default function Mapa(props: PropsMapa) {
     mapa.current = m;
     // Para las pruebas e2e (Playwright marca `navigator.webdriver`): leer posiciones del mapa desde la prueba.
     if (navigator.webdriver) (window as unknown as { __twMapa?: MapaLibre }).__twMapa = m;
+
+    // Si el estilo de OpenFreeMap no carga, MapLibre no llega a `load`: se cambia por un fondo liso.
+    let conReserva = false;
+    m.on('error', () => {
+      if (conReserva || m.isStyleLoaded()) return;
+      conReserva = true;
+      setSinFondo(true);
+      m.setStyle(ESTILO_RESERVA);
+    });
 
     m.on('load', () => {
       capaTrenes.current = new CapaTrenes2D(m, {
@@ -123,9 +142,13 @@ export default function Mapa(props: PropsMapa) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nucleo?.id]);
 
+  const ultimoRecibido = useRef<number | null>(null);
   useEffect(() => {
-    if (listo) capaTrenes.current?.actualizar(props.trenes);
-  }, [listo, props.trenes]);
+    if (!listo) return;
+    const nuevo = props.recibido !== ultimoRecibido.current;
+    ultimoRecibido.current = props.recibido;
+    capaTrenes.current?.actualizar(props.trenes, nuevo);
+  }, [listo, props.trenes, props.recibido]);
 
   useEffect(() => {
     if (listo) capaTrenes.current?.seleccionar(props.seleccionado);
@@ -162,5 +185,14 @@ export default function Mapa(props: PropsMapa) {
     mapa.current?.getCanvas().setAttribute('aria-label', props.descripcion);
   }, [props.descripcion, listo]);
 
-  return <div ref={contenedor} className="mapa" data-listo={listo ? 'si' : 'no'} />;
+  return (
+    <>
+      <div ref={contenedor} className="mapa" data-listo={listo ? 'si' : 'no'} />
+      {sinFondo && (
+        <p className="aviso-mapa" role="status">
+          No se ha podido cargar el mapa de fondo: los trenes se ven sobre un fondo liso.
+        </p>
+      )}
+    </>
+  );
 }

@@ -16,6 +16,8 @@ export interface Directo {
   antiguedadS: number | null;
   antiguedadEn: number | null;
   conexion: EstadoConexion;
+  /** Hora local en que toca el próximo intento, si se está esperando para reintentar. */
+  reintentoHasta: number | null;
   /** `true` desde que llega la primera instantánea del núcleo. */
   cargado: boolean;
 }
@@ -26,6 +28,7 @@ const INICIAL: Directo = {
   antiguedadS: null,
   antiguedadEn: null,
   conexion: { tipo: 'conectando' },
+  reintentoHasta: null,
   cargado: false,
 };
 
@@ -76,7 +79,12 @@ export function useDirecto(nucleo: number | null): Directo {
         const ahora = Date.now();
         actualizar((d) => ({ ...d, antiguedadS: l.antiguedadS, antiguedadEn: ahora }));
       },
-      estado: (estado) => actualizar((d) => ({ ...d, conexion: estado })),
+      estado: (estado) =>
+        actualizar((d) => ({
+          ...d,
+          conexion: estado,
+          reintentoHasta: estado.tipo === 'reintentando' ? Date.now() + estado.esperaMs : null,
+        })),
     });
     conexion.abrir();
     return () => conexion.cerrar();

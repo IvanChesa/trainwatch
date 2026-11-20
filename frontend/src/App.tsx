@@ -8,6 +8,7 @@ import { FichaEstacion } from './componentes/FichaEstacion';
 import { FichaTren } from './componentes/FichaTren';
 import { Hoja } from './componentes/Hoja';
 import { Leyenda } from './componentes/Leyenda';
+import { SinMapa } from './componentes/SinMapa';
 import { ListaTrenes } from './componentes/ListaTrenes';
 import { useAhora, useReducirMovimiento } from './componentes/ganchos';
 import { tituloTren } from './componentes/textos';
@@ -45,7 +46,7 @@ function nombreDe(nucleo: Nucleo | undefined, id: number): string {
 
 export default function App() {
   const [inicial] = useState(leerUrl);
-  const [nucleoId, setNucleoId] = useState(inicial.nucleo);
+  const [nucleoPedido, setNucleoId] = useState(inicial.nucleo);
   const [linea, setLinea] = useState(inicial.linea);
   const [vista, setVista] = useState<Vista>(inicial.vista);
   const [seleccion, setSeleccion] = useState<Seleccion>(null);
@@ -59,6 +60,9 @@ export default function App() {
     () => (nucleos.tipo === 'lista' ? [...nucleos.datos].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')) : []),
     [nucleos],
   );
+  // Un núcleo de la URL que no existe: en cuanto se sabe, Rodalies.
+  const nucleoId =
+    listaNucleos.length > 0 && !listaNucleos.some((n) => n.id === nucleoPedido) ? NUCLEO_POR_DEFECTO : nucleoPedido;
   const nucleo = listaNucleos.find((n) => n.id === nucleoId);
   const directo = useDirecto(nucleoId);
   const avisos = useConsulta<Aviso[]>(`avisos:${nucleoId}`, (s) => consultas.avisos(nucleoId, s), 60_000);
@@ -159,7 +163,7 @@ export default function App() {
           <label className="campo">
             <span>Núcleo</span>
             <select value={nucleoId} onChange={(e) => cambiarNucleo(Number(e.target.value))}>
-              {listaNucleos.length === 0 && <option value={nucleoId}>Rodalies de Catalunya</option>}
+              {listaNucleos.length === 0 && <option value={nucleoId}>Cargando los núcleos…</option>}
               {listaNucleos.map((n) => (
                 <option key={n.id} value={n.id}>
                   {n.nombre}
@@ -214,8 +218,14 @@ export default function App() {
           <button type="button" className="boton" onClick={() => abrir({ tipo: 'avisos' })}>
             Avisos{avisos.tipo === 'lista' ? ` (${avisosVisibles.length})` : ''}
           </button>
-          {esRodalies && linea !== LINEA_DESTACADA && (
-            <button type="button" className="destacada" onClick={() => setLinea(LINEA_DESTACADA)}>
+          {esRodalies && (
+            // Siempre está (si desapareciera al pulsarlo, el foco se perdería): pulsado, filtra la RL4.
+            <button
+              type="button"
+              className="destacada"
+              aria-pressed={linea === LINEA_DESTACADA}
+              onClick={() => setLinea(linea === LINEA_DESTACADA ? '' : LINEA_DESTACADA)}
+            >
               <span aria-hidden="true">★</span> RL4 Lleida
             </button>
           )}
@@ -226,11 +236,14 @@ export default function App() {
       </header>
 
       <main id="contenido" className="contenido" tabIndex={-1}>
-        <div className="mapa-marco" hidden={vista !== 'mapa'}>
-          <Suspense fallback={<p className="nota mapa-cargando">Cargando el mapa…</p>}>
+        {/* Oculto con `visibility` y no con `hidden`: así el mapa conserva su tamaño y encuadra bien aunque no se vea. */}
+        <div className={`mapa-marco${vista === 'mapa' ? '' : ' mapa-marco--oculto'}`}>
+          <SinMapa alFallar={() => setVista('lista')}>
+            <Suspense fallback={<p className="nota mapa-cargando">Cargando el mapa…</p>}>
             <Mapa
               nucleo={nucleo ?? null}
               trenes={enMapa}
+              recibido={directo.recibido}
               linea={datosLinea.tipo === 'lista' ? datosLinea.datos : null}
               seleccionado={seleccion?.tipo === 'tren' ? seleccion.id : null}
               destacada={esRodalies ? LINEA_DESTACADA : null}
@@ -239,7 +252,8 @@ export default function App() {
               alPulsarTren={abrirTren}
               alPulsarEstacion={abrirEstacion}
             />
-          </Suspense>
+            </Suspense>
+          </SinMapa>
           <Leyenda />
         </div>
         {vista === 'lista' && (
@@ -253,7 +267,11 @@ export default function App() {
       </main>
 
       {seleccion && (
-        <Hoja titulo={tituloHoja} alCerrar={cerrar}>
+        <Hoja
+          clave={seleccion.tipo === 'avisos' ? 'avisos' : `${seleccion.tipo}:${seleccion.id}`}
+          titulo={tituloHoja}
+          alCerrar={cerrar}
+        >
           {seleccion.tipo === 'tren' && (
             <FichaTren id={seleccion.id} enDirecto={trenSeleccionado} alAbrirEstacion={abrirEstacion} />
           )}

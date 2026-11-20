@@ -104,7 +104,7 @@ describe('App', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Línea' }), { target: { value: 'R13' } });
     expect(within(screen.getByTestId('mapa')).getAllByRole('button')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Lista' }));
-    const lista = screen.getByRole('list');
+    const lista = screen.getByRole('region', { name: /^Trenes de/ });
     expect(within(lista).getAllByRole('button')).toHaveLength(1);
     expect(lista).toHaveTextContent('Hacia La Plana-Picamoixons');
   });
@@ -115,7 +115,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lista' }));
     expect(screen.getByRole('button', { name: 'Lista' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('heading', { name: 'Trenes de Rodalies de Catalunya' })).toBeInTheDocument();
-    const botones = within(screen.getByRole('list')).getAllByRole('button');
+    const botones = within(screen.getByRole('region', { name: /^Trenes de/ })).getAllByRole('button');
     expect(botones).toHaveLength(3);
     // En marcha primero; el de origen, con su hora de salida.
     expect(botones[2]).toHaveTextContent('Sale a las 15:15');
@@ -161,7 +161,7 @@ describe('App', () => {
     prepararApi();
     await conDirecto();
     act(() => FuenteFalsa.ultima().enviar('latido', { instante: '', ultimoDato: '', antiguedadS: 400 }));
-    expect(screen.getByText('Datos hace 6 min: el directo está parado')).toBeInTheDocument();
+    expect(screen.getByText('Datos de hace 6 min: el directo está parado')).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Los datos en directo están parados.');
   });
 

@@ -126,6 +126,10 @@
   color: var(--acento);
   font-weight: 600;
 }
+.destacada[aria-pressed='true'] {
+  background: var(--acento);
+  color: #0b0d12;
+}
 
 .conmutador {
   display: inline-flex;
@@ -173,8 +177,22 @@
   position: absolute;
   inset: 0;
 }
-.mapa-marco[hidden] {
-  display: none;
+.mapa-marco--oculto {
+  visibility: hidden;
+}
+.aviso-mapa {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 4;
+  max-width: 300px;
+  padding: 10px 12px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--linea-fuerte);
+  border-radius: var(--radio);
+  background: var(--panel-translucido);
+  font-size: 0.9rem;
+  text-align: center;
 }
 .mapa-cargando {
   position: absolute;
@@ -220,11 +238,12 @@
   cursor: pointer;
 }
 .leyenda__titulo button::after {
-  content: ' ▾';
+  /* El texto alternativo vacío deja la flecha fuera del nombre accesible del botón. */
+  content: ' ▾' / '';
   color: var(--sec);
 }
 .leyenda__titulo button[aria-expanded='true']::after {
-  content: ' ▴';
+  content: ' ▴' / '';
 }
 .leyenda__lista {
   margin: 4px 0;
@@ -523,6 +542,10 @@
     max-height: 62vh;
     border-radius: 16px 16px 0 0;
     box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.5);
+  }
+  /* Que se pueda desplazar la lista por encima de la hoja. */
+  .app--con-hoja .lista {
+    padding-bottom: 64vh;
   }
 }
 

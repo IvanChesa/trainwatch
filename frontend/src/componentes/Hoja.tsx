@@ -5,13 +5,24 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
  * usable detrás). Al abrirse, el foco va a su título; con Escape o «Cerrar» se cierra y el foco vuelve a donde estaba
  * (eso lo hace `App`).
  */
-export function Hoja({ titulo, alCerrar, children }: { titulo: string; alCerrar(): void; children: ReactNode }) {
+export function Hoja({
+  clave,
+  titulo,
+  alCerrar,
+  children,
+}: {
+  /** Qué se enseña (tipo e id): el foco va al título solo cuando cambia esto, no cuando cambia el texto del título. */
+  clave: string;
+  titulo: string;
+  alCerrar(): void;
+  children: ReactNode;
+}) {
   const idTitulo = useId();
   const encabezado = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     encabezado.current?.focus();
-  }, [titulo]);
+  }, [clave]);
 
   useEffect(() => {
     const alPulsar = (e: KeyboardEvent) => {

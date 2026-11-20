@@ -32,12 +32,13 @@ export function textoEstadoDatos(directo: Directo, ahora: number): { texto: stri
   const viejo = antiguedad !== null && antiguedad >= ANTIGUEDAD_AVISO_S;
   const sufijo = antiguedad === null ? '' : ` · dato de Renfe ${formatearAntiguedad(antiguedad)}`;
   if (directo.conexion.tipo === 'reintentando') {
-    const segundos = Math.max(1, Math.round(directo.conexion.esperaMs / 1000));
+    const restante = directo.reintentoHasta !== null ? directo.reintentoHasta - ahora : directo.conexion.esperaMs;
+    const segundos = Math.max(1, Math.ceil(restante / 1000));
     const base = `Sin conexión con el directo: se reintenta en ${segundos} s`;
-    return { texto: antiguedad === null ? base : `${base}. Datos ${formatearAntiguedad(antiguedad)}`, aviso: true };
+    return { texto: antiguedad === null ? base : `${base}. Datos de ${formatearAntiguedad(antiguedad)}`, aviso: true };
   }
   if (!directo.cargado) return { texto: 'Conectando con el directo…', aviso: false };
-  if (viejo) return { texto: `Datos ${formatearAntiguedad(antiguedad!)}: el directo está parado`, aviso: true };
+  if (viejo) return { texto: `Datos de ${formatearAntiguedad(antiguedad!)}: el directo está parado`, aviso: true };
   if (directo.conexion.tipo === 'conectando') return { texto: `Reconectando…${sufijo}`, aviso: false };
   return { texto: `En directo${sufijo}`, aviso: false };
 }
@@ -48,6 +49,7 @@ export function anuncio(directo: Directo, ahora: number): string {
   if (directo.conexion.tipo === 'reintentando') return 'Sin conexión con el directo.';
   if (!directo.cargado) return 'Conectando con el directo.';
   if (antiguedad !== null && antiguedad >= ANTIGUEDAD_AVISO_S) return 'Los datos en directo están parados.';
+  if (directo.conexion.tipo === 'conectando') return 'Reconectando con el directo.';
   return 'En directo.';
 }
 

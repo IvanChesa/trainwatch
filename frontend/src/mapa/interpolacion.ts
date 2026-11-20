@@ -63,8 +63,9 @@ export class Interpolador {
    * Recibe **todos** los trenes que se ven ahora (tras aplicar una instantánea o unos cambios). Los que faltan se
    * borran; los que no han cambiado de sitio siguen con su movimiento; los que sí, empiezan uno nuevo desde donde están.
    */
-  sincronizar(trenes: Iterable<{ id: string; lon: number; lat: number }>, ahora: number): void {
-    if (this.ultimaActualizacion !== null) {
+  sincronizar(trenes: Iterable<{ id: string; lon: number; lat: number }>, ahora: number, medir = true): void {
+    // Solo los datos nuevos del directo marcan el ritmo; un cambio de filtro, no.
+    if (medir && this.ultimaActualizacion !== null) {
       const intervalo = ahora - this.ultimaActualizacion;
       // Un intervalo de más de 20 s es un corte (o una reconexión), no el ritmo normal: no cuenta para la media.
       if (intervalo > 0 && intervalo <= DURACION_MAX_MS) {
@@ -72,7 +73,7 @@ export class Interpolador {
         this.duracionMs = Math.min(DURACION_MAX_MS, Math.max(DURACION_MIN_MS, media));
       }
     }
-    this.ultimaActualizacion = ahora;
+    if (medir) this.ultimaActualizacion = ahora;
 
     const vistos = new Set<string>();
     for (const tren of trenes) {

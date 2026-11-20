@@ -10,8 +10,11 @@ import { FRANJAS, categoriaRetraso, etiquetaRetraso, type CategoriaRetraso } fro
  * implementación de lo mismo.
  */
 export interface CapaDeTrenes {
-  /** Los trenes que hay que pintar ahora (ya filtrados). Llama cada vez que llega un evento del directo. */
-  actualizar(trenes: readonly TrenMapa[]): void;
+  /**
+   * Los trenes que hay que pintar ahora (ya filtrados). `nuevoDato` es `true` si viene de un evento del directo y
+   * `false` si solo ha cambiado el filtro (entonces no cuenta para medir el ritmo de las actualizaciones).
+   */
+  actualizar(trenes: readonly TrenMapa[], nuevoDato: boolean): void;
   /** Resalta un tren (el de la ficha abierta) o ninguno. */
   seleccionar(id: string | null): void;
   /** Resalta una línea (la RL4 en Rodalies) o ninguna. */
@@ -30,10 +33,22 @@ export const CAPA_DESTACADA = 'tw-trenes-destacada';
 const MS_POR_FOTOGRAMA = 33;
 const ESCALA = 2;
 
+/** Un lienzo 2D: `OffscreenCanvas` si lo hay (Safari lo tiene desde la 16.4); si no, un `<canvas>` normal. */
+function lienzo(lado: number): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
+  if (typeof OffscreenCanvas !== 'undefined') {
+    const c = new OffscreenCanvas(lado, lado).getContext('2d');
+    if (c) return c;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = lado;
+  canvas.height = lado;
+  return canvas.getContext('2d')!;
+}
+
 /** Icono de un tren en marcha: un círculo con una punta que señala hacia donde va (se gira con el rumbo). */
 function dibujarEnMarcha(color: string, conRumbo: boolean): ImageData {
   const lado = 26 * ESCALA;
-  const c = new OffscreenCanvas(lado, lado).getContext('2d')!;
+  const c = lienzo(lado);
   const m = lado / 2;
   const r = 7 * ESCALA;
   c.lineWidth = 2 * ESCALA;
@@ -56,7 +71,7 @@ function dibujarEnMarcha(color: string, conRumbo: boolean): ImageData {
 /** Icono de un tren en origen («sale a las 10:25»): un cuadrado hueco, distinto de los que están en marcha. */
 function dibujarEnOrigen(): ImageData {
   const lado = 18 * ESCALA;
-  const c = new OffscreenCanvas(lado, lado).getContext('2d')!;
+  const c = lienzo(lado);
   c.fillStyle = '#101114';
   c.fillRect(2 * ESCALA, 2 * ESCALA, lado - 4 * ESCALA, lado - 4 * ESCALA);
   c.lineWidth = 2.5 * ESCALA;
@@ -163,9 +178,9 @@ export class CapaTrenes2D implements CapaDeTrenes {
     mapa.on('mouseleave', CAPA_SIMBOLOS, this.alSalir);
   }
 
-  actualizar(trenes: readonly TrenMapa[]): void {
+  actualizar(trenes: readonly TrenMapa[], nuevoDato: boolean): void {
     this.trenes = trenes;
-    this.interpolador.sincronizar(trenes, performance.now());
+    this.interpolador.sincronizar(trenes, performance.now(), nuevoDato);
     this.pintar();
   }
 
@@ -215,7 +230,9 @@ export class CapaTrenes2D implements CapaDeTrenes {
           linea: tren.linea ?? '',
           icono: icono(tren, categoria),
           rumbo: tren.estado === 'EN_ORIGEN' ? 0 : (tren.rumbo ?? 0),
-          etiqueta: tren.estado === 'EN_ORIGEN' ? '' : etiquetaRetraso(tren.retrasoMin),
+          // «+7» si va con retraso y «?» si no se sabe: el color nunca va solo.
+          etiqueta:
+            tren.estado === 'EN_ORIGEN' ? '' : categoria === 'sin-dato' ? '?' : etiquetaRetraso(tren.retrasoMin),
           orden: tren.estado === 'EN_ORIGEN' ? -1 : (tren.retrasoMin ?? 0),
         },
       });
