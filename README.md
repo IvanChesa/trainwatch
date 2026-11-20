@@ -4,7 +4,7 @@ Mapa con los trenes de Cercanías y Rodalies moviéndose en directo, con su retr
 
 > **Proyecto personal, no oficial.** No tiene relación con Renfe ni con Adif.
 
-> **Estado:** en desarrollo. Están hechas la prueba técnica de los datos (fase 0), los cimientos del proyecto (fase 1: backend, frontend, PostGIS, pruebas y CI), la importación nocturna del horario de Renfe (fase 2), la ingesta en directo (fase 3) y la API REST con el directo por SSE (fase 4). El frontend pasó de Angular a React (fase 4r). El plan está en [`docs/PLAN.md`](docs/PLAN.md) y los informes de cada fase, en [`docs/informes/`](docs/informes/).
+> **Estado:** en desarrollo. Están hechas la prueba técnica de los datos (fase 0), los cimientos del proyecto (fase 1: backend, frontend, PostGIS, pruebas y CI), la importación nocturna del horario de Renfe (fase 2), la ingesta en directo (fase 3) y la API REST con el directo por SSE (fase 4). El frontend pasó de Angular a React (fase 4r). La fase 7 (despliegue en Azure y Cloudflare) tiene lista la infraestructura como código y el despliegue automático; falta montarla. El plan está en [`docs/PLAN.md`](docs/PLAN.md) y los informes de cada fase, en [`docs/informes/`](docs/informes/).
 
 ## Arquitectura (prevista)
 
@@ -29,7 +29,7 @@ Las decisiones de arquitectura están en [`docs/adr/`](docs/adr/).
 |---|---|
 | `backend/` | Java 25 y Spring Boot 4.2 (Web, Actuator, Spring Data JDBC, Flyway, Spring Batch, validación). Maven con wrapper |
 | `frontend/` | React 19 con Vite 8 y TypeScript estricto. Pruebas con Vitest y Testing Library; lint con oxlint |
-| `infra/` | Docker Compose con PostgreSQL 18 y PostGIS 3.7. Terraform llegará en la fase 7 |
+| `infra/` | Docker Compose con PostgreSQL 18 y PostGIS 3.7 para local; `terraform/` (Azure y Cloudflare), `produccion/` (compose, Caddy, despliegue y copias), `vigilancia/` y `medicion/` (fase 7) |
 | `spike/` | Prueba técnica de la fase 0 (Java sin Spring) |
 | `docs/` | Plan, ADR, informes de cada fase y guías |
 
@@ -103,6 +103,20 @@ java backend/carga/CargaSse.java http://localhost:8080 200 90 51,10,40,20,60
 ```
 
 La prueba de integración levanta `postgis/postgis:18-3.7` con Testcontainers, aplica las migraciones de Flyway y comprueba PostGIS, `/actuator/health` y `/api/estado`. Las de la importación del horario usan un GTFS pequeño de ejemplo (`backend/src/test/resources/gtfs/ejemplo/`) servido por un servidor HTTP local. La CI de GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) ejecuta lo mismo en cada push y pull request.
+
+## Producción (fase 7)
+
+- **API y directo:** `https://trainwatch-api.ivanchesa.com`, en una máquina pequeña de Azure (`spaincentral`) con Docker Compose (Caddy y el backend), detrás de Cloudflare en modo «Full (strict)». La base de datos es Azure Database for PostgreSQL Flexible Server con PostGIS, en una red privada.
+- **Web:** `https://trainwatch.ivanchesa.com`, en Cloudflare Pages.
+- **Infraestructura como código:** Terraform en [`infra/terraform/`](infra/terraform/), con el estado en Azure Storage.
+- **Despliegue automático:** al fusionar en `main`, [`despliegue.yml`](.github/workflows/despliegue.yml) prueba, publica la imagen en GHCR y despliega por OIDC, sin secretos de larga duración. La vigilancia ([`vigilancia.yml`](.github/workflows/vigilancia.yml)) comprueba la API cada 15 minutos.
+- **Guía paso a paso, coste mensual y cómo desmontarlo:** [`docs/despliegue.md`](docs/despliegue.md).
+
+La imagen del backend se construye desde la raíz del repo:
+
+```bash
+docker build -f backend/Dockerfile -t trainwatch-backend .
+```
 
 ## La prueba técnica (`spike/`)
 

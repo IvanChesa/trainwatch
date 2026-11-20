@@ -1,0 +1,11 @@
+[Unit]
+Description=TrainWatch: copia de la base de datos cada noche, antes de la importación del horario
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 Europe/Madrid
+RandomizedDelaySec=5min
+# Si la máquina estaba apagada a esa hora, la copia se hace al arrancar.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

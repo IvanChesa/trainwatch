@@ -1,5 +1,8 @@
 package com.ivanchesa.trainwatch.api;
 
+import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -47,8 +50,14 @@ public class DirectoSseController {
     public SseEmitter directo(
             @Parameter(description = "Código del núcleo", example = "51") @RequestParam int nucleo,
             @Parameter(description = "El id del último evento recibido (lo manda el navegador al reconectarse)")
-            @RequestHeader(name = "Last-Event-ID", required = false) String ultimoId) {
+            @RequestHeader(name = "Last-Event-ID", required = false) String ultimoId,
+            HttpServletResponse respuesta) {
         nucleos.comprobarNucleo(nucleo);
+        // Fase 7 (ADR 0018): detrás de Caddy y de Cloudflare, el flujo no se guarda en caché, no se comprime
+        // (no-transform: Cloudflare no lo toca) y no se acumula en búferes (X-Accel-Buffering, la convención de los
+        // proxies). El latido de 15 s queda muy por debajo de los 100 s que Cloudflare espera sin datos.
+        respuesta.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache, no-transform");
+        respuesta.setHeader("X-Accel-Buffering", "no");
         return difusor.suscribir(nucleo, ultimoId);
     }
 }

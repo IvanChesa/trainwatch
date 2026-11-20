@@ -1,0 +1,10 @@
+# Fase 7: las acciones de GitHub están fijadas por SHA (con la versión en un comentario). Dependabot propone
+# cada semana las versiones nuevas en un pull request, con su SHA.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "CI"

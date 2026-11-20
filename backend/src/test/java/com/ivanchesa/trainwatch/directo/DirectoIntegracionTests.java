@@ -306,10 +306,14 @@ class DirectoIntegracionTests {
         // 1. No se puede escribir: el mapa se pone al día igual y las filas esperan en la cola.
         jdbc.sql("ALTER TABLE posiciones RENAME TO posiciones_caida").update();
         int pendientes;
+        Instant guardadoAntes = ingesta.resumen().guardadoAlDia();
+        ResumenDirecto conLaBaseCaida;
         try {
             servirConCabecera("092815", 1_000);
+            reloj.ahora = reloj.ahora.plusSeconds(7);
             ingesta.ciclo();
             pendientes = ingesta.pendientes("posiciones");
+            conLaBaseCaida = ingesta.resumen();
         } finally {
             jdbc.sql("ALTER TABLE posiciones_caida RENAME TO posiciones").update();
         }
@@ -317,12 +321,19 @@ class DirectoIntegracionTests {
         assertThat(contador("trainwatch.directo.errores", "feed", "-", "tipo", "base_de_datos")).isGreaterThan(erroresBd);
         long cabecera = cabecera("092815") + 1_000;
         assertThat(estado.ultimaMuestraPosiciones()).isEqualTo(Instant.ofEpochSecond(cabecera));
+        // Fase 7: el estado lo dice (para la vigilancia): el dato de Renfe es nuevo, pero «guardado al día» no avanza
+        // y hay filas pendientes.
+        assertThat(conLaBaseCaida.calculado()).isAfter(guardadoAntes);
+        assertThat(conLaBaseCaida.guardadoAlDia()).isEqualTo(guardadoAntes);
+        assertThat(conLaBaseCaida.pendientes()).containsEntry("posiciones", pendientes);
 
         // Vuelve: el ciclo siguiente (sin nada nuevo en Renfe) escribe lo pendiente, sin perder nada.
         reloj.ahora = reloj.ahora.plusSeconds(7);
         ingesta.ciclo();
         assertThat(ingesta.pendientes("posiciones")).isZero();
         assertThat(filas("posiciones")).isEqualTo(posicionesAntes + pendientes);
+        assertThat(ingesta.resumen().guardadoAlDia()).isEqualTo(reloj.ahora);
+        assertThat(ingesta.resumen().pendientes()).containsEntry("posiciones", 0).containsEntry("retrasos", 0);
 
         // 2. No se puede leer el horario (y con las cachés vacías): los viajes se saltan y se cuentan, sin error de
         // procesado y sin mover ni borrar trenes.

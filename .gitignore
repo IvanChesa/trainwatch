@@ -28,6 +28,10 @@ Thumbs.db
 *.tfstate
 *.tfstate.*
 .terraform/
+# Terraform (fase 7): las variables y el backend de cada uno, fuera; las plantillas .example, dentro
+*.tfvars
+backend.hcl
+*.tfplan
 
 # Frontend (fases siguientes)
 node_modules/

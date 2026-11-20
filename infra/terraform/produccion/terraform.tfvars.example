@@ -1,0 +1,5 @@
+# Copia en terraform.tfvars (fuera del repo) y rellena (docs/despliegue.md, paso 3).
+suscripcion           = "00000000-0000-0000-0000-000000000000"
+ips_administracion    = ["203.0.113.10"]
+cloudflare_zone_id    = "15ac47629720ddb81d92f4e4241f921a" # ivanchesa.com (no es secreto)
+cloudflare_account_id = "b35ef6008684721a57bda8f8be2df30b" # cuenta de Iván (no es secreto)

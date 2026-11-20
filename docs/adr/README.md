@@ -18,3 +18,8 @@ Un fichero por decisión: `NNNN-titulo-corto.md`, con contexto, decisión, alter
 - [0014 · `retrasos` guarda la hora programada de llegada a cada parada](0014-hora-programada-en-retrasos.md)
 - [0015 · El directo va por SSE: instantánea al conectarse y después solo los cambios](0015-sse-para-el-directo.md)
 - [0016 · La API lee el directo de memoria y el resto de PostGIS, con records propios, ProblemDetail y OpenAPI](0016-api-rest-desde-el-estado-en-memoria.md)
+- [0017 · Una máquina pequeña para el backend y PostgreSQL Flexible Server, dentro de la oferta gratuita](0017-maquina-pequena-y-postgresql-gestionado.md)
+- [0018 · HTTPS de punta a punta: Cloudflare en «Full (strict)», certificado de origen, Authenticated Origin Pulls y Caddy](0018-https-con-cloudflare-y-caddy.md)
+- [0019 · Terraform con estado remoto en Azure Storage, versiones fijadas y secretos que no pasan por el estado](0019-terraform-con-estado-remoto-en-azure.md)
+- [0020 · Despliegue continuo: GHCR, OIDC con identidad administrada federada, `az vm run-command` y wrangler](0020-despliegue-con-oidc-y-run-command.md)
+- [0021 · Copias: las gestionadas de PostgreSQL (14 días) y un `pg_dump` nocturno a Blob Storage (30 días)](0021-copias-gestionadas-y-pg-dump-nocturno.md)

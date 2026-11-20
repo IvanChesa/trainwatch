@@ -1,18 +1,22 @@
-# TrainWatch · integración continua: pruebas y build del backend y del frontend en cada push y pull request.
+# TrainWatch · integración continua: pruebas y build del backend y del frontend, y comprobación de la
+# infraestructura (Terraform, scripts, Caddy y compose), en cada push a una rama de fase y en cada pull request.
+# En main la ejecuta el despliegue (despliegue.yml) antes de publicar nada.
 name: CI
 
 on:
   push:
-    branches: [main, 'fase-*']
+    branches: ['fase-*']
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # En main no se cancela nada: forma parte de un despliegue.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   backend:
@@ -23,10 +27,10 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: JDK 25 (Temurin)
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: '25'
@@ -39,7 +43,7 @@ jobs:
 
       - name: Informes de las pruebas si fallan
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: informes-surefire
           path: backend/target/surefire-reports/
@@ -52,10 +56,10 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Node 24
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm
@@ -72,3 +76,43 @@ jobs:
 
       - name: Build (tsc y Vite)
         run: npm run build
+
+  infraestructura:
+    name: Infraestructura (Terraform, scripts, Caddy y compose)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Terraform 1.17
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: '1.17.1'
+
+      # Sin backend ni credenciales: solo formato y validez (proveedores, tipos y referencias).
+      - name: Terraform fmt y validate
+        run: |
+          terraform fmt -check -recursive infra/terraform
+          for dir in infra/terraform/estado infra/terraform/produccion; do
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+          done
+
+      - name: ShellCheck de los scripts
+        run: shellcheck infra/produccion/*.sh infra/vigilancia/*.sh infra/medicion/*.sh
+
+      # Caddy carga el certificado al validar: uno autofirmado de usar y tirar.
+      - name: Caddyfile y compose de producción
+        working-directory: infra/produccion
+        run: |
+          mkdir -p /tmp/tls
+          openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 1 -subj /CN=prueba \
+            -keyout /tmp/tls/origen.key -out /tmp/tls/origen.pem
+          cp /tmp/tls/origen.pem /tmp/tls/clientes-ca.pem
+          caddy=$(sed -n 's/^ *image: \(caddy:.*\)$/\1/p' compose.yaml)
+          docker run --rm -e HOST_API=trainwatch-api.ivanchesa.com \
+            -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -v /tmp/tls:/etc/caddy/tls:ro \
+            "$caddy" caddy validate --config /etc/caddy/Caddyfile
+          sudo mkdir -p /etc/trainwatch && sudo touch /etc/trainwatch/backend.env
+          TRAINWATCH_IMAGEN=ghcr.io/prueba/backend:1 HOST_API=prueba docker compose -f compose.yaml config --quiet

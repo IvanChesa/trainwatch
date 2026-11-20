@@ -1,0 +1,2 @@
+# Copia en terraform.tfvars (fuera del repo) y rellena. «az account show --query id -o tsv» da el id.
+suscripcion = "00000000-0000-0000-0000-000000000000"

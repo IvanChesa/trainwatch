@@ -17,9 +17,14 @@ import java.util.Map;
  * @param trenes        trenes en el estado en memoria (sin los cancelados que solo están en trip_updates)
  * @param sinHorario    trenes cuyo viaje no está en el horario
  * @param circuitos     estado del circuit breaker de cada feed (CLOSED, OPEN, HALF_OPEN)
+ * @param guardadoAlDia fase 7: el final del último ciclo que terminó con todo escrito en la base de datos (sin filas
+ *                      pendientes). Si la base de datos falla, deja de avanzar aunque Renfe siga mandando datos: es lo
+ *                      que mira la vigilancia para saber que se están guardando. {@code null} hasta el primer ciclo
+ * @param pendientes    filas que esperan a que la base de datos vuelva, por tabla (retrasos y posiciones)
  */
 public record ResumenDirecto(Instant calculado, Instant ultimoDato, Long antiguedadS, int trenes,
-        Map<EstadoTren, Integer> porEstado, int sinHorario, List<Nucleo> nucleos, Map<String, String> circuitos) {
+        Map<EstadoTren, Integer> porEstado, int sinHorario, List<Nucleo> nucleos, Map<String, String> circuitos,
+        Instant guardadoAlDia, Map<String, Integer> pendientes) {
 
     /**
      * El directo de un núcleo.
@@ -38,15 +43,18 @@ public record ResumenDirecto(Instant calculado, Instant ultimoDato, Long antigue
 
     /**
      * El mismo resumen con el último dato que hay ahora (el del estado en memoria, que puede ser más nuevo que el del
-     * resumen si este no se pudo calcular) y su antigüedad contada hasta {@code ahora}.
+     * resumen si este no se pudo calcular) y su antigüedad contada hasta {@code ahora}, y lo que hay ahora sin
+     * escribir en la base de datos.
      */
-    public ResumenDirecto alInstante(Instant ahora, Instant ultimoAhora) {
+    public ResumenDirecto alInstante(Instant ahora, Instant ultimoAhora, Instant guardadoAhora,
+            Map<String, Integer> pendientesAhora) {
         Instant ultimo = ultimoAhora != null ? ultimoAhora : ultimoDato;
         Long antiguedad = ultimo == null ? null : Duration.between(ultimo, ahora).toSeconds();
-        return new ResumenDirecto(calculado, ultimo, antiguedad, trenes, porEstado, sinHorario, nucleos, circuitos);
+        return new ResumenDirecto(calculado, ultimo, antiguedad, trenes, porEstado, sinHorario, nucleos, circuitos,
+                guardadoAhora, pendientesAhora);
     }
 
     public static ResumenDirecto vacio(Instant ahora) {
-        return new ResumenDirecto(ahora, null, null, 0, Map.of(), 0, List.of(), Map.of());
+        return new ResumenDirecto(ahora, null, null, 0, Map.of(), 0, List.of(), Map.of(), null, Map.of());
     }
 }
