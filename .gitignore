@@ -2,6 +2,8 @@
 spike/datos/
 *.pb
 fomento_transit.zip
+# GTFS descargado para las pruebas manuales de la fase 2
+datos/
 
 # Java / Maven
 target/

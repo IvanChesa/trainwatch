@@ -55,7 +55,7 @@
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
-			<scope>runtime</scope>
+			<!-- Compilación, no solo ejecución: la importación usa su API de COPY (CopyManager) -->
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

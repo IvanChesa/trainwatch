@@ -59,17 +59,14 @@ class CimientosIntegracionTests {
     }
 
     @Test
-    void laTablaDePruebaGuardaGeometriaEnWgs84() {
-        Integer srid = jdbc.sql("SELECT ST_SRID(posicion) FROM prueba_cimientos WHERE nombre = 'Lleida Pirineus'")
-                .query(Integer.class).single();
+    void postgisCalculaDistanciasEnWgs84() {
+        // La tabla de prueba de la fase 1 la borró la V2; la comprobación de la geometría sigue con dos puntos.
         // ST_Distance sobre geography da metros: Lleida Pirineus está a unos 130 km en línea recta de Barcelona Sants.
         Double metros = jdbc.sql("""
-                SELECT ST_Distance(posicion::geography,
+                SELECT ST_Distance(ST_SetSRID(ST_MakePoint(0.6335, 41.6206), 4326)::geography,
                                    ST_SetSRID(ST_MakePoint(2.1404, 41.3790), 4326)::geography)
-                FROM prueba_cimientos WHERE nombre = 'Lleida Pirineus'
                 """).query(Double.class).single();
 
-        assertThat(srid).isEqualTo(4326);
         assertThat(metros).isBetween(120_000.0, 140_000.0);
     }
 

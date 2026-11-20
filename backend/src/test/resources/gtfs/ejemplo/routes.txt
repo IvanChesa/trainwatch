@@ -1,0 +1,4 @@
+route_id,route_short_name,route_long_name,route_type,route_color,route_text_color
+51T0001RL4  ,RL4  ,Lleida Pirineus               ,2,9A4A9E,FFFFFF                                                       
+51T0002RL4  ,RL4  ,Parada C                      ,2,9A4A9E,FFFFFF                                                       
+51T0003RL4  ,RL4  ,Lleida Pirineus (autobus)     ,3,9A4A9E,FFFFFF                                                       

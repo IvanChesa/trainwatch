@@ -1,0 +1,5 @@
+stop_id,stop_name,stop_lat,stop_lon,wheelchair_boarding
+78805,Lleida Pirineus,41.6206,0.6335,1                                                                        
+78900,Parada B,41.6400,0.9000,1                                                                               
+78950,Parada C,41.6703,1.2696,0                                                                               
+79999,Parada Lejana,42.0000,0.9000,                                                                           
