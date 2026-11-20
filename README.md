@@ -4,7 +4,7 @@ Mapa con los trenes de Cercanías y Rodalies moviéndose en directo, con su retr
 
 > **Proyecto personal, no oficial.** No tiene relación con Renfe ni con Adif.
 
-> **Estado:** en desarrollo. Están hechas la prueba técnica de los datos (fase 0) y los cimientos del proyecto (fase 1): backend y frontend vacíos, base de datos con PostGIS, pruebas y CI. El plan está en [`docs/PLAN.md`](docs/PLAN.md) y los informes de cada fase, en [`docs/informes/`](docs/informes/).
+> **Estado:** en desarrollo. Están hechas la prueba técnica de los datos (fase 0), los cimientos del proyecto (fase 1: backend, frontend, PostGIS, pruebas y CI) y la importación nocturna del horario de Renfe (fase 2). El plan está en [`docs/PLAN.md`](docs/PLAN.md) y los informes de cada fase, en [`docs/informes/`](docs/informes/).
 
 ## Arquitectura (prevista)
 
@@ -59,6 +59,11 @@ Para comprobar que funciona:
 - `http://localhost:8080/api/estado` → `{"aplicacion":"TrainWatch","version":"0.0.1-SNAPSHOT","hora":"…"}`
 - `http://localhost:8080/actuator/health` → `"status":"UP"`, con `db` en `UP`.
 
+Al arrancar con la base de datos vacía, el backend descarga e importa el horario de Renfe en segundo plano (unos 15 s). Después lo hace cada noche a las 04:30 y a las 06:30, hora de Madrid, solo si el fichero ha cambiado. El estado del horario:
+
+- `http://localhost:8080/api/horario/estado` → fecha de publicación, días que cubre, filas por tabla y último intento.
+- Importación a mano, si `TRAINWATCH_ADMIN_TOKEN` tiene valor en el `.env`: `curl -X POST -H "X-Trainwatch-Token: <token>" "http://localhost:8080/api/horario/importaciones?forzar=true"`.
+
 En Windows, usa `mvnw.cmd` en vez de `./mvnw` si no trabajas con Git Bash, y asegúrate de que `JAVA_HOME` apunta al JDK 25.
 
 ## Pruebas
@@ -69,7 +74,14 @@ cd frontend && npm test -- --watch=false          # Vitest
 cd frontend && npm run build
 ```
 
-La prueba de integración levanta `postgis/postgis:18-3.7` con Testcontainers, aplica las migraciones de Flyway y comprueba PostGIS, `/actuator/health` y `/api/estado`. La CI de GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) ejecuta lo mismo en cada push y pull request.
+Prueba manual con el ZIP real de Renfe (no corre en CI; escribe las cifras en `backend/target/importacion-real.txt`):
+
+```bash
+curl -o datos/gtfs/fomento_transit.zip https://ssl.renfe.com/ftransit/Fichero_CER_FOMENTO/fomento_transit.zip
+cd backend && ./mvnw test -Dtest=ImportacionRealManualTests -Dhorario.zip=../datos/gtfs/fomento_transit.zip
+```
+
+La prueba de integración levanta `postgis/postgis:18-3.7` con Testcontainers, aplica las migraciones de Flyway y comprueba PostGIS, `/actuator/health` y `/api/estado`. Las de la importación del horario usan un GTFS pequeño de ejemplo (`backend/src/test/resources/gtfs/ejemplo/`) servido por un servidor HTTP local. La CI de GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) ejecuta lo mismo en cada push y pull request.
 
 ## La prueba técnica (`spike/`)
 

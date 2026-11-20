@@ -1,0 +1,90 @@
+ZIP: 15564301 bytes
+Primera importación (base vacía): CORRECTA en 15227 ms
+Segunda importación (con horario cargado): CORRECTA en 16761 ms
+Tercera (mismo ETag): SIN_CAMBIOS en 18 ms
+Filas y calidad: {stops=1167, routes=277, calendar=450, trips=130297, stop_times=1793333, shapes=144, parada_forma=2513, transfers=19, viajes_tren=113488, viajes_autobus=16809, viajes_tren_con_recorrido=113488, viajes_tren_sin_recorrido=0, viajes_tren_encajan=106111, viajes_tren_menos_de_2_paradas=607, viajes_tren_sin_orden=1004, viajes_tren_lejos_del_recorrido=5766, horas_de_paso_sin_viaje=0, horas_de_paso_sin_parada=0}
+Tamaño del esquema horario (tablas e índices): 313 MB
+Encaje de los viajes de tren en su recorrido, por núcleo:
+  {nucleo=10, viajes=35903, con_recorrido=35903, encajan=35301, sin_orden=179, lejos=423, pct=98.3}
+  {nucleo=20, viajes=12327, con_recorrido=12327, encajan=10557, sin_orden=0, lejos=1770, pct=85.6}
+  {nucleo=30, viajes=4104, con_recorrido=4104, encajan=3881, sin_orden=0, lejos=223, pct=94.6}
+  {nucleo=31, viajes=3573, con_recorrido=3573, encajan=3573, sin_orden=0, lejos=0, pct=100.0}
+  {nucleo=32, viajes=3882, con_recorrido=3882, encajan=3762, sin_orden=120, lejos=0, pct=96.9}
+  {nucleo=40, viajes=8500, con_recorrido=8500, encajan=5776, sin_orden=416, lejos=2308, pct=68.0}
+  {nucleo=41, viajes=1968, con_recorrido=1968, encajan=1838, sin_orden=130, lejos=0, pct=93.4}
+  {nucleo=45, viajes=1132, con_recorrido=1132, encajan=1132, sin_orden=0, lejos=0, pct=100.0}
+  {nucleo=46, viajes=835, con_recorrido=835, encajan=835, sin_orden=0, lejos=0, pct=100.0}
+  {nucleo=47, viajes=787, con_recorrido=787, encajan=787, sin_orden=0, lejos=0, pct=100.0}
+  {nucleo=51, viajes=20755, con_recorrido=20755, encajan=19507, sin_orden=748, lejos=500, pct=94.0}
+  {nucleo=60, viajes=9780, con_recorrido=9780, encajan=9520, sin_orden=0, lejos=260, pct=97.3}
+  {nucleo=61, viajes=2231, con_recorrido=2231, encajan=2231, sin_orden=0, lejos=0, pct=100.0}
+  {nucleo=62, viajes=5504, con_recorrido=5504, encajan=5222, sin_orden=0, lejos=282, pct=94.9}
+  {nucleo=70, viajes=2207, con_recorrido=2207, encajan=2189, sin_orden=18, lejos=0, pct=99.2}
+Recorridos con viajes que no encajan (los 15 con más):
+  {shape_id=40_C6, no_encajan=1292, sin_orden=206, dist_max_m=68918.0}
+  {shape_id=40_C6_INV, no_encajan=1276, sin_orden=210, dist_max_m=68918.0}
+  {shape_id=20_C2_INV, no_encajan=536, sin_orden=0, dist_max_m=418.0}
+  {shape_id=20_C2, no_encajan=536, sin_orden=0, dist_max_m=418.0}
+  {shape_id=20_C5, no_encajan=319, sin_orden=0, dist_max_m=361.0}
+  {shape_id=20_C5_INV, no_encajan=319, sin_orden=0, dist_max_m=361.0}
+  {shape_id=51_R16_INV, no_encajan=198, sin_orden=198, dist_max_m=72.0}
+  {shape_id=51_R11, no_encajan=168, sin_orden=134, dist_max_m=10098.0}
+  {shape_id=41_C3, no_encajan=130, sin_orden=130, dist_max_m=null}
+  {shape_id=51_R2, no_encajan=128, sin_orden=0, dist_max_m=39301.0}
+  {shape_id=10_C2, no_encajan=127, sin_orden=0, dist_max_m=2225.0}
+  {shape_id=51_R16, no_encajan=124, sin_orden=124, dist_max_m=72.0}
+  {shape_id=51_R4, no_encajan=114, sin_orden=114, dist_max_m=15.0}
+  {shape_id=30_C5, no_encajan=114, sin_orden=0, dist_max_m=5243.0}
+  {shape_id=10_C8b, no_encajan=114, sin_orden=114, dist_max_m=null}
+Un viaje de ejemplo de cada recorrido que no encaja (parada: posición · metros al recorrido):
+  {shape_id=10_C2, trip_id=1023V35973C2, paradas=70103: 0.642 · 13 | 70102: 0.468 · 17 | 70101: 0.387 · 1 | 98003: 0.000 · 2225 | 17000: 0.000 · 48}
+  {shape_id=20_C2, trip_id=2023V22200C2, paradas=15211: 1.000 · 24 | 15218: 0.970 · 6 | 15210: 0.854 · 18 | 15209: 0.790 · 7 | 15208: 0.735 · 11 | 16001: 0.581 · 12 | 16002: 0.460 · 13 | 16005: 0.269 · 16 | 16006: 0.237 · 12 | 16008: 0.168 · 9 | 16009: 0.135 · 349 | 16010: 0.075 · 5 | 16011: 0.000 · 418}
+  {shape_id=40_C6, trip_id=4023V18096C6, paradas=65000: 1.000 · 221 | 65003: 0.864 · 1 | 65200: 0.555 · 39 | 65206: 0.249 · 29 | 65208: 0.101 · 24 | 65300: 0.000 · 37 | 65318: 0.000 · 12160 | 65304: 0.000 · 20044 | 65306: 0.000 · 32805 | 65308: 0.000 · 42513 | 65311: 0.000 · 62956 | 65312: 0.000 · 68918}
+  {shape_id=41_C3, trip_id=4123V30770C3, paradas=null}
+  {shape_id=51_R11, trip_id=5123V15900R11, paradas=71801: 0.000 · 43 | 71802: 0.016 · 37 | 79009: 0.031 · 33 | 79004: 0.049 · 37 | 79100: 0.173 · 30 | 79104: 0.309 · 19 | 79105: 0.342 · 28 | 79106: 0.360 · 20 | 79107: 0.398 · 12 | 79200: 0.428 · 43 | 79202: 0.476 · 12 | 79203: 0.513 · 33 | 79204: 0.546 · 16 | 79205: 0.571 · 26 | 79300: 0.598 · 20 | 79301: 0.652 · 14 | 79302: 0.676 · 8 | 79303: 0.700 · 26 | 79304: 0.713 · 24 | 79305: 0.746 · 25 | 79306: 0.779 · 18 | 79308: 0.805 · 22 | 79309: 0.833 · 14 | 79311: 0.909 · 14 | 79312: 0.953 · 22 | 79314: 0.977 · 9 | 79315: 0.989 · 9 | 79316: 1.000 · 32 | 79315: 0.989 · 9}
+  {shape_id=51_R16_INV, trip_id=5123V18050R16, paradas=65314: 0.000 · 28}
+  {shape_id=51_R2, trip_id=5123V25400R2, paradas=71700: 0.000 · 21649 | 71701: 0.000 · 14711 | 71703: 0.000 · 6795 | 71704: 0.000 · 2080 | 71705: 0.004 · 36 | 71706: 0.082 · 31 | 71709: 0.117 · 23 | 71707: 0.245 · 7 | 71708: 0.325 · 16 | 71801: 0.404 · 43 | 71802: 0.457 · 37 | 79009: 0.512 · 33 | 79004: 0.572 · 16 | 79005: 0.676 · 16 | 79011: 0.734 · 11 | 79006: 0.791 · 14 | 79007: 0.856 · 9 | 79100: 0.999 · 29 | 79109: 1.000 · 1921 | 79101: 1.000 · 6747 | 79102: 1.000 · 10302 | 79103: 1.000 · 15721 | 79104: 1.000 · 19122 | 79105: 1.000 · 24407 | 79106: 1.000 · 27015 | 79107: 1.000 · 32720 | 79200: 1.000 · 37133}
+  {shape_id=51_R4, trip_id=5123V33518R4, paradas=78600: 1.000 · 15}
+Distancia de las paradas a su recorrido (parada_forma): {"p50": 15.247442245483398, "p90": 2225.2724609375, "p99": 151119.45125000027, "mas_de_200": 281}
+Próximas salidas de Lleida Pirineus (78805) entre las 08:00 y las 10:00:
+    Sort (actual time=2.030..2.095 rows=965.00 loops=1)
+      Sort Key: salida_s
+      Sort Method: quicksort  Memory: 62kB
+      Buffers: shared hit=332 read=74
+      ->  Bitmap Heap Scan on stop_times st (actual time=0.156..1.909 rows=965.00 loops=1)
+            Recheck Cond: ((stop_id = '78805'::text) AND (salida_s >= 28800) AND (salida_s <= 36000))
+            Heap Blocks: exact=397
+            Buffers: shared hit=332 read=74
+            ->  Bitmap Index Scan on stop_times_salidas_idx (actual time=0.115..0.116 rows=965.00 loops=1)
+                  Index Cond: ((stop_id = '78805'::text) AND (salida_s >= 28800) AND (salida_s <= 36000))
+                  Index Searches: 1
+                  Buffers: shared hit=1 read=8
+    Planning:
+      Buffers: shared hit=11
+    Planning Time: 0.120 ms
+    Execution Time: 2.144 ms
+Las 5 estaciones más cercanas a la plaza de Catalunya:
+    Limit (actual time=7.855..7.865 rows=5.00 loops=1)
+      Buffers: shared hit=152 read=17
+      ->  Index Scan using stops_ubicacion_geog_idx on stops (actual time=7.854..7.862 rows=5.00 loops=1)
+            Order By: ((ubicacion)::geography <-> '0101000020E61000005C8FC2F5285C0140A8C64B3789B14440'::geography)
+            Index Searches: 1
+            Buffers: shared hit=152 read=17
+    Planning:
+      Buffers: shared hit=48 read=6 dirtied=1
+    Planning Time: 11.648 ms
+    Execution Time: 7.892 ms
+Paradas de un viaje en orden:
+    Index Scan using stop_times_pkey on stop_times (actual time=0.185..0.185 rows=0.00 loops=1)
+      Index Cond: (trip_id = (InitPlan 1).col1)
+      Index Searches: 1
+      Buffers: shared hit=334 read=1
+      InitPlan 1
+        ->  Limit (actual time=0.156..0.157 rows=1.00 loops=1)
+              Buffers: shared hit=332
+              ->  Seq Scan on trips (actual time=0.156..0.156 rows=1.00 loops=1)
+                    Buffers: shared hit=332
+    Planning:
+      Buffers: shared hit=5
+    Planning Time: 0.109 ms
+    Execution Time: 0.195 ms
