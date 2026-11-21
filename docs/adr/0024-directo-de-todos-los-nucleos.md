@@ -15,8 +15,8 @@ Iván quiere ver a la vez los trenes de todos los núcleos (unos 330-400). El di
    - «Toda España» es la primera opción del selector y se enlaza con `?nucleo=todos`; Rodalies sigue por defecto;
    - el mapa encuadra el rectángulo que contiene los `limites` de todos los núcleos (la península);
    - **el filtro de línea se desactiva**, con una nota que dice por qué: los nombres se repiten entre núcleos (C1 en Madrid, Valencia, Asturias, Sevilla…). Agruparlo por núcleo obligaría a llevar el núcleo en el filtro, en la URL y en la consulta del recorrido, para un caso (ver una línea concreta) que ya resuelve elegir su núcleo;
-   - la lista enseña el núcleo de cada tren y se ordena por él;
-   - la RL4 se resalta también en toda España, ahora por núcleo y línea (`51` + `RL4`); su botón lleva a Rodalies con la RL4 filtrada.
+   - la lista se agrupa por núcleo, con un encabezado por grupo.
+5. **La RL4 ya no se destaca** (Iván, 21-11), ni con un núcleo ni con toda España.
 
 ## Alternativas
 

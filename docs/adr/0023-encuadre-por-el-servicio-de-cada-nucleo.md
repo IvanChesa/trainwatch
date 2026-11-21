@@ -23,14 +23,14 @@ Con ellas, el rectángulo iba de Zaragoza a Francia (4° de ancho): zoom 6,8 en 
 1. **Cada estación pesa sus horas de paso** (filas de `stop_times` de trenes, sin autobuses) y, **en cada eje por separado**, se quita por cada lado lo que sume menos del **0,5 %** del total (`ExtensionDelServicio`). Queda el rectángulo donde pasa el 99 % del servicio en cada eje.
 2. `limites`, `centro` y `zoom` salen de ese rectángulo. El campo se sigue llamando `limites`; cambia su descripción en OpenAPI.
 3. Se calcula en Java sobre una consulta que agrupa las horas de paso por núcleo y estación (unas 1.000 filas) y se guarda en memoria hasta el horario siguiente, como antes.
-4. En la web, el primer encuadre va **sin animación** (el mapa aparece ya encuadrado) y los siguientes, con un vuelo de 0,8 s salvo con movimiento reducido. Si el contenedor aún no tiene tamaño, se espera a su primer `resize`.
+4. En la web, el primer encuadre va **sin animación** (el mapa aparece ya encuadrado) y los siguientes, con un vuelo de 0,8 s salvo con movimiento reducido. Si el contenedor aún no tiene tamaño, se espera a su primer `resize`. El margen **sustituye** al que MapLibre tenga guardado (`absolutePadding`: el de la ficha de un tren se sumaba) y el zoom no pasa de 12.
 
 Resultado con el horario real: Rodalies pasa de lon −0,82…3,16 a **0,54…3,15** (de Flix a Portbou y del sur de Tortosa a Colera; dentro Lleida, Tortosa y Girona; Puigcerdà queda 2,5 km por encima del borde) y de zoom 6,9 a **7,4**; Bilbao, de −5,57 a −4,91 (zoom 7,5 → 7,9); Madrid, Asturias, Sevilla, Cádiz y Santander se acercan entre 0,1 y 0,4 niveles; el resto no cambia.
 
 ## Alternativas
 
 - **Estaciones distintas sin peso, con percentiles:** una estación con 2 trenes al día pesaría como Sants; con pocas estaciones lejanas pero numerosas (la R15 tiene 9 en Aragón) no las quitaría.
-- **Recortar el 1 % por lado:** deja fuera Lleida-Pirineus por 0,02° (la RL4, que la web destaca, sale de Lleida).
+- **Recortar el 1 % por lado:** deja fuera Lleida-Pirineus por 0,02° (la estación de Lleida, de donde salen sus líneas RL).
 - **Encuadrar los trenes en directo, no las estaciones:** el encuadre cambiaría con la hora y a primera hora de la mañana enseñaría tres trenes; además, al abrir aún no han llegado.
 - **Límites fijos a mano por núcleo:** a mano no se mantienen cuando Renfe cambia el horario.
 - **Arreglarlo solo en la web** (más zoom, menos margen): ocultaría el síntoma en una pantalla y no en otra.
