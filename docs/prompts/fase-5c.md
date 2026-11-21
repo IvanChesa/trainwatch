@@ -64,7 +64,7 @@ TrainWatch está en producción en `trainwatch.ivanchesa.com` (web) y `trainwatc
      **La cuenta la crea Iván**, y también los monitores, o una clave de API que pega él en la terminal, nunca en el chat ni en un fichero. Tú deja en `docs/despliegue.md` los pasos exactos y la configuración de cada monitor.
    - **La vigilancia de GitHub** se queda como segunda capa: documenta que no es fiable. Pon una línea en el informe y en la guía de defensa: por qué un vigilante externo.
 
-8. **SEO mínimo** (Iván, 21-11, a partir de los estudios de la competencia: `C:\Users\ivan\Ivan Chesa AI\estudios-trainwatch\05-mejoras-trainwatch.md`, bloque A; léelo).
+8. **SEO mínimo** (Iván, 21-11, a partir de los estudios de la competencia: `docs/estudios/05-mejoras-trainwatch.md`, bloque A; léelo).
    - **Dos fallos comprobados el 21-11 en producción:**
      - `https://trainwatch.ivanchesa.com/sitemap.xml` devuelve el `index.html` de la SPA (200, `text/html`);
      - cualquier ruta que no existe (`/esta-pagina-no-existe`) responde 200.
