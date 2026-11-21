@@ -219,13 +219,17 @@ describe('App', () => {
     // Los avisos de todos los núcleos.
     expect(fetch).toHaveBeenCalledWith('/api/avisos', expect.anything());
 
-    // La lista: el núcleo de cada tren, ordenada por núcleo (Madrid antes que Rodalies).
+    // El selector de núcleo también dice por qué no hay filtro de línea (el de línea, desactivado, no recibe el foco).
+    expect(screen.getByRole('combobox', { name: 'Núcleo' })).toHaveAccessibleDescription(/elige un núcleo/);
+
+    // La lista, agrupada por núcleo con un encabezado por grupo (Madrid antes que Rodalies).
     fireEvent.click(screen.getByRole('button', { name: 'Lista' }));
     const lista = screen.getByRole('region', { name: 'Trenes de toda España' });
-    const botones = within(lista).getAllByRole('button');
-    expect(botones).toHaveLength(4);
-    expect(botones[0]).toHaveTextContent(/^C5Madrid/);
-    expect(botones[1]).toHaveTextContent('Rodalies de Catalunya');
+    const grupos = within(lista).getAllByRole('heading', { level: 3 });
+    expect(grupos.map((g) => g.textContent)).toEqual(['Madrid (1 tren)', 'Rodalies de Catalunya (3 trenes)']);
+    const madrid = within(lista).getByRole('region', { name: 'Madrid (1 tren)' });
+    expect(within(madrid).getByRole('button')).toHaveTextContent(/^C5, Hacia Humanes/);
+    expect(within(lista).getAllByRole('button')).toHaveLength(4);
   });
 
   it('«Toda España» se elige en el selector y se vuelve a un núcleo', async () => {

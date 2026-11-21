@@ -256,8 +256,12 @@ test('«Toda España» enseña los trenes de todos los núcleos con la penínsul
   await page.getByRole('button', { name: 'Lista' }).click();
   const lista = page.getByRole('region', { name: 'Trenes de toda España' });
   await expect(lista.getByRole('button')).toHaveCount(6);
-  await expect(lista.getByRole('button').first()).toContainText('Bilbao');
-  await expect(lista).toContainText('Madrid');
-  await expect(lista).toContainText('Rodalies de Catalunya');
+  // Agrupada por núcleo, con un encabezado por grupo.
+  await expect(lista.getByRole('heading', { level: 3 })).toHaveText([
+    'Bilbao (1 tren)',
+    'Madrid (1 tren)',
+    'Rodalies de Catalunya (3 trenes)',
+    'Sevilla (1 tren)',
+  ]);
   expect(vigilancia.errores).toEqual([]);
 });

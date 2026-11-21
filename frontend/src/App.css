@@ -99,6 +99,15 @@
   background: var(--fondo);
   font-size: 0.95rem;
 }
+/* Desactivado («Toda España»): que se vea, no solo que no responda (`color: inherit` quita el gris del navegador). */
+.campo select:disabled {
+  border-style: dashed;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.campo:has(select:disabled) > span {
+  opacity: 0.75;
+}
 
 .acciones {
   display: flex;
@@ -321,10 +330,21 @@
 .lista__destino {
   font-weight: 600;
 }
+.lista__grupo + .lista__grupo {
+  margin-top: 18px;
+}
+.lista__grupo {
+  /* Con ~400 trenes, el navegador no pinta los grupos que no se ven. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
+}
 .lista__nucleo {
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.lista__cuantos {
+  font-weight: 400;
   color: var(--sec);
 }
 .lista__detalle {
@@ -516,6 +536,15 @@
   .resumen,
   .cobertura {
     display: none;
+  }
+  /* En el móvil, la nota de «Toda España» se queda en lo esencial; el ejemplo lo sigue leyendo el lector de pantalla. */
+  .nota__extra {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
   }
   .panel {
     gap: 8px;

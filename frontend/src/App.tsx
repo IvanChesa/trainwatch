@@ -189,16 +189,21 @@ export default function App() {
             <span>Núcleo</span>
             <select
               value={String(nucleoId)}
+              aria-describedby={esTodos ? 'linea-con-todos' : undefined}
               onChange={(e) => cambiarNucleo(e.target.value === TODOS ? TODOS : Number(e.target.value))}
             >
               {listaNucleos.length === 0 && !esTodos && <option value={nucleoId}>Cargando los núcleos…</option>}
               <option value={TODOS}>Toda España</option>
-              {listaNucleos.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.nombre}
-                  {n.estado === 'EN_DIRECTO' ? '' : ` (${n.estadoTexto})`}
-                </option>
-              ))}
+              {listaNucleos.length > 0 && (
+                <optgroup label="Núcleos">
+                  {listaNucleos.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.nombre}
+                      {n.estado === 'EN_DIRECTO' ? '' : ` (${n.estadoTexto})`}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </label>
           <label className="campo">
@@ -213,7 +218,7 @@ export default function App() {
                 setSeleccion(null);
               }}
             >
-              <option value="">{esTodos ? 'Todas (elige un núcleo para filtrar)' : 'Todas las líneas'}</option>
+              <option value="">Todas las líneas</option>
               {lineas.map((l) => (
                 <option key={l} value={l}>
                   {l}
@@ -223,12 +228,18 @@ export default function App() {
           </label>
         </div>
 
-        {esTodos && (
-          <p className="nota" id="linea-con-todos">
-            Los trenes de todos los núcleos a la vez. Para filtrar por línea, elige un núcleo: los nombres de las
-            líneas se repiten (hay una C1 en Madrid, otra en Valencia…).
-          </p>
-        )}
+        {/* Siempre en la página (vacía si no hace falta): una región viva solo anuncia lo que cambia dentro de ella. */}
+        <p className={esTodos ? 'nota' : 'solo-lector'} id="linea-con-todos" aria-live="polite">
+          {esTodos && (
+            <>
+              Para filtrar por línea, elige un núcleo
+              <span className="nota__extra">
+                : los nombres de las líneas se repiten (hay una C1 en Madrid, otra en Valencia…)
+              </span>
+              .
+            </>
+          )}
+        </p>
         {nucleo && nucleo.estado !== 'EN_DIRECTO' && (
           <p className="aviso-nucleo">
             {nucleo.estado === 'SIN_DATOS_EN_DIRECTO'
