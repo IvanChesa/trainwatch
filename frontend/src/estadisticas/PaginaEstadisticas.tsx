@@ -1,0 +1,481 @@
+import { useEffect } from 'react';
+import { pedirJson } from '../api/consultas';
+import { useConsulta } from '../api/useConsulta';
+import { BarraCelda, Columnas, Reparto } from './Graficos';
+import { Bloque, CeldasCifras, Cifrado, Contexto, ElegirPeriodo, SinPublicar } from './Comunes';
+import {
+  entero,
+  fechaCorta,
+  frase,
+  franja,
+  hallazgoRanking,
+  minutos,
+  NOTA_CANCELADOS,
+  numero,
+  ordenHora,
+  porcentaje,
+  textoInsuficiente,
+} from './formato';
+import { rutaApiDe, urlLinea, urlNucleo, urlTodos, type RutaEstadisticas } from './ruta';
+import type { Cifras, PuntualidadLinea, PuntualidadNucleo, PuntualidadTodos } from './tipos';
+import './estadisticas.css';
+
+/** Las páginas de estadísticas: toda España, un núcleo o una línea, según la ruta (`ruta.ts`). */
+export default function PaginaEstadisticas({ ruta }: { ruta: RutaEstadisticas }) {
+  const consulta = useConsulta<PuntualidadTodos | PuntualidadNucleo | PuntualidadLinea>(rutaApiDe(ruta), (s) =>
+    pedirJson(rutaApiDe(ruta), s),
+  );
+  const irA = (desde: string, hasta: string) => {
+    const url =
+      ruta.tipo === 'todos'
+        ? urlTodos(desde, hasta)
+        : ruta.tipo === 'nucleo'
+          ? urlNucleo(ruta.nucleo, desde, hasta)
+          : urlLinea(ruta.nucleo, ruta.linea, desde, hasta);
+    window.location.assign(url);
+  };
+
+  let titulo = 'Puntualidad en toda España';
+  if (consulta.tipo === 'lista') {
+    const d = consulta.datos;
+    if ('lineas' in d) titulo = `Puntualidad en ${d.nombre}`;
+    else if ('linea' in d) titulo = `Puntualidad de la ${d.linea} (${d.nombreNucleo})`;
+  } else if (ruta.tipo === 'nucleo') titulo = 'Puntualidad del núcleo';
+  else if (ruta.tipo === 'linea') titulo = `Puntualidad de la ${ruta.linea}`;
+
+  useEffect(() => {
+    document.title = `${titulo} · TrainWatch`;
+  }, [titulo]);
+
+  // Esta página se desplaza en el documento (el mapa, no: index.css lo bloquea). Así funcionan AvPág y Espacio desde el
+  // principio y el navegador recuerda la posición al volver atrás.
+  useEffect(() => {
+    document.documentElement.classList.add('con-desplazamiento');
+    return () => document.documentElement.classList.remove('con-desplazamiento');
+  }, []);
+
+  const mapa =
+    ruta.tipo === 'todos'
+      ? '/?nucleo=todos'
+      : ruta.tipo === 'linea'
+        ? `/?nucleo=${ruta.nucleo}&linea=${encodeURIComponent(ruta.linea)}`
+        : `/?nucleo=${ruta.nucleo}`;
+
+  return (
+    <div className="estad">
+      <a className="saltar" href="#contenido">
+        Ir al contenido
+      </a>
+      <header className="estad__barra">
+        <a className="estad__marca" href="/" translate="no">
+          TrainWatch
+        </a>
+        <nav aria-label="Secciones">
+          <a href={mapa}>Mapa en directo</a>
+          <a href={urlTodos()} aria-current={ruta.tipo === 'todos' ? 'page' : undefined}>
+            Puntualidad
+          </a>
+        </nav>
+        <p className="estad__no-oficial">
+          Proyecto personal <strong>no oficial</strong>, sin relación con Renfe ni con Adif.
+        </p>
+      </header>
+
+      <main id="contenido" className="estad__contenido" tabIndex={-1}>
+        <Migas ruta={ruta} datos={consulta.tipo === 'lista' ? consulta.datos : null} />
+        <h1>{titulo}</h1>
+        <p className="nota" role="status">
+          {consulta.tipo === 'cargando' ? 'Cargando las cifras…' : ''}
+        </p>
+        {consulta.tipo === 'error' && (
+          <p className="nota" role="alert">
+            {consulta.status === 404
+              ? 'No hay datos de esta página: puede que el núcleo o la línea no existan.'
+              : `No se han podido cargar las cifras (${consulta.mensaje}). Vuelve a probar en unos minutos.`}
+          </p>
+        )}
+        {consulta.tipo === 'lista' &&
+          ('nucleos' in consulta.datos ? (
+            <VistaTodos datos={consulta.datos} alCambiarPeriodo={irA} />
+          ) : 'lineas' in consulta.datos ? (
+            <VistaNucleo datos={consulta.datos} alCambiarPeriodo={irA} />
+          ) : (
+            <VistaLinea datos={consulta.datos} alCambiarPeriodo={irA} />
+          ))}
+      </main>
+
+      <footer className="estad__pie">
+        <p>
+          Datos: Renfe (CC BY 4.0). Cifras propias de TrainWatch, calculadas con los trenes vistos en directo: no son
+          las oficiales de Renfe. Proyecto no oficial.
+        </p>
+      </footer>
+    </div>
+  );
+}
+
+function Migas({
+  ruta,
+  datos,
+}: {
+  ruta: RutaEstadisticas;
+  datos: PuntualidadTodos | PuntualidadNucleo | PuntualidadLinea | null;
+}) {
+  if (ruta.tipo === 'todos') return null;
+  const nombreNucleo = datos && 'nombreNucleo' in datos ? datos.nombreNucleo : datos && 'nombre' in datos ? datos.nombre : `Núcleo ${ruta.nucleo}`;
+  return (
+    <nav className="migas" aria-label="Estás en">
+      <ol>
+        <li>
+          <a href={urlTodos(ruta.desde, ruta.hasta)}>Toda España</a>
+        </li>
+        <li>
+          <span className="migas__sep" aria-hidden="true">
+            ›
+          </span>
+          {ruta.tipo === 'linea' ? (
+            <a href={urlNucleo(ruta.nucleo, ruta.desde, ruta.hasta)}>{nombreNucleo}</a>
+          ) : (
+            <span aria-current="page">{nombreNucleo}</span>
+          )}
+        </li>
+        {ruta.tipo === 'linea' && (
+          <li>
+            <span className="migas__sep" aria-hidden="true">
+              ›
+            </span>
+            <span aria-current="page">{datos && 'linea' in datos ? datos.linea : ruta.linea}</span>
+          </li>
+        )}
+      </ol>
+    </nav>
+  );
+}
+
+// ---------------------------------------------------------------- toda España
+
+function VistaTodos({ datos, alCambiarPeriodo }: { datos: PuntualidadTodos; alCambiarPeriodo(d: string, h: string): void }) {
+  if (!datos.publicacion.publicado) return <SinPublicar publicacion={datos.publicacion} />;
+  const minimo = datos.publicacion.muestraMinima;
+  const hallazgo = hallazgoRanking(datos.nucleos);
+  return (
+    <>
+      <p className="hallazgo">{hallazgo ?? 'Aún no hay ningún núcleo con datos suficientes en este periodo.'}</p>
+      <Contexto periodo={datos.periodo} coberturas={[{ etiqueta: 'Cobertura de toda España', cobertura: datos.cobertura }]} muestra={datos.muestra} />
+      <ElegirPeriodo periodo={datos.periodo} alCambiar={alCambiarPeriodo} />
+      <Bloque
+        id="ranking-nucleos"
+        titulo="Los núcleos, del más puntual al que menos"
+        explicacion="Por el porcentaje de paradas a las que los trenes llegan con menos de 3 minutos de retraso. Las líneas se comparan dentro de cada núcleo: sus nombres se repiten (hay una C1 en Madrid, otra en Valencia…)."
+      >
+        <table className="tabla">
+          <caption className="solo-lector">Ranking de puntualidad de los núcleos</caption>
+          <thead>
+            <tr>
+              <th scope="col" className="cifra">Puesto</th>
+              <th scope="col">Núcleo</th>
+              <th scope="col" className="cifra">Menos de 3 min</th>
+              <th scope="col" className="cifra">5 min o menos</th>
+              <th scope="col" className="cifra">Media</th>
+              <th scope="col" className="cifra">Viajes</th>
+              <th scope="col" className="cifra">Cobertura</th>
+            </tr>
+          </thead>
+          <tbody>
+            {datos.nucleos.map((n) => (
+              <tr key={n.nucleo}>
+                <td className="cifra">{n.puesto ?? '—'}</td>
+                <th scope="row">
+                  <a href={urlNucleo(n.nucleo, datos.periodo.desde, datos.periodo.hasta)}>{n.nombre}</a>
+                </th>
+                {n.cifras.suficiente && n.cifras.porcentajes ? (
+                  <>
+                    <td className="cifra">
+                      <BarraCelda valor={n.cifras.porcentajes.menosDe3} />
+                      {porcentaje(n.cifras.porcentajes.menosDe3)}
+                    </td>
+                    <td className="cifra">{porcentaje(n.cifras.porcentajes.hasta5)}</td>
+                    <td className="cifra">{minutos(n.cifras.mediaMinutos)}</td>
+                  </>
+                ) : (
+                  <td colSpan={3} className="nota">
+                    {textoInsuficiente(n.cifras, minimo)}
+                  </td>
+                )}
+                <td className="cifra">{entero(n.cifras.viajes)}</td>
+                <td className="cifra">{porcentaje(n.cobertura?.porcentaje)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Bloque>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- núcleo
+
+function VistaNucleo({ datos, alCambiarPeriodo }: { datos: PuntualidadNucleo; alCambiarPeriodo(d: string, h: string): void }) {
+  if (!datos.publicacion.publicado) return <SinPublicar publicacion={datos.publicacion} />;
+  const minimo = datos.publicacion.muestraMinima;
+  const filas = datos.lineas.map((l) => ({ ...l, nombre: l.linea }));
+  const hallazgo = hallazgoRanking(filas);
+  return (
+    <>
+      <p className="hallazgo">{hallazgo ?? 'Aún no hay ninguna línea con datos suficientes en este periodo.'}</p>
+      <Contexto periodo={datos.periodo} coberturas={[{ etiqueta: 'Cobertura del núcleo', cobertura: datos.cobertura }]} muestra={datos.muestra} />
+      <ElegirPeriodo periodo={datos.periodo} alCambiar={alCambiarPeriodo} />
+      <Bloque
+        id="ranking-lineas"
+        titulo="Las líneas, de la más puntual a la que menos"
+        explicacion={`Por el porcentaje de paradas a las que llegan con menos de 3 minutos de retraso, y luego por la media. Las que no llegan a ${minimo} viajes van al final, sin puesto. Cancelados: ${NOTA_CANCELADOS.charAt(0).toLowerCase()}${NOTA_CANCELADOS.slice(1)}`}
+      >
+        <table className="tabla">
+          <caption className="solo-lector">Ranking de puntualidad de las líneas de {datos.nombre}</caption>
+          <thead>
+            <tr>
+              <th scope="col" className="cifra">Puesto</th>
+              <th scope="col">Línea</th>
+              <th scope="col" className="cifra">Menos de 3 min</th>
+              <th scope="col" className="cifra">5 min o menos</th>
+              <th scope="col" className="cifra">Media</th>
+              <th scope="col" className="cifra">Viajes</th>
+              <th scope="col" className="cifra">Cancelados</th>
+              <th scope="col" className="cifra">Cobertura</th>
+            </tr>
+          </thead>
+          <tbody>
+            {datos.lineas.map((l) => (
+              <tr key={l.linea}>
+                <td className="cifra">{l.puesto ?? '—'}</td>
+                <th scope="row">
+                  <a href={urlLinea(datos.nucleo, l.linea, datos.periodo.desde, datos.periodo.hasta)}>{l.linea}</a>
+                </th>
+                {l.cifras.suficiente && l.cifras.porcentajes ? (
+                  <>
+                    <td className="cifra">
+                      <BarraCelda valor={l.cifras.porcentajes.menosDe3} />
+                      {porcentaje(l.cifras.porcentajes.menosDe3)}
+                    </td>
+                    <td className="cifra">{porcentaje(l.cifras.porcentajes.hasta5)}</td>
+                    <td className="cifra">{minutos(l.cifras.mediaMinutos)}</td>
+                  </>
+                ) : (
+                  <td colSpan={3} className="nota">
+                    {textoInsuficiente(l.cifras, minimo)}
+                  </td>
+                )}
+                <td className="cifra">{entero(l.cifras.viajes)}</td>
+                <td className="cifra">{entero(l.cancelados)}</td>
+                <td className="cifra">{porcentaje(l.cobertura?.porcentaje)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Bloque>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- línea
+
+const DIAS_CORTOS = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+
+function media(c: Cifras): number | null {
+  return c.suficiente ? c.mediaMinutos : null;
+}
+
+function TablaSerie({
+  titulo,
+  cabecera,
+  filas,
+  minimo,
+}: {
+  titulo: string;
+  cabecera: string;
+  filas: { clave: string; etiqueta: string; cifras: Cifras }[];
+  minimo: number;
+}) {
+  return (
+    <table className="tabla">
+      <caption className="solo-lector">{titulo}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{cabecera}</th>
+          <th scope="col" className="cifra">Media</th>
+          <th scope="col" className="cifra">Menos de 3 min</th>
+          <th scope="col" className="cifra">5 min o menos</th>
+          <th scope="col" className="cifra">Viajes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filas.map((f) => (
+          <tr key={f.clave}>
+            <th scope="row">{f.etiqueta}</th>
+            <CeldasCifras cifras={f.cifras} minimo={minimo} />
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function VistaLinea({ datos, alCambiarPeriodo }: { datos: PuntualidadLinea; alCambiarPeriodo(d: string, h: string): void }) {
+  if (!datos.publicacion.publicado) return <SinPublicar publicacion={datos.publicacion} />;
+  const minimo = datos.publicacion.muestraMinima;
+  const r = datos.resumen;
+  // En el orden del día de servicio: de las 4 a las 3 (lo de pasada la medianoche, al final).
+  const horas = [...datos.porHora].sort((a, b) => ordenHora(a.hora) - ordenHora(b.hora));
+  const destino = datos.llegadaDestino;
+  return (
+    <>
+      <p className="hallazgo">{frase(r) ?? (r ? `${textoInsuficiente(r, minimo)}.` : 'Sin datos.')}</p>
+      <Contexto
+        periodo={datos.periodo}
+        coberturas={[
+          { etiqueta: 'Cobertura de la línea', cobertura: datos.coberturaLinea },
+          { etiqueta: `Cobertura de ${datos.nombreNucleo}`, cobertura: datos.coberturaNucleo },
+        ]}
+        muestra={datos.muestra}
+      />
+      <ElegirPeriodo periodo={datos.periodo} alCambiar={alCambiarPeriodo} />
+
+      {r && (
+        <section className="bloque" aria-labelledby="resumen-titulo">
+          <h2 id="resumen-titulo">Todo el periodo</h2>
+          <Cifrado cifras={r} minimo={minimo} />
+          {r.suficiente && r.porcentajes && <Reparto porcentajes={r.porcentajes} titulo="Paradas por retraso al llegar" />}
+          {datos.muestra && datos.muestra.cancelados !== null && (
+            <p className="bloque__explicacion">
+              <strong>
+                {entero(datos.muestra.cancelados)} {datos.muestra.cancelados === 1 ? 'viaje cancelado' : 'viajes cancelados'}
+              </strong>{' '}
+              en el periodo (no cuentan como retraso). {NOTA_CANCELADOS}
+            </p>
+          )}
+          {destino && (
+            <p className="bloque__explicacion">
+              {destino.suficiente
+                ? `Al llegar a su destino, ${minutos(destino.mediaMinutos)} de media y el ${porcentaje(destino.menosDe3)} con menos de 3 min (${entero(destino.viajesEnDestino)} de ${entero(destino.viajes)} viajes se vieron llegar).`
+                : `Llegada a destino: solo ${entero(destino.viajesEnDestino)} de ${entero(destino.viajes)} viajes se vieron llegar, y hacen falta ${minimo} para dar la cifra.`}
+            </p>
+          )}
+        </section>
+      )}
+
+      <Bloque
+        id="por-hora"
+        titulo="Por hora"
+        explicacion={`Retraso medio, en minutos, según la hora programada de llegada a la parada, en el orden del día de servicio (de las 4 a las 3). «—»: menos de ${minimo} viajes en esa hora.`}
+        ancho
+        grafico={
+          horas.some((h) => media(h.cifras) !== null) ? (
+            <Columnas columnas={horas.map((h) => ({ clave: String(h.hora), etiqueta: String(h.hora).padStart(2, '0'), valor: media(h.cifras) }))} />
+          ) : undefined
+        }
+      >
+        {horas.length === 0 ? (
+          <p className="nota">Sin datos en este periodo.</p>
+        ) : (
+          <TablaSerie
+            titulo={`Puntualidad de la ${datos.linea} por hora`}
+            minimo={minimo}
+            cabecera="Hora"
+            filas={horas.map((h) => ({ clave: String(h.hora), etiqueta: franja(h.hora), cifras: h.cifras }))}
+          />
+        )}
+      </Bloque>
+
+      <Bloque
+        id="por-dia"
+        titulo="Por día de la semana"
+        explicacion="Del día de servicio: un tren que sale el viernes a las 23:50 cuenta en viernes."
+        grafico={
+          datos.porDiaSemana.some((d) => media(d.cifras) !== null) ? (
+            <Columnas columnas={datos.porDiaSemana.map((d) => ({ clave: String(d.dia), etiqueta: DIAS_CORTOS[d.dia - 1], valor: media(d.cifras) }))} />
+          ) : undefined
+        }
+      >
+        {datos.porDiaSemana.length === 0 ? (
+          <p className="nota">Sin datos en este periodo.</p>
+        ) : (
+          <TablaSerie
+            titulo={`Puntualidad de la ${datos.linea} por día de la semana`}
+            minimo={minimo}
+            cabecera="Día"
+            filas={datos.porDiaSemana.map((d) => ({
+              clave: String(d.dia),
+              etiqueta: `${d.nombre} (${d.dias} ${d.dias === 1 ? 'día' : 'días'})`,
+              cifras: d.cifras,
+            }))}
+          />
+        )}
+      </Bloque>
+
+      <Bloque
+        id="por-semana"
+        titulo="Semana a semana"
+        grafico={
+          datos.porSemana.some((x) => media(x.cifras) !== null) ? (
+            <Columnas columnas={datos.porSemana.map((s) => ({ clave: s.lunes, etiqueta: fechaCorta(s.lunes), valor: media(s.cifras) }))} />
+          ) : undefined
+        }
+      >
+        {datos.porSemana.length === 0 ? (
+          <p className="nota">Sin datos en este periodo.</p>
+        ) : (
+          <TablaSerie
+            titulo={`Puntualidad de la ${datos.linea} semana a semana`}
+            minimo={minimo}
+            cabecera="Semana del"
+            filas={datos.porSemana.map((s) => ({
+              clave: s.lunes,
+              etiqueta: `${fechaCorta(s.lunes)}${s.dias < 7 ? ` (${s.dias} ${s.dias === 1 ? 'día' : 'días'})` : ''}`,
+              cifras: s.cifras,
+            }))}
+          />
+        )}
+      </Bloque>
+
+      <Bloque
+        id="tramos"
+        titulo="Dónde se pierde el tiempo"
+        explicacion={`Los tramos entre dos paradas seguidas en los que los trenes llegan con más retraso del que traían, de media. Solo los tramos con ${minimo} pasos o más.`}
+      >
+        {datos.tramos.length === 0 ? (
+          <p className="nota">Aún no hay ningún tramo con {minimo} pasos de trenes en este periodo.</p>
+        ) : (
+          <table className="tabla">
+            <caption className="solo-lector">Tramos de la {datos.linea} con más retraso</caption>
+            <thead>
+              <tr>
+                <th scope="col">Tramo</th>
+                <th scope="col" className="cifra">Minutos perdidos de media</th>
+                <th scope="col" className="cifra">Pierden 2 min o más</th>
+                <th scope="col" className="cifra">Pasos</th>
+              </tr>
+            </thead>
+            <tbody>
+              {datos.tramos.map((t) => (
+                <tr key={`${t.desde.stopId}-${t.hasta.stopId}`}>
+                  <th scope="row">
+                    {t.desde.nombre ?? t.desde.stopId}{' '}
+                    <span aria-hidden="true">→</span>
+                    <span className="solo-lector">a</span> {t.hasta.nombre ?? t.hasta.stopId}
+                  </th>
+                  <td className="cifra">
+                    {t.mediaMinutos === null
+                      ? '—'
+                      : `${t.mediaMinutos > 0 ? '+' : ''}${numero(t.mediaMinutos)}\u00a0min`}
+                  </td>
+                  <td className="cifra">{porcentaje(t.pierden2OMas)}</td>
+                  <td className="cifra">{entero(t.pasos)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Bloque>
+    </>
+  );
+}

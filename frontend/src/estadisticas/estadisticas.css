@@ -1,0 +1,406 @@
+/*
+ * Páginas de estadísticas: una columna centrada, sin barra lateral (es un informe que se lee, no un panel de mando).
+ * Los colores son los del tema (index.css). Las superficies se separan por un paso de tono, no por cajas ni sombras;
+ * las tablas sí llevan líneas, que es lo suyo. Las cifras, con números tabulares para que se alineen.
+ */
+
+/* El mapa bloquea el desplazamiento del documento (index.css); estas páginas lo recuperan mientras están abiertas. */
+html.con-desplazamiento body {
+  overflow: auto;
+}
+html.con-desplazamiento #root {
+  height: auto;
+  min-height: 100%;
+}
+
+.estad {
+  --borde-control: #6b7079; /* 3,8:1 contra el fondo: el borde se ve (WCAG 1.4.11). */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.estad .saltar {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 10;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--texto-fuerte);
+  color: var(--fondo);
+}
+.estad .saltar:focus {
+  top: 12px;
+}
+
+.estad__barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 24px;
+  padding: 14px clamp(16px, 4vw, 32px);
+  background: var(--panel);
+}
+.estad__marca {
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--texto-fuerte);
+  text-decoration: none;
+}
+.estad__barra nav {
+  display: flex;
+  gap: 4px 18px;
+  flex-wrap: wrap;
+}
+.estad__barra nav a {
+  display: inline-block;
+  padding: 10px 0;
+  color: var(--texto);
+}
+.estad__barra nav a:hover {
+  color: var(--texto-fuerte);
+  text-decoration-thickness: 2px;
+}
+.estad__barra nav a[aria-current='page'] {
+  color: var(--texto-fuerte);
+  font-weight: 600;
+  text-decoration-thickness: 2px;
+}
+.estad__no-oficial {
+  margin-left: auto;
+  color: var(--sec);
+  font-size: 0.9rem;
+}
+
+.estad__contenido {
+  flex: 1;
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px clamp(16px, 4vw, 32px) 56px;
+}
+.estad__contenido:focus {
+  outline: none;
+}
+.estad h1 {
+  margin-top: 6px;
+  font-size: clamp(1.6rem, 4.5vw, 2.4rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--texto-fuerte);
+  text-wrap: balance;
+}
+.estad h2 {
+  font-size: 1.2rem;
+  color: var(--texto-fuerte);
+}
+
+.migas ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--sec);
+  font-size: 0.95rem;
+}
+.migas__sep {
+  margin-right: 4px;
+  color: var(--sec);
+}
+.migas a {
+  display: inline-block;
+  padding: 6px 0;
+}
+
+.hallazgo {
+  max-width: 44rem;
+  margin-top: 12px;
+  font-size: clamp(1.05rem, 2.4vw, 1.3rem);
+  color: var(--texto-fuerte);
+}
+
+.estad .nota {
+  color: var(--sec);
+}
+
+/* Lo que va siempre con una cifra: periodo, qué cuenta y cobertura. */
+.contexto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 12px 28px;
+  margin: 20px 0 0;
+  padding: 14px 16px;
+  border-radius: var(--radio);
+  background: var(--panel);
+}
+.contexto dt {
+  color: var(--sec);
+  font-size: 0.9rem;
+}
+.contexto dd {
+  margin: 2px 0 0;
+}
+.contexto--aviso dd {
+  color: var(--aviso);
+}
+
+.elegir-periodo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  margin-top: 16px;
+}
+.elegir-periodo label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+  color: var(--sec);
+}
+.elegir-periodo input {
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--borde-control);
+  border-radius: 8px;
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+}
+.elegir-periodo input[aria-invalid='true'] {
+  border-color: var(--aviso);
+}
+.elegir-periodo__error {
+  flex-basis: 100%;
+  color: var(--aviso);
+}
+.estad .boton {
+  min-height: 44px;
+  padding: 6px 18px;
+  border: 1px solid var(--borde-control);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--texto);
+  font: inherit;
+  cursor: pointer;
+}
+.estad .boton:hover {
+  border-color: var(--sec);
+}
+
+.sin-publicar {
+  margin-top: 28px;
+  padding: 24px;
+  border-radius: var(--radio);
+  background: var(--panel);
+}
+.sin-publicar p:first-of-type {
+  margin-top: 8px;
+  font-size: clamp(1.1rem, 2.6vw, 1.4rem);
+  color: var(--texto-fuerte);
+}
+.sin-publicar .nota {
+  margin-top: 8px;
+}
+
+/* Secciones: separadas por espacio, no por líneas. */
+.bloque {
+  margin-top: 48px;
+}
+.bloque__explicacion {
+  max-width: 44rem;
+  margin-top: 6px;
+  color: var(--sec);
+}
+.bloque__cuerpo {
+  margin-top: 16px;
+}
+.bloque__cuerpo--con-grafico {
+  display: grid;
+  gap: 20px 32px;
+}
+@media (min-width: 900px) {
+  .bloque__cuerpo--con-grafico:not(.bloque__cuerpo--ancho) {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-items: start;
+  }
+}
+.bloque__grafico,
+.bloque__tabla {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* Las cifras principales: la media manda (es la respuesta); el resto, al lado y más pequeño. */
+.cifrado {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 36px;
+  margin: 14px 0 0;
+}
+.cifrado dt {
+  color: var(--sec);
+  font-size: 0.9rem;
+}
+.cifrado dd {
+  margin: 2px 0 0;
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--texto-fuerte);
+}
+.cifrado__lider dd {
+  font-size: 2.1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.insuficiente {
+  margin-top: 12px;
+  color: var(--aviso);
+}
+
+/* El reparto por tramos: una barra al 100 % y su leyenda, que es también su tabla. */
+.reparto {
+  margin: 20px 0 0;
+  max-width: 44rem;
+}
+.reparto__barra {
+  display: flex;
+  gap: 2px;
+  height: 18px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--linea);
+}
+.reparto__trozo {
+  display: block;
+  height: 100%;
+}
+.muestra-color {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+/* Tablas: las de verdad, con sus líneas. */
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.tabla th,
+.tabla td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--linea);
+  text-align: left;
+  vertical-align: baseline;
+}
+.tabla thead th {
+  color: var(--sec);
+  font-weight: 500;
+  font-size: 0.9rem;
+  border-bottom-color: var(--linea-fuerte);
+}
+.tabla tbody th {
+  font-weight: 500;
+}
+.tabla .cifra {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tabla--leyenda {
+  margin-top: 10px;
+  width: auto;
+}
+.tabla--leyenda th,
+.tabla--leyenda td {
+  padding: 4px 16px 4px 0;
+  border: 0;
+}
+.tabla a {
+  display: inline-block;
+  padding: 4px 0;
+}
+
+/* La barra dentro de la celda del ranking: decorativa, la cifra va escrita al lado. */
+.barra-celda {
+  display: inline-block;
+  width: 72px;
+  height: 8px;
+  margin-right: 10px;
+  border-radius: 4px;
+  background: var(--linea);
+  vertical-align: 1px;
+  overflow: hidden;
+}
+.barra-celda span {
+  display: block;
+  height: 100%;
+  background: var(--acento);
+}
+@media (max-width: 560px) {
+  .barra-celda {
+    display: none;
+  }
+}
+
+/* Gráficos SVG: una sola serie, en el color de acento; las rejillas, tenues. */
+/* A su tamaño natural (texto de 11 px de verdad); si no cabe, se desplaza dentro de .bloque__grafico. */
+.grafico {
+  display: block;
+}
+.grafico__rejilla {
+  stroke: var(--linea);
+  stroke-width: 1;
+}
+.grafico__base {
+  stroke: var(--linea-fuerte);
+  stroke-width: 2;
+}
+.grafico__columna {
+  fill: var(--acento);
+}
+.grafico__eje {
+  fill: var(--sec);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.grafico__valor {
+  fill: var(--texto-fuerte);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.grafico__valor--sin {
+  fill: var(--sec);
+}
+
+.estad__pie {
+  padding: 18px clamp(16px, 4vw, 32px) 24px;
+  background: var(--panel);
+  color: var(--sec);
+  font-size: 0.9rem;
+}
+.estad__pie p {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+/* La puntualidad en la ficha de la estación (hoja del mapa). */
+.puntualidad-estacion .cifrado {
+  gap: 10px 24px;
+}
+.puntualidad-estacion .cifrado__lider dd {
+  font-size: 1.6rem;
+}
+.puntualidad-estacion .cifrado dd {
+  font-size: 1.1rem;
+}
+.puntualidad-estacion .tabla {
+  margin-top: 10px;
+}

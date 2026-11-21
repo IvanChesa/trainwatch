@@ -108,7 +108,11 @@ test('al pulsar un tren en el mapa se abre su ficha, y de ahí la de una estaci�
   await expect(ficha.getByRole('heading', { name: 'Paradas' })).toBeVisible();
   await ficha.getByRole('button', { name: 'Barcelona-Sants' }).click();
   const estacion = page.getByRole('complementary', { name: 'Barcelona-Sants' });
-  await expect(estacion.getByRole('table')).toContainText('R17 hacia Barcelona Estació de França');
+  // La ficha tiene dos tablas: los próximos trenes y, desde la fase 6, la puntualidad por línea.
+  await expect(estacion.getByRole('table', { name: /Próximos trenes/ })).toContainText(
+    'R17 hacia Barcelona Estació de França',
+  );
+  await expect(estacion.getByRole('heading', { name: 'Puntualidad' })).toBeVisible();
   await estacion.getByRole('button', { name: /^Cerrar/ }).click();
   await expect(page.getByRole('complementary')).toHaveCount(0);
 });

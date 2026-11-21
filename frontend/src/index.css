@@ -62,6 +62,11 @@ select {
   outline-offset: 2px;
 }
 
+.cargando-pagina {
+  padding: 24px;
+  color: var(--sec);
+}
+
 .solo-lector {
   position: absolute;
   width: 1px;

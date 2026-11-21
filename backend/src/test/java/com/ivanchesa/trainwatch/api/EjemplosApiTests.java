@@ -21,6 +21,10 @@ import com.ivanchesa.trainwatch.api.Respuestas.Latido;
 import com.ivanchesa.trainwatch.api.Respuestas.Linea;
 import com.ivanchesa.trainwatch.api.Respuestas.Nucleo;
 import com.ivanchesa.trainwatch.api.Respuestas.TrenMapa;
+import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.PuntualidadEstacion;
+import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.PuntualidadLinea;
+import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.PuntualidadNucleo;
+import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.PuntualidadTodos;
 
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.DeserializationFeature;
@@ -52,7 +56,11 @@ class EjemplosApiTests {
                 Arguments.of("avisos", new TypeReference<List<Aviso>>() { }),
                 Arguments.of("directo", new TypeReference<Instantanea>() { }),
                 Arguments.of("directo-cambios", new TypeReference<Cambios>() { }),
-                Arguments.of("directo-latido", new TypeReference<Latido>() { }));
+                Arguments.of("directo-latido", new TypeReference<Latido>() { }),
+                Arguments.of("puntualidadTodos", new TypeReference<PuntualidadTodos>() { }),
+                Arguments.of("puntualidadNucleo", new TypeReference<PuntualidadNucleo>() { }),
+                Arguments.of("puntualidadLinea", new TypeReference<PuntualidadLinea>() { }),
+                Arguments.of("puntualidadEstacion", new TypeReference<PuntualidadEstacion>() { }));
     }
 
     @ParameterizedTest(name = "{0}.json")

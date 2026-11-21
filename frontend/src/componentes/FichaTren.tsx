@@ -1,6 +1,7 @@
 import { consultas } from '../api/consultas';
 import type { FichaTren as Ficha, TrenMapa } from '../api/tipos';
 import { useConsulta } from '../api/useConsulta';
+import { urlLinea } from '../estadisticas/ruta';
 import { hora, textoSalida } from '../mapa/retraso';
 import { ListaAvisos } from './Avisos';
 import { Retraso } from './Retraso';
@@ -85,6 +86,11 @@ export function FichaTren({
           {consulta.status === 404
             ? 'Este tren ya no está en directo.'
             : `No se ha podido cargar la ficha: ${consulta.mensaje}`}
+        </p>
+      )}
+      {ficha?.linea && !ficha.sinHorario && (
+        <p>
+          <a href={urlLinea(ficha.nucleo, ficha.linea)}>Puntualidad de la {ficha.linea}</a>
         </p>
       )}
       {ficha?.sinHorario && (

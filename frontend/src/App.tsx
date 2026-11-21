@@ -12,6 +12,7 @@ import { SinMapa } from './componentes/SinMapa';
 import { ListaTrenes } from './componentes/ListaTrenes';
 import { useAhora, useReducirMovimiento } from './componentes/ganchos';
 import { tituloTren } from './componentes/textos';
+import { urlLinea, urlNucleo, urlTodos } from './estadisticas/ruta';
 import { useDirecto } from './directo/useDirecto';
 import { encuadreDeNucleo, encuadreDeTodos } from './mapa/encuadre';
 import { compararLineas, seVeEnElMapa } from './mapa/retraso';
@@ -266,6 +267,18 @@ export default function App() {
           <button type="button" className="boton" onClick={() => abrir({ tipo: 'avisos' })}>
             Avisos{avisos.tipo === 'lista' ? ` (${avisosVisibles.length})` : ''}
           </button>
+          <a
+            className="boton boton--enlace"
+            href={
+              esTodos
+                ? urlTodos()
+                : lineaDeNucleo
+                  ? urlLinea(nucleoId as number, lineaDeNucleo)
+                  : urlNucleo(nucleoId as number)
+            }
+          >
+            {lineaDeNucleo ? `Puntualidad de la ${lineaDeNucleo}` : 'Puntualidad'}
+          </a>
         </div>
         <p className="resumen" aria-live="off">
           {resumen}

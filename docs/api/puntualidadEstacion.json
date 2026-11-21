@@ -1,0 +1,88 @@
+{
+  "stopId": "71801",
+  "nombre": "Barcelona-Sants",
+  "publicacion": {
+    "publicado": true,
+    "recogiendoDesde": "2026-11-21",
+    "cifrasDesde": "2026-01-01",
+    "texto": "Datos recogidos desde el 21-11-2026.",
+    "muestraMinima": 30
+  },
+  "periodo": {
+    "desde": "2026-11-21",
+    "hasta": "2026-11-21",
+    "diasConDatos": 1
+  },
+  "muestra": {
+    "viajes": 35,
+    "paradas": 35,
+    "paradasInferidasQuitadas": 6,
+    "paradasSinHoraQuitadas": 0,
+    "cancelados": null
+  },
+  "coberturaNucleo": {
+    "viajesProgramados": 694,
+    "viajesVistos": 100,
+    "porcentaje": 14.4,
+    "paradasProgramadas": 11402,
+    "paradasVistas": 769,
+    "porcentajeParadas": 6.7
+  },
+  "resumen": {
+    "viajes": 35,
+    "paradas": 35,
+    "suficiente": true,
+    "mediaMinutos": 6.9,
+    "medianaMinutos": 2,
+    "p90Minutos": 24,
+    "porcentajes": {
+      "menosDe3": 54.3,
+      "de3a5": 8.6,
+      "de6a15": 20.0,
+      "de16OMas": 17.1,
+      "hasta5": 62.9
+    }
+  },
+  "porLinea": [
+    {
+      "nucleo": 51,
+      "linea": "R1",
+      "cifras": {
+        "viajes": 10,
+        "paradas": 10,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      }
+    },
+    {
+      "nucleo": 51,
+      "linea": "R15",
+      "cifras": {
+        "viajes": 1,
+        "paradas": 1,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      }
+    },
+    {
+      "nucleo": 51,
+      "linea": "R16",
+      "cifras": {
+        "viajes": 1,
+        "paradas": 1,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      }
+    }
+  ],
+  "fuente": "Datos: Renfe (CC BY 4.0). Cifras propias de TrainWatch, proyecto no oficial: solo trenes vistos en directo; las paradas inferidas no cuentan."
+}

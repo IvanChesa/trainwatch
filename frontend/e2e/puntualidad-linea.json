@@ -1,0 +1,684 @@
+{
+  "nucleo": 51,
+  "nombreNucleo": "Rodalies de Catalunya",
+  "linea": "R2N",
+  "publicacion": {
+    "publicado": true,
+    "recogiendoDesde": "2026-11-21",
+    "cifrasDesde": "2026-12-19",
+    "texto": "Datos recogidos desde el 21-11-2026.",
+    "muestraMinima": 30
+  },
+  "periodo": {
+    "desde": "2026-11-21",
+    "hasta": "2026-12-18",
+    "diasConDatos": 28
+  },
+  "muestra": {
+    "viajes": 1843,
+    "paradas": 21904,
+    "paradasInferidasQuitadas": 412,
+    "paradasSinHoraQuitadas": 0,
+    "cancelados": 3
+  },
+  "coberturaNucleo": {
+    "viajesProgramados": 2120,
+    "viajesVistos": 1890,
+    "porcentaje": 89.2,
+    "paradasProgramadas": 30410,
+    "paradasVistas": 24800,
+    "porcentajeParadas": 81.6
+  },
+  "coberturaLinea": {
+    "viajesProgramados": 2120,
+    "viajesVistos": 1890,
+    "porcentaje": 86.0,
+    "paradasProgramadas": 30410,
+    "paradasVistas": 24800,
+    "porcentajeParadas": 81.6
+  },
+  "resumen": {
+    "viajes": 1843,
+    "paradas": 16587,
+    "suficiente": true,
+    "mediaMinutos": 2.4,
+    "medianaMinutos": 2,
+    "p90Minutos": 7,
+    "porcentajes": {
+      "menosDe3": 78.4,
+      "de3a5": 10.8,
+      "de6a15": 5.4,
+      "de16OMas": 5.4,
+      "hasta5": 89.2
+    }
+  },
+  "llegadaDestino": {
+    "viajes": 1843,
+    "viajesEnDestino": 1520,
+    "suficiente": true,
+    "mediaMinutos": 3.1,
+    "menosDe3": 71.5
+  },
+  "porHora": [
+    {
+      "hora": 5,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 1.8,
+        "medianaMinutos": 2,
+        "p90Minutos": 5,
+        "porcentajes": {
+          "menosDe3": 81.0,
+          "de3a5": 9.5,
+          "de6a15": 4.8,
+          "de16OMas": 4.8,
+          "hasta5": 90.5
+        }
+      }
+    },
+    {
+      "hora": 6,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.4,
+        "medianaMinutos": 2,
+        "p90Minutos": 7,
+        "porcentajes": {
+          "menosDe3": 78.0,
+          "de3a5": 11.0,
+          "de6a15": 5.5,
+          "de16OMas": 5.5,
+          "hasta5": 89.0
+        }
+      }
+    },
+    {
+      "hora": 7,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 3.4,
+        "medianaMinutos": 3,
+        "p90Minutos": 10,
+        "porcentajes": {
+          "menosDe3": 73.0,
+          "de3a5": 13.5,
+          "de6a15": 6.8,
+          "de16OMas": 6.8,
+          "hasta5": 86.5
+        }
+      }
+    },
+    {
+      "hora": 8,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 4.0,
+        "medianaMinutos": 4,
+        "p90Minutos": 12,
+        "porcentajes": {
+          "menosDe3": 70.0,
+          "de3a5": 15.0,
+          "de6a15": 7.5,
+          "de16OMas": 7.5,
+          "hasta5": 85.0
+        }
+      }
+    },
+    {
+      "hora": 9,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 3.4,
+        "medianaMinutos": 3,
+        "p90Minutos": 10,
+        "porcentajes": {
+          "menosDe3": 73.0,
+          "de3a5": 13.5,
+          "de6a15": 6.8,
+          "de16OMas": 6.8,
+          "hasta5": 86.5
+        }
+      }
+    },
+    {
+      "hora": 10,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.4,
+        "medianaMinutos": 2,
+        "p90Minutos": 7,
+        "porcentajes": {
+          "menosDe3": 78.0,
+          "de3a5": 11.0,
+          "de6a15": 5.5,
+          "de16OMas": 5.5,
+          "hasta5": 89.0
+        }
+      }
+    },
+    {
+      "hora": 11,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 1.8,
+        "medianaMinutos": 2,
+        "p90Minutos": 5,
+        "porcentajes": {
+          "menosDe3": 81.0,
+          "de3a5": 9.5,
+          "de6a15": 4.8,
+          "de16OMas": 4.8,
+          "hasta5": 90.5
+        }
+      }
+    },
+    {
+      "hora": 12,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 1.5,
+        "medianaMinutos": 2,
+        "p90Minutos": 4,
+        "porcentajes": {
+          "menosDe3": 82.5,
+          "de3a5": 8.8,
+          "de6a15": 4.4,
+          "de16OMas": 4.4,
+          "hasta5": 91.3
+        }
+      }
+    },
+    {
+      "hora": 13,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 1.5,
+        "medianaMinutos": 2,
+        "p90Minutos": 4,
+        "porcentajes": {
+          "menosDe3": 82.5,
+          "de3a5": 8.8,
+          "de6a15": 4.4,
+          "de16OMas": 4.4,
+          "hasta5": 91.3
+        }
+      }
+    },
+    {
+      "hora": 14,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 1.6,
+        "medianaMinutos": 2,
+        "p90Minutos": 5,
+        "porcentajes": {
+          "menosDe3": 82.0,
+          "de3a5": 9.0,
+          "de6a15": 4.5,
+          "de16OMas": 4.5,
+          "hasta5": 91.0
+        }
+      }
+    },
+    {
+      "hora": 15,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 1.8,
+        "medianaMinutos": 2,
+        "p90Minutos": 5,
+        "porcentajes": {
+          "menosDe3": 81.0,
+          "de3a5": 9.5,
+          "de6a15": 4.8,
+          "de16OMas": 4.8,
+          "hasta5": 90.5
+        }
+      }
+    },
+    {
+      "hora": 16,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.4,
+        "medianaMinutos": 2,
+        "p90Minutos": 7,
+        "porcentajes": {
+          "menosDe3": 78.0,
+          "de3a5": 11.0,
+          "de6a15": 5.5,
+          "de16OMas": 5.5,
+          "hasta5": 89.0
+        }
+      }
+    },
+    {
+      "hora": 17,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 3.1,
+        "medianaMinutos": 3,
+        "p90Minutos": 9,
+        "porcentajes": {
+          "menosDe3": 74.5,
+          "de3a5": 12.8,
+          "de6a15": 6.4,
+          "de16OMas": 6.4,
+          "hasta5": 87.3
+        }
+      }
+    },
+    {
+      "hora": 18,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 3.5,
+        "medianaMinutos": 4,
+        "p90Minutos": 10,
+        "porcentajes": {
+          "menosDe3": 72.5,
+          "de3a5": 13.8,
+          "de6a15": 6.9,
+          "de16OMas": 6.9,
+          "hasta5": 86.3
+        }
+      }
+    },
+    {
+      "hora": 19,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 3.1,
+        "medianaMinutos": 3,
+        "p90Minutos": 9,
+        "porcentajes": {
+          "menosDe3": 74.5,
+          "de3a5": 12.8,
+          "de6a15": 6.4,
+          "de16OMas": 6.4,
+          "hasta5": 87.3
+        }
+      }
+    },
+    {
+      "hora": 20,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.4,
+        "medianaMinutos": 2,
+        "p90Minutos": 7,
+        "porcentajes": {
+          "menosDe3": 78.0,
+          "de3a5": 11.0,
+          "de6a15": 5.5,
+          "de16OMas": 5.5,
+          "hasta5": 89.0
+        }
+      }
+    },
+    {
+      "hora": 21,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 1.8,
+        "medianaMinutos": 2,
+        "p90Minutos": 5,
+        "porcentajes": {
+          "menosDe3": 81.0,
+          "de3a5": 9.5,
+          "de6a15": 4.8,
+          "de16OMas": 4.8,
+          "hasta5": 90.5
+        }
+      }
+    },
+    {
+      "hora": 22,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 1.6,
+        "medianaMinutos": 2,
+        "p90Minutos": 5,
+        "porcentajes": {
+          "menosDe3": 82.0,
+          "de3a5": 9.0,
+          "de6a15": 4.5,
+          "de16OMas": 4.5,
+          "hasta5": 91.0
+        }
+      }
+    },
+    {
+      "hora": 23,
+      "cifras": {
+        "viajes": 12,
+        "paradas": 40,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      }
+    },
+    {
+      "hora": 0,
+      "cifras": {
+        "viajes": 12,
+        "paradas": 40,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      }
+    }
+  ],
+  "porDiaSemana": [
+    {
+      "dia": 1,
+      "nombre": "lunes",
+      "dias": 4,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.0,
+        "medianaMinutos": 2,
+        "p90Minutos": 6,
+        "porcentajes": {
+          "menosDe3": 80,
+          "de3a5": 10.0,
+          "de6a15": 5.0,
+          "de16OMas": 5.0,
+          "hasta5": 90.0
+        }
+      }
+    },
+    {
+      "dia": 2,
+      "nombre": "martes",
+      "dias": 4,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.2,
+        "medianaMinutos": 2,
+        "p90Minutos": 7,
+        "porcentajes": {
+          "menosDe3": 79,
+          "de3a5": 10.5,
+          "de6a15": 5.2,
+          "de16OMas": 5.2,
+          "hasta5": 89.5
+        }
+      }
+    },
+    {
+      "dia": 3,
+      "nombre": "miércoles",
+      "dias": 4,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.4,
+        "medianaMinutos": 2,
+        "p90Minutos": 7,
+        "porcentajes": {
+          "menosDe3": 78,
+          "de3a5": 11.0,
+          "de6a15": 5.5,
+          "de16OMas": 5.5,
+          "hasta5": 89.0
+        }
+      }
+    },
+    {
+      "dia": 4,
+      "nombre": "jueves",
+      "dias": 4,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.6,
+        "medianaMinutos": 3,
+        "p90Minutos": 8,
+        "porcentajes": {
+          "menosDe3": 77,
+          "de3a5": 11.5,
+          "de6a15": 5.8,
+          "de16OMas": 5.8,
+          "hasta5": 88.5
+        }
+      }
+    },
+    {
+      "dia": 5,
+      "nombre": "viernes",
+      "dias": 4,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.8,
+        "medianaMinutos": 3,
+        "p90Minutos": 8,
+        "porcentajes": {
+          "menosDe3": 76,
+          "de3a5": 12.0,
+          "de6a15": 6.0,
+          "de16OMas": 6.0,
+          "hasta5": 88.0
+        }
+      }
+    },
+    {
+      "dia": 6,
+      "nombre": "sábado",
+      "dias": 4,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 3.0,
+        "medianaMinutos": 3,
+        "p90Minutos": 9,
+        "porcentajes": {
+          "menosDe3": 75,
+          "de3a5": 12.5,
+          "de6a15": 6.2,
+          "de16OMas": 6.2,
+          "hasta5": 87.5
+        }
+      }
+    },
+    {
+      "dia": 7,
+      "nombre": "domingo",
+      "dias": 4,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 3.2,
+        "medianaMinutos": 3,
+        "p90Minutos": 10,
+        "porcentajes": {
+          "menosDe3": 74,
+          "de3a5": 13.0,
+          "de6a15": 6.5,
+          "de16OMas": 6.5,
+          "hasta5": 87.0
+        }
+      }
+    }
+  ],
+  "porSemana": [
+    {
+      "lunes": "2026-11-16",
+      "dias": 2,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.0,
+        "medianaMinutos": 2,
+        "p90Minutos": 6,
+        "porcentajes": {
+          "menosDe3": 82,
+          "de3a5": 9.0,
+          "de6a15": 4.5,
+          "de16OMas": 4.5,
+          "hasta5": 91.0
+        }
+      }
+    },
+    {
+      "lunes": "2026-11-23",
+      "dias": 7,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.6,
+        "medianaMinutos": 3,
+        "p90Minutos": 8,
+        "porcentajes": {
+          "menosDe3": 77,
+          "de3a5": 11.5,
+          "de6a15": 5.8,
+          "de16OMas": 5.8,
+          "hasta5": 88.5
+        }
+      }
+    },
+    {
+      "lunes": "2026-11-30",
+      "dias": 7,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.3,
+        "medianaMinutos": 2,
+        "p90Minutos": 7,
+        "porcentajes": {
+          "menosDe3": 79,
+          "de3a5": 10.5,
+          "de6a15": 5.2,
+          "de16OMas": 5.2,
+          "hasta5": 89.5
+        }
+      }
+    },
+    {
+      "lunes": "2026-12-07",
+      "dias": 7,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.8,
+        "medianaMinutos": 3,
+        "p90Minutos": 8,
+        "porcentajes": {
+          "menosDe3": 75,
+          "de3a5": 12.5,
+          "de6a15": 6.2,
+          "de16OMas": 6.2,
+          "hasta5": 87.5
+        }
+      }
+    },
+    {
+      "lunes": "2026-12-14",
+      "dias": 7,
+      "cifras": {
+        "viajes": 120,
+        "paradas": 1080,
+        "suficiente": true,
+        "mediaMinutos": 2.2,
+        "medianaMinutos": 2,
+        "p90Minutos": 7,
+        "porcentajes": {
+          "menosDe3": 80,
+          "de3a5": 10.0,
+          "de6a15": 5.0,
+          "de16OMas": 5.0,
+          "hasta5": 90.0
+        }
+      }
+    }
+  ],
+  "tramos": [
+    {
+      "desde": {
+        "stopId": "79009",
+        "nombre": "Granollers Centre"
+      },
+      "hasta": {
+        "stopId": "79011",
+        "nombre": "Les Franqueses"
+      },
+      "pasos": 240,
+      "suficiente": true,
+      "mediaMinutos": 1.3,
+      "pierden2OMas": 24.6,
+      "ganan2OMas": 2.1
+    },
+    {
+      "desde": {
+        "stopId": "78804",
+        "nombre": "Montcada i Reixac"
+      },
+      "hasta": {
+        "stopId": "79004",
+        "nombre": "La Llagosta"
+      },
+      "pasos": 310,
+      "suficiente": true,
+      "mediaMinutos": 0.8,
+      "pierden2OMas": 15.2,
+      "ganan2OMas": 3.0
+    }
+  ],
+  "fuente": "Datos: Renfe (CC BY 4.0). Cifras propias de TrainWatch, proyecto no oficial: solo trenes vistos en directo; las paradas inferidas no cuentan."
+}

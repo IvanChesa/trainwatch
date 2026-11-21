@@ -26,3 +26,6 @@ Un fichero por decisión: `NNNN-titulo-corto.md`, con contexto, decisión, alter
 - [0022 · El mapa: MapLibre GL 6.17 directamente, sin `react-map-gl` ni TanStack Query, con OpenFreeMap](0022-maplibre-sin-adaptador-y-sin-libreria-de-datos.md)
 - [0023 · El encuadre de cada núcleo es el rectángulo donde está su servicio, no el de todas sus estaciones](0023-encuadre-por-el-servicio-de-cada-nucleo.md)
 - [0024 · «Toda España»: el directo de todos los núcleos es un canal más del difusor (`nucleo=todos`)](0024-directo-de-todos-los-nucleos.md)
+- [0025 · Qué es una cifra de puntualidad de TrainWatch](0025-definiciones-de-puntualidad.md)
+- [0026 · Agregados diarios con sumas, recuentos e histograma, calculados cada noche antes del horario nuevo](0026-agregados-diarios-y-tarea-nocturna.md)
+- [0027 · Las páginas de puntualidad: rutas propias, gráficos en SVG propio con su tabla, y un ranking de núcleos para toda España](0027-paginas-de-puntualidad-con-svg-propio.md)

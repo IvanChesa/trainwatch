@@ -61,7 +61,7 @@ public class ImportadorHorario {
     private final Clock reloj;
     private final MeterRegistry metricas;
     /** Clave del advisory lock de PostgreSQL para la importación del horario (un número cualquiera, fijo). */
-    static final long CLAVE_CERROJO = 20_261_120_002L;
+    public static final long CLAVE_CERROJO = 20_261_120_002L;
 
     private final DataSource dataSource;
     private final AtomicBoolean ocupado = new AtomicBoolean();

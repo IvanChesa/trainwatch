@@ -3,6 +3,7 @@ import { consultas } from '../api/consultas';
 import type { FichaEstacion as Ficha } from '../api/tipos';
 import { useConsulta } from '../api/useConsulta';
 import { hora } from '../mapa/retraso';
+import { PuntualidadEstacion } from '../estadisticas/PuntualidadEstacion';
 import { ListaAvisos } from './Avisos';
 import { Retraso } from './Retraso';
 
@@ -85,6 +86,7 @@ export function FichaEstacion({
       )}
       <h3>Avisos</h3>
       <ListaAvisos avisos={f.avisos} vacio="Sin avisos para esta estación." />
+      <PuntualidadEstacion id={id} />
     </div>
   );
 }
