@@ -25,6 +25,11 @@ export function minutos(x: number | null | undefined): string {
   return x === null || x === undefined ? '—' : `${NUMERO.format(x)}${NBSP}min`;
 }
 
+/** «15 min», o «60 min o más» en el tope del histograma (la mediana y el p90 no pasan de ahí, ADR 0026). */
+export function minutosTope(x: number | null | undefined): string {
+  return x !== null && x !== undefined && x >= 60 ? `60${NBSP}min o más` : minutos(x);
+}
+
 /** «78,4 %»; «—». */
 export function porcentaje(x: number | null | undefined): string {
   return x === null || x === undefined ? '—' : `${NUMERO.format(x)}${NBSP}%`;
@@ -78,6 +83,43 @@ export const TRAMOS: readonly { clave: keyof Porcentajes; texto: string; corto: 
 export function frase(c: Cifras | null | undefined): string | null {
   if (!c || !c.suficiente || c.mediaMinutos === null || !c.porcentajes) return null;
   return `${minutos(c.mediaMinutos)} de retraso medio por parada; el ${porcentaje(c.porcentajes.menosDe3)} de las paradas, con menos de 3 min`;
+}
+
+/**
+ * Diferencia en puntos por debajo de la cual dos puestos de un ranking no se distinguen: con ~30 viajes, el error típico
+ * de un porcentaje ronda los 7 puntos (ADR 0025), así que el titular no corona a nadie por menos.
+ */
+export const MARGEN_RANKING = 5;
+
+/**
+ * El titular de un ranking: quién va primero y quién último, si la diferencia con el siguiente lo permite; si no, que
+ * van igualadas. Y la cobertura, si la del primero es baja.
+ */
+export function hallazgoRanking(
+  filas: readonly { nombre: string; cifras: Cifras; cobertura?: Cobertura | null }[],
+): string | null {
+  const con = filas.filter((f) => f.cifras.suficiente && f.cifras.porcentajes?.menosDe3 != null);
+  if (con.length === 0) return null;
+  const p = (f: { cifras: Cifras }) => f.cifras.porcentajes!.menosDe3!;
+  const primero = con[0];
+  const cob = primero.cobertura?.porcentaje;
+  const aviso = cob != null && cob < COBERTURA_BAJA ? ` (solo se ve el ${porcentaje(cob)} de sus trenes)` : '';
+  if (con.length === 1) return `${primero.nombre}: el ${porcentaje(p(primero))} de las paradas, con menos de 3 min${aviso}.`;
+  const ultimo = con[con.length - 1];
+  if (p(primero) - p(ultimo) < MARGEN_RANKING) {
+    return `Todas muy igualadas: entre el ${porcentaje(p(ultimo))} y el ${porcentaje(p(primero))} de las paradas con menos de 3 min, una diferencia que estas muestras no permiten separar.`;
+  }
+  const empatadas = con.filter((f) => p(primero) - p(f) < MARGEN_RANKING);
+  const cabeza =
+    empatadas.length > 1
+      ? `En cabeza, igualadas: ${empatadas.map((f) => `${f.nombre} (${porcentaje(p(f))})`).join(', ')}`
+      : `La más puntual, ${primero.nombre} (el ${porcentaje(p(primero))} de las paradas con menos de 3 min${aviso})`;
+  return `${cabeza}; la que menos, ${ultimo.nombre} (${porcentaje(p(ultimo))}).`;
+}
+
+/** Las horas en el orden del día de servicio: de las 4 a las 3 (las de pasada la medianoche, al final). */
+export function ordenHora(hora: number): number {
+  return (hora + 24 - 4) % 24;
 }
 
 /** «08:00» para una franja horaria. */

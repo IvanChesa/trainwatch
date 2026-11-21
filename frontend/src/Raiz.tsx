@@ -10,7 +10,13 @@ export default function Raiz() {
   const estadisticas = leerRuta(window.location.pathname, window.location.search);
   if (!estadisticas) return <App />;
   return (
-    <Suspense fallback={<p className="cargando-pagina">Cargando las estadísticas…</p>}>
+    <Suspense
+      fallback={
+        <p className="cargando-pagina" role="status">
+          Cargando las estadísticas…
+        </p>
+      }
+    >
       <PaginaEstadisticas ruta={estadisticas} />
     </Suspense>
   );

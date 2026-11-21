@@ -1,12 +1,22 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ejemploEstacion from '../../../docs/api/puntualidadEstacion.json';
 import ejemploLinea from '../../../docs/api/puntualidadLinea.json';
 import ejemploNucleo from '../../../docs/api/puntualidadNucleo.json';
 import ejemploTodos from '../../../docs/api/puntualidadTodos.json';
-import { INSUFICIENTE, LINEA, NUCLEO, SIN_PUBLICAR, TODOS } from '../pruebas/estadisticas';
+import { INSUFICIENTE, LINEA, NUCLEO, SIN_PUBLICAR, TODOS, cifras } from '../pruebas/estadisticas';
 import { escala } from './escala';
-import { fecha, frase, numero, porcentaje, textoCobertura, textoPeriodo } from './formato';
+import {
+  fecha,
+  frase,
+  hallazgoRanking,
+  minutosTope,
+  numero,
+  ordenHora,
+  porcentaje,
+  textoCobertura,
+  textoPeriodo,
+} from './formato';
 import PaginaEstadisticas from './PaginaEstadisticas';
 import { PuntualidadEstacion } from './PuntualidadEstacion';
 import { leerRuta, rutaApiDe, urlLinea, urlNucleo, urlTodos } from './ruta';
@@ -44,6 +54,8 @@ describe('rutas', () => {
     expect(leerRuta('/estadisticasX', '')).toBeNull();
     expect(leerRuta('/estadisticas/madrid', '')).toBeNull();
     expect(leerRuta('/estadisticas/51/R1/mas', '')).toBeNull();
+    // Un «%» mal formado no rompe la página: se trata como una ruta que no existe.
+    expect(leerRuta('/estadisticas/51/R%E0', '')).toBeNull();
   });
 
   it('construye los enlaces y la ruta de la API', () => {
@@ -70,6 +82,29 @@ describe('textos', () => {
       '89,2\u00a0% de los trenes programados y el 81,6\u00a0% de sus paradas',
     );
     expect(frase(INSUFICIENTE)).toBeNull();
+    expect(minutosTope(15)).toBe('15\u00a0min');
+    expect(minutosTope(60)).toBe('60\u00a0min o más');
+  });
+
+  it('las horas, en el orden del día de servicio: de las 4 a las 3', () => {
+    expect([0, 23, 5, 4, 3].sort((a, b) => ordenHora(a) - ordenHora(b))).toEqual([4, 5, 23, 0, 3]);
+  });
+
+  it('el titular del ranking no corona diferencias que la muestra no permite separar', () => {
+    const fila = (nombre: string, p: number, cob = 90) => ({
+      nombre,
+      cifras: cifras(2, p),
+      cobertura: { ...LINEA.coberturaNucleo!, porcentaje: cob },
+    });
+    expect(hallazgoRanking([fila('R3', 90), fila('R1', 80), fila('R2', 70)])).toBe(
+      'La más puntual, R3 (el 90\u00a0% de las paradas con menos de 3 min); la que menos, R2 (70\u00a0%).',
+    );
+    // A menos de 5 puntos: igualadas.
+    expect(hallazgoRanking([fila('R3', 82), fila('R1', 79), fila('R2', 70)])).toMatch(/^En cabeza, igualadas: R3 .*, R1 /);
+    expect(hallazgoRanking([fila('R3', 82), fila('R1', 80)])).toMatch(/^Todas muy igualadas/);
+    // Con poca cobertura, se dice.
+    expect(hallazgoRanking([fila('Asturias', 90, 11.1), fila('Madrid', 70)])).toContain('solo se ve el 11,1\u00a0% de sus trenes');
+    expect(hallazgoRanking([{ nombre: 'R1', cifras: INSUFICIENTE }])).toBeNull();
   });
 
   it('la escala del eje da pasos redondos por encima del máximo', () => {
@@ -91,8 +126,10 @@ describe('página de una línea', () => {
     expect(screen.getByText(/Del 21 de noviembre de 2026 al 18 de diciembre de 2026/)).toBeInTheDocument();
     expect(screen.getByText(/Solo trenes vistos en directo/)).toBeInTheDocument();
     expect(screen.getByText(/se han quitado 412 paradas que no se vieron/)).toBeInTheDocument();
-    // Cobertura de la línea por debajo del 60 %: se resalta y se explica.
+    // Cobertura de la línea por debajo del 60 %: se resalta y se explica. Y la del núcleo, también a la vista.
     expect(screen.getByText(/45,5 % de los trenes programados/)).toBeInTheDocument();
+    expect(screen.getByText('Cobertura de Rodalies de Catalunya')).toBeInTheDocument();
+    expect(screen.getByText(/89,2 % de los trenes programados/)).toBeInTheDocument();
     expect(screen.getByText(/la cifra es solo de los trenes que se ven/)).toBeInTheDocument();
     expect(screen.getByText(/Datos: Renfe \(CC BY 4\.0\)/)).toBeInTheDocument();
     expect(screen.getByText('no oficial')).toBeInTheDocument();
@@ -119,11 +156,27 @@ describe('página de una línea', () => {
     expect(screen.getByText(/1520 de 1843 viajes se vieron llegar/)).toBeInTheDocument();
     // Tramos.
     const tramos = screen.getByRole('table', { name: 'Tramos de la R2N con más retraso' });
-    expect(within(tramos).getByText('Granollers Centre → Les Franqueses')).toBeInTheDocument();
+    // La flecha no se lee: el lector de pantalla oye «Granollers Centre a Les Franqueses».
+    expect(within(tramos).getByRole('rowheader', { name: /^Granollers Centre\s+a\s+Les Franqueses$/ })).toBeInTheDocument();
     expect(within(tramos).getByText('+1,3 min')).toBeInTheDocument();
     // Migas: vuelta al núcleo y a toda España.
     expect(screen.getByRole('link', { name: 'Rodalies de Catalunya' })).toHaveAttribute('href', '/estadisticas/51');
     expect(document.title).toBe('Puntualidad de la R2N (Rodalies de Catalunya) · TrainWatch');
+  });
+
+  it('el periodo de la URL llega a la petición, y el formulario no deja un periodo al revés', async () => {
+    const fetch = api({ '/api/estadisticas/lineas/51/R2N': LINEA });
+    render(
+      <PaginaEstadisticas ruta={{ tipo: 'linea', nucleo: 51, linea: 'R2N', desde: '2026-11-21', hasta: '2026-12-18' }} />,
+    );
+    await screen.findByRole('table', { name: 'Puntualidad de la R2N por hora' });
+    expect(fetch).toHaveBeenCalledWith('/api/estadisticas/lineas/51/R2N?desde=2026-11-21&hasta=2026-12-18', expect.anything());
+    const desde = screen.getByLabelText('Desde');
+    fireEvent.change(desde, { target: { value: '2026-12-30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ver el periodo' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('con «desde» antes de «hasta»');
+    expect(desde).toHaveAttribute('aria-invalid', 'true');
+    expect(desde).toHaveAccessibleDescription(/con «desde» antes de «hasta»/);
   });
 
   it('antes de la fecha de publicación no enseña ninguna cifra', async () => {

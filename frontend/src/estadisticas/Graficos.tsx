@@ -16,20 +16,27 @@ export interface Columna {
   valor: number | null;
 }
 
-/** Columnas de una serie: la media de minutos por hora, por día o por semana. */
+/** A partir de aquí las columnas se estrechan, los valores no van encima y el eje se rotula de 3 en 3. */
+const MUCHAS_COLUMNAS = 12;
+
+/**
+ * Columnas de una serie: la media de minutos por hora, por día o por semana. Se dibuja a su tamaño natural (el texto,
+ * a 11 px de verdad): si no cabe, se desplaza dentro de su bloque en vez de encogerse hasta no leerse.
+ */
 export function Columnas({ columnas, unidad = 'min' }: { columnas: readonly Columna[]; unidad?: string }) {
-  const ancho = 36;
-  const hueco = 8;
+  const muchas = columnas.length > MUCHAS_COLUMNAS;
+  const ancho = muchas ? 22 : 36;
+  const hueco = muchas ? 6 : 8;
   const alto = 160;
-  const izquierda = 34;
+  const izquierda = 38;
   const arriba = 18;
   const abajo = 22;
   const valores = columnas.map((c) => c.valor).filter((v): v is number => v !== null);
   const { tope, paso } = escala(Math.max(0, ...valores));
   const y = (v: number) => arriba + alto - (Math.max(0, v) / tope) * alto;
   const total = izquierda + columnas.length * (ancho + hueco);
-  const lineas: number[] = [];
-  for (let v = 0; v <= tope + 1e-9; v += paso) lineas.push(Math.round(v * 10) / 10);
+  // Las líneas del eje, sin acumular errores de coma flotante (0,05 + 0,05 + 0,05…).
+  const lineas = Array.from({ length: Math.round(tope / paso) + 1 }, (_, i) => i * paso);
   return (
     <svg
       className="grafico"
@@ -38,13 +45,12 @@ export function Columnas({ columnas, unidad = 'min' }: { columnas: readonly Colu
       height={arriba + alto + abajo}
       aria-hidden="true"
       focusable="false"
-      preserveAspectRatio="xMinYMid meet"
     >
-      {lineas.map((v) => (
-        <g key={v}>
+      {lineas.map((v, i) => (
+        <g key={i}>
           <line className="grafico__rejilla" x1={izquierda} x2={total} y1={y(v)} y2={y(v)} />
           <text className="grafico__eje" x={izquierda - 6} y={y(v) + 4} textAnchor="end">
-            {numero(v)}
+            {paso < 0.1 ? v.toLocaleString('es-ES', { maximumFractionDigits: 2 }) : numero(v)}
           </text>
         </g>
       ))}
@@ -58,17 +64,21 @@ export function Columnas({ columnas, unidad = 'min' }: { columnas: readonly Colu
             {c.valor !== null && c.valor > 0 && (
               <rect className="grafico__columna" x={x} y={y(c.valor)} width={ancho} height={arriba + alto - y(c.valor)} />
             )}
-            <text
-              className={c.valor === null ? 'grafico__valor grafico__valor--sin' : 'grafico__valor'}
-              x={x + ancho / 2}
-              y={(c.valor === null ? y(0) : y(c.valor)) - 5}
-              textAnchor="middle"
-            >
-              {c.valor === null ? '—' : numero(c.valor)}
-            </text>
-            <text className="grafico__eje" x={x + ancho / 2} y={arriba + alto + 16} textAnchor="middle">
-              {c.etiqueta}
-            </text>
+            {(!muchas || c.valor === null) && (
+              <text
+                className={c.valor === null ? 'grafico__valor grafico__valor--sin' : 'grafico__valor'}
+                x={x + ancho / 2}
+                y={(c.valor === null ? y(0) : y(c.valor)) - 5}
+                textAnchor="middle"
+              >
+                {c.valor === null ? '—' : numero(c.valor)}
+              </text>
+            )}
+            {(!muchas || i % 3 === 0) && (
+              <text className="grafico__eje" x={x + ancho / 2} y={arriba + alto + 16} textAnchor="middle">
+                {c.etiqueta}
+              </text>
+            )}
           </g>
         );
       })}
@@ -80,7 +90,7 @@ export function Columnas({ columnas, unidad = 'min' }: { columnas: readonly Colu
 /** El reparto de las paradas por tramos de retraso: una barra al 100 %, con su leyenda, que es también su tabla. */
 export function Reparto({ porcentajes, titulo }: { porcentajes: Porcentajes; titulo: string }) {
   return (
-    <figure className="reparto">
+    <div className="reparto">
       <div className="reparto__barra" aria-hidden="true">
         {TRAMOS.map((t) => {
           const v = porcentajes[t.clave] ?? 0;
@@ -109,7 +119,7 @@ export function Reparto({ porcentajes, titulo }: { porcentajes: Porcentajes; tit
           ))}
         </tbody>
       </table>
-    </figure>
+    </div>
   );
 }
 

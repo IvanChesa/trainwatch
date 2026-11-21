@@ -22,7 +22,9 @@ const trenes = ejemplo('trenesDeNucleo');
 // Fase 6: las estadísticas (los ejemplos de docs/api, con unas horas de datos reales).
 const puntualidadTodos = ejemplo('puntualidadTodos');
 const puntualidadNucleo = ejemplo('puntualidadNucleo');
-const puntualidadLinea = ejemplo('puntualidadLinea');
+// La línea, con datos inventados pero suficientes (los ejemplos reales son de unas horas y casi todo sale
+// «insuficiente»): así el e2e pinta los gráficos de verdad (20 horas, 7 días, 5 semanas, reparto y tramos).
+const puntualidadLinea = JSON.parse(readFileSync(new URL('./puntualidad-linea.json', import.meta.url), 'utf8'));
 const puntualidadEstacion = ejemplo('puntualidadEstacion');
 
 /** Con `nucleo=todos`, además de los de Rodalies: un tren en Madrid, otro en Sevilla y otro en Bilbao. */

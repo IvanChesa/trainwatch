@@ -4,9 +4,18 @@
  * las tablas sí llevan líneas, que es lo suyo. Las cifras, con números tabulares para que se alineen.
  */
 
+/* El mapa bloquea el desplazamiento del documento (index.css); estas páginas lo recuperan mientras están abiertas. */
+html.con-desplazamiento body {
+  overflow: auto;
+}
+html.con-desplazamiento #root {
+  height: auto;
+  min-height: 100%;
+}
+
 .estad {
-  height: 100%;
-  overflow-y: auto;
+  --borde-control: #6b7079; /* 3,8:1 contra el fondo: el borde se ve (WCAG 1.4.11). */
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
@@ -48,6 +57,10 @@
   display: inline-block;
   padding: 10px 0;
   color: var(--texto);
+}
+.estad__barra nav a:hover {
+  color: var(--texto-fuerte);
+  text-decoration-thickness: 2px;
 }
 .estad__barra nav a[aria-current='page'] {
   color: var(--texto-fuerte);
@@ -93,8 +106,7 @@
   color: var(--sec);
   font-size: 0.95rem;
 }
-.migas li + li::before {
-  content: '›';
+.migas__sep {
   margin-right: 4px;
   color: var(--sec);
 }
@@ -152,32 +164,31 @@
 .elegir-periodo input {
   min-height: 44px;
   padding: 6px 10px;
-  border: 1px solid var(--linea-fuerte);
+  border: 1px solid var(--borde-control);
   border-radius: 8px;
   background: var(--fondo);
   color: var(--texto);
   font: inherit;
 }
-.elegir-periodo .nota {
+.elegir-periodo input[aria-invalid='true'] {
+  border-color: var(--aviso);
+}
+.elegir-periodo__error {
   flex-basis: 100%;
   color: var(--aviso);
 }
 .estad .boton {
   min-height: 44px;
   padding: 6px 18px;
-  border: 1px solid var(--linea-fuerte);
+  border: 1px solid var(--borde-control);
   border-radius: 8px;
   background: var(--panel);
   color: var(--texto);
   font: inherit;
   cursor: pointer;
 }
-.estad .boton:hover:not(:disabled) {
+.estad .boton:hover {
   border-color: var(--sec);
-}
-.estad .boton:disabled {
-  border-style: dashed;
-  cursor: not-allowed;
 }
 
 .sin-publicar {
@@ -212,7 +223,7 @@
   gap: 20px 32px;
 }
 @media (min-width: 900px) {
-  .bloque__cuerpo--con-grafico {
+  .bloque__cuerpo--con-grafico:not(.bloque__cuerpo--ancho) {
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
     align-items: start;
   }
@@ -302,9 +313,7 @@
   text-align: right;
   white-space: nowrap;
 }
-.tabla thead th:not(:first-child):not(:nth-child(2)) {
-  text-align: right;
-}
+
 .tabla--leyenda {
   margin-top: 10px;
   width: auto;
@@ -342,10 +351,9 @@
 }
 
 /* Gráficos SVG: una sola serie, en el color de acento; las rejillas, tenues. */
+/* A su tamaño natural (texto de 11 px de verdad); si no cabe, se desplaza dentro de .bloque__grafico. */
 .grafico {
   display: block;
-  max-width: 100%;
-  height: auto;
 }
 .grafico__rejilla {
   stroke: var(--linea);
@@ -361,6 +369,7 @@
 .grafico__eje {
   fill: var(--sec);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 .grafico__valor {
   fill: var(--texto-fuerte);

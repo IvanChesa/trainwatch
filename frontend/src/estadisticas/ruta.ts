@@ -33,11 +33,17 @@ export function leerRuta(ruta: string, busqueda: string): RutaEstadisticas | nul
   };
   const desde = fecha('desde');
   const hasta = fecha('hasta');
-  const partes = ruta
-    .slice(RAIZ.length)
-    .split('/')
-    .filter((x) => x !== '')
-    .map((x) => decodeURIComponent(x));
+  let partes: string[];
+  try {
+    partes = ruta
+      .slice(RAIZ.length)
+      .split('/')
+      .filter((x) => x !== '')
+      .map((x) => decodeURIComponent(x));
+  } catch {
+    // Un «%» mal formado (/estadisticas/51/R%E0): como una ruta que no existe, no una página en blanco.
+    return null;
+  }
   if (partes.length === 0) return { tipo: 'todos', desde, hasta };
   const nucleo = Number(partes[0]);
   if (!Number.isInteger(nucleo) || nucleo <= 0 || partes.length > 2) return null;
