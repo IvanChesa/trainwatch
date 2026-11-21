@@ -5,7 +5,8 @@
     "publicado": true,
     "recogiendoDesde": "2026-11-21",
     "cifrasDesde": "2026-01-01",
-    "texto": "Datos recogidos desde el 21-11-2026."
+    "texto": "Datos recogidos desde el 21-11-2026.",
+    "muestraMinima": 30
   },
   "periodo": {
     "desde": "2026-11-21",
@@ -13,23 +14,23 @@
     "diasConDatos": 1
   },
   "muestra": {
-    "viajes": 21,
-    "paradas": 21,
+    "viajes": 23,
+    "paradas": 23,
     "paradasInferidasQuitadas": 4,
     "paradasSinHoraQuitadas": 0,
     "cancelados": null
   },
   "coberturaNucleo": {
     "viajesProgramados": 694,
-    "viajesVistos": 85,
-    "porcentaje": 12.2,
+    "viajesVistos": 89,
+    "porcentaje": 12.8,
     "paradasProgramadas": 11402,
-    "paradasVistas": 505,
-    "porcentajeParadas": 4.4
+    "paradasVistas": 591,
+    "porcentajeParadas": 5.2
   },
   "resumen": {
-    "viajes": 21,
-    "paradas": 21,
+    "viajes": 23,
+    "paradas": 23,
     "suficiente": false,
     "mediaMinutos": null,
     "medianaMinutos": null,
@@ -41,8 +42,8 @@
       "nucleo": 51,
       "linea": "R1",
       "cifras": {
-        "viajes": 6,
-        "paradas": 6,
+        "viajes": 7,
+        "paradas": 7,
         "suficiente": false,
         "mediaMinutos": null,
         "medianaMinutos": null,

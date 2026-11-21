@@ -33,6 +33,7 @@ const PUBLICADO = {
   recogiendoDesde: '2026-11-21',
   cifrasDesde: '2026-12-19',
   texto: 'Datos recogidos desde el 21-11-2026.',
+  muestraMinima: 30,
 };
 const PERIODO = { desde: '2026-11-21', hasta: '2026-12-18', diasConDatos: 28 };
 const MUESTRA = { viajes: 1843, paradas: 21904, paradasInferidasQuitadas: 412, paradasSinHoraQuitadas: 0, cancelados: 3 };
@@ -116,4 +117,5 @@ export const SIN_PUBLICAR = {
   recogiendoDesde: '2026-11-21',
   cifrasDesde: '2026-12-19',
   texto: 'Recogiendo datos desde el 21-11-2026; cifras a partir del 19-12-2026.',
+  muestraMinima: 30,
 };

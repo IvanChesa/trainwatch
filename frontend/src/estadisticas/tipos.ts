@@ -11,6 +11,8 @@ export interface Publicacion {
   recogiendoDesde: string | null;
   cifrasDesde: string | null;
   texto: string;
+  /** Viajes por debajo de los cuales una cifra no se da. */
+  muestraMinima: number;
 }
 
 export interface Periodo {

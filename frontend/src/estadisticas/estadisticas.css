@@ -344,8 +344,7 @@
 /* Gráficos SVG: una sola serie, en el color de acento; las rejillas, tenues. */
 .grafico {
   display: block;
-  width: 100%;
-  max-width: 640px;
+  max-width: 100%;
   height: auto;
 }
 .grafico__rejilla {

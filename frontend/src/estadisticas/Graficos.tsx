@@ -34,6 +34,8 @@ export function Columnas({ columnas, unidad = 'min' }: { columnas: readonly Colu
     <svg
       className="grafico"
       viewBox={`0 0 ${total} ${arriba + alto + abajo}`}
+      width={total}
+      height={arriba + alto + abajo}
       aria-hidden="true"
       focusable="false"
       preserveAspectRatio="xMinYMid meet"

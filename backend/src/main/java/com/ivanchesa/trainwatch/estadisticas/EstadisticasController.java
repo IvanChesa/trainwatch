@@ -365,7 +365,7 @@ public class EstadisticasController {
             texto = (desde == null ? "Aún no hay datos" : "Recogiendo datos desde el " + FECHA.format(desde))
                     + "; cifras a partir del " + FECHA.format(cifras) + ".";
         }
-        return new Publicacion(publicado, desde, cifras, texto);
+        return new Publicacion(publicado, desde, cifras, texto, propiedades.muestraMinima());
     }
 
     private LocalDate hoy() {

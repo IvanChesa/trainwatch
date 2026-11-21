@@ -135,6 +135,7 @@ function hallazgoRanking(filas: { nombre: string; cifras: Cifras }[]): string | 
 
 function VistaTodos({ datos, alCambiarPeriodo }: { datos: PuntualidadTodos; alCambiarPeriodo(d: string, h: string): void }) {
   if (!datos.publicacion.publicado) return <SinPublicar publicacion={datos.publicacion} />;
+  const minimo = datos.publicacion.muestraMinima;
   const hallazgo = hallazgoRanking(datos.nucleos);
   return (
     <>
@@ -175,7 +176,7 @@ function VistaTodos({ datos, alCambiarPeriodo }: { datos: PuntualidadTodos; alCa
                   </>
                 ) : (
                   <td colSpan={2} className="nota">
-                    {textoInsuficiente(n.cifras)}
+                    {textoInsuficiente(n.cifras, minimo)}
                   </td>
                 )}
                 <td className="cifra">{entero(n.cifras.viajes)}</td>
@@ -193,6 +194,7 @@ function VistaTodos({ datos, alCambiarPeriodo }: { datos: PuntualidadTodos; alCa
 
 function VistaNucleo({ datos, alCambiarPeriodo }: { datos: PuntualidadNucleo; alCambiarPeriodo(d: string, h: string): void }) {
   if (!datos.publicacion.publicado) return <SinPublicar publicacion={datos.publicacion} />;
+  const minimo = datos.publicacion.muestraMinima;
   const filas = datos.lineas.map((l) => ({ ...l, nombre: l.linea }));
   const hallazgo = hallazgoRanking(filas);
   return (
@@ -203,7 +205,7 @@ function VistaNucleo({ datos, alCambiarPeriodo }: { datos: PuntualidadNucleo; al
       <Bloque
         id="ranking-lineas"
         titulo="Las líneas, de la más puntual a la que menos"
-        explicacion="Por el porcentaje de paradas a las que llegan con menos de 3 minutos de retraso, y luego por la media. Las que no llegan a 30 viajes van al final, sin puesto."
+        explicacion={`Por el porcentaje de paradas a las que llegan con menos de 3 minutos de retraso, y luego por la media. Las que no llegan a ${minimo} viajes van al final, sin puesto.`}
       >
         <table className="tabla">
           <caption className="solo-lector">Ranking de puntualidad de las líneas de {datos.nombre}</caption>
@@ -235,7 +237,7 @@ function VistaNucleo({ datos, alCambiarPeriodo }: { datos: PuntualidadNucleo; al
                   </>
                 ) : (
                   <td colSpan={2} className="nota">
-                    {textoInsuficiente(l.cifras)}
+                    {textoInsuficiente(l.cifras, minimo)}
                   </td>
                 )}
                 <td className="cifra">{entero(l.cifras.viajes)}</td>
@@ -262,10 +264,12 @@ function TablaSerie({
   titulo,
   cabecera,
   filas,
+  minimo,
 }: {
   titulo: string;
   cabecera: string;
   filas: { clave: string; etiqueta: string; cifras: Cifras }[];
+  minimo: number;
 }) {
   return (
     <table className="tabla">
@@ -282,7 +286,7 @@ function TablaSerie({
         {filas.map((f) => (
           <tr key={f.clave}>
             <th scope="row">{f.etiqueta}</th>
-            <CeldasCifras cifras={f.cifras} />
+            <CeldasCifras cifras={f.cifras} minimo={minimo} />
           </tr>
         ))}
       </tbody>
@@ -292,25 +296,26 @@ function TablaSerie({
 
 function VistaLinea({ datos, alCambiarPeriodo }: { datos: PuntualidadLinea; alCambiarPeriodo(d: string, h: string): void }) {
   if (!datos.publicacion.publicado) return <SinPublicar publicacion={datos.publicacion} />;
+  const minimo = datos.publicacion.muestraMinima;
   const r = datos.resumen;
   const horas = [...datos.porHora].sort((a, b) => a.hora - b.hora);
   const destino = datos.llegadaDestino;
   return (
     <>
-      <p className="hallazgo">{frase(r) ?? (r ? `${textoInsuficiente(r)} en este periodo.` : 'Sin datos.')}</p>
+      <p className="hallazgo">{frase(r) ?? (r ? `${textoInsuficiente(r, minimo)}.` : 'Sin datos.')}</p>
       <Contexto periodo={datos.periodo} cobertura={datos.coberturaLinea} etiquetaCobertura="Cobertura de la línea" muestra={datos.muestra} />
       <ElegirPeriodo periodo={datos.periodo} alCambiar={alCambiarPeriodo} />
 
       {r && (
         <section className="bloque" aria-labelledby="resumen-titulo">
           <h2 id="resumen-titulo">Todo el periodo</h2>
-          <Cifrado cifras={r} />
+          <Cifrado cifras={r} minimo={minimo} />
           {r.suficiente && r.porcentajes && <Reparto porcentajes={r.porcentajes} titulo="Paradas por retraso al llegar" />}
           {destino && (
             <p className="bloque__explicacion">
               {destino.suficiente
                 ? `Al llegar a su destino, ${minutos(destino.mediaMinutos)} de media y el ${porcentaje(destino.menosDe3)} con menos de 3 min (${entero(destino.viajesEnDestino)} de ${entero(destino.viajes)} viajes se vieron llegar).`
-                : `Llegada a destino: ${textoInsuficiente({ viajes: destino.viajesEnDestino })} vistos llegar, de ${entero(destino.viajes)}.`}
+                : `Llegada a destino: solo ${entero(destino.viajesEnDestino)} de ${entero(destino.viajes)} viajes se vieron llegar, y hacen falta ${minimo} para dar la cifra.`}
             </p>
           )}
         </section>
@@ -319,9 +324,9 @@ function VistaLinea({ datos, alCambiarPeriodo }: { datos: PuntualidadLinea; alCa
       <Bloque
         id="por-hora"
         titulo="Por hora"
-        explicacion="Retraso medio, en minutos, según la hora programada de llegada a la parada. «—»: menos de 30 viajes en esa hora."
+        explicacion={`Retraso medio, en minutos, según la hora programada de llegada a la parada. «—»: menos de ${minimo} viajes en esa hora.`}
         grafico={
-          horas.length > 0 ? (
+          horas.some((h) => media(h.cifras) !== null) ? (
             <Columnas columnas={horas.map((h) => ({ clave: String(h.hora), etiqueta: String(h.hora).padStart(2, '0'), valor: media(h.cifras) }))} />
           ) : undefined
         }
@@ -331,6 +336,7 @@ function VistaLinea({ datos, alCambiarPeriodo }: { datos: PuntualidadLinea; alCa
         ) : (
           <TablaSerie
             titulo={`Puntualidad de la ${datos.linea} por hora`}
+            minimo={minimo}
             cabecera="Hora"
             filas={horas.map((h) => ({ clave: String(h.hora), etiqueta: franja(h.hora), cifras: h.cifras }))}
           />
@@ -342,7 +348,7 @@ function VistaLinea({ datos, alCambiarPeriodo }: { datos: PuntualidadLinea; alCa
         titulo="Por día de la semana"
         explicacion="Del día de servicio: un tren que sale el viernes a las 23:50 cuenta en viernes."
         grafico={
-          datos.porDiaSemana.length > 0 ? (
+          datos.porDiaSemana.some((d) => media(d.cifras) !== null) ? (
             <Columnas columnas={datos.porDiaSemana.map((d) => ({ clave: String(d.dia), etiqueta: DIAS_CORTOS[d.dia - 1], valor: media(d.cifras) }))} />
           ) : undefined
         }
@@ -352,6 +358,7 @@ function VistaLinea({ datos, alCambiarPeriodo }: { datos: PuntualidadLinea; alCa
         ) : (
           <TablaSerie
             titulo={`Puntualidad de la ${datos.linea} por día de la semana`}
+            minimo={minimo}
             cabecera="Día"
             filas={datos.porDiaSemana.map((d) => ({
               clave: String(d.dia),
@@ -366,7 +373,7 @@ function VistaLinea({ datos, alCambiarPeriodo }: { datos: PuntualidadLinea; alCa
         id="por-semana"
         titulo="Semana a semana"
         grafico={
-          datos.porSemana.length > 0 ? (
+          datos.porSemana.some((x) => media(x.cifras) !== null) ? (
             <Columnas columnas={datos.porSemana.map((s) => ({ clave: s.lunes, etiqueta: fechaCorta(s.lunes), valor: media(s.cifras) }))} />
           ) : undefined
         }
@@ -376,6 +383,7 @@ function VistaLinea({ datos, alCambiarPeriodo }: { datos: PuntualidadLinea; alCa
         ) : (
           <TablaSerie
             titulo={`Puntualidad de la ${datos.linea} semana a semana`}
+            minimo={minimo}
             cabecera="Semana del"
             filas={datos.porSemana.map((s) => ({
               clave: s.lunes,
@@ -389,10 +397,10 @@ function VistaLinea({ datos, alCambiarPeriodo }: { datos: PuntualidadLinea; alCa
       <Bloque
         id="tramos"
         titulo="Dónde se pierde el tiempo"
-        explicacion="Los tramos entre dos paradas seguidas en los que los trenes llegan con más retraso del que traían, de media. Solo los tramos con 30 pasos o más."
+        explicacion={`Los tramos entre dos paradas seguidas en los que los trenes llegan con más retraso del que traían, de media. Solo los tramos con ${minimo} pasos o más.`}
       >
         {datos.tramos.length === 0 ? (
-          <p className="nota">Aún no hay ningún tramo con 30 pasos de trenes en este periodo.</p>
+          <p className="nota">Aún no hay ningún tramo con {minimo} pasos de trenes en este periodo.</p>
         ) : (
           <table className="tabla">
             <caption className="solo-lector">Tramos de la {datos.linea} con más retraso</caption>

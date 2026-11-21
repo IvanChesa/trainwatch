@@ -35,7 +35,7 @@ function Contenido({ datos }: { datos: Datos }) {
         {datos.coberturaNucleo?.porcentaje != null &&
           ` Cobertura del núcleo: ${datos.coberturaNucleo.porcentaje.toLocaleString('es-ES')} %.`}
       </p>
-      {datos.resumen && <Cifrado cifras={datos.resumen} />}
+      {datos.resumen && <Cifrado cifras={datos.resumen} minimo={datos.publicacion.muestraMinima} />}
       {lineas.length > 0 && (
         <table className="tabla">
           <caption className="solo-lector">Puntualidad por línea en {datos.nombre ?? 'esta estación'}</caption>
@@ -53,7 +53,7 @@ function Contenido({ datos }: { datos: Datos }) {
                 <th scope="row">
                   <a href={urlLinea(l.nucleo, l.linea)}>{l.linea}</a>
                 </th>
-                <CeldasCifras cifras={l.cifras} />
+                <CeldasCifras cifras={l.cifras} minimo={datos.publicacion.muestraMinima} />
               </tr>
             ))}
           </tbody>

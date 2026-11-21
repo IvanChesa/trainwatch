@@ -25,7 +25,8 @@ public final class RespuestasEstadisticas {
             @Schema(example = "true") boolean publicado,
             @Schema(description = "Primer día de servicio con datos; null si aún no hay ninguno", example = "2026-11-21") LocalDate recogiendoDesde,
             @Schema(description = "Día desde el que se publican cifras; null si siempre", example = "2026-12-19") LocalDate cifrasDesde,
-            @Schema(description = "Para enseñarlo tal cual", example = "Recogiendo datos desde el 21-11-2026; cifras a partir del 19-12-2026.") String texto) {
+            @Schema(description = "Para enseñarlo tal cual", example = "Recogiendo datos desde el 21-11-2026; cifras a partir del 19-12-2026.") String texto,
+            @Schema(description = "Viajes por debajo de los cuales una cifra no se da (suficiente: false)", example = "30") int muestraMinima) {
     }
 
     @Schema(description = "Días de servicio que abarca la respuesta (ambos incluidos)")

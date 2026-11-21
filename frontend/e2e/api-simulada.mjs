@@ -19,6 +19,11 @@ const fichaEstacion = ejemplo('fichaEstacion');
 const linea = ejemplo('linea');
 const avisos = ejemplo('avisos');
 const trenes = ejemplo('trenesDeNucleo');
+// Fase 6: las estadísticas (los ejemplos de docs/api, con unas horas de datos reales).
+const puntualidadTodos = ejemplo('puntualidadTodos');
+const puntualidadNucleo = ejemplo('puntualidadNucleo');
+const puntualidadLinea = ejemplo('puntualidadLinea');
+const puntualidadEstacion = ejemplo('puntualidadEstacion');
 
 /** Con `nucleo=todos`, además de los de Rodalies: un tren en Madrid, otro en Sevilla y otro en Bilbao. */
 const DE_OTROS_NUCLEOS = [
@@ -97,5 +102,9 @@ createServer((req, res) => {
   if (ruta.startsWith('/api/trenes/')) return json(res, { ...fichaTren, id: decodeURIComponent(ruta.slice(12)) });
   if (ruta.startsWith('/api/estaciones/')) return json(res, fichaEstacion);
   if (ruta.startsWith('/api/lineas/')) return json(res, linea);
+  if (ruta === '/api/estadisticas/nucleos/todos') return json(res, puntualidadTodos);
+  if (/^\/api\/estadisticas\/nucleos\/\d+$/.test(ruta)) return json(res, puntualidadNucleo);
+  if (ruta.startsWith('/api/estadisticas/lineas/')) return json(res, puntualidadLinea);
+  if (ruta.startsWith('/api/estadisticas/estaciones/')) return json(res, puntualidadEstacion);
   return json(res, { title: 'No encontrado', status: 404, detail: `No existe ${ruta}` }, 404);
 }).listen(puerto, () => console.log(`API simulada en http://localhost:${puerto}`));

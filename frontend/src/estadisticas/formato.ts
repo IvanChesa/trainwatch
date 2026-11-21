@@ -42,6 +42,7 @@ export function fechaCorta(iso: string): string {
 /** «Del 21 de noviembre al 18 de diciembre de 2026 (28 días con datos)». */
 export function textoPeriodo(p: Periodo): string {
   const dias = `${entero(p.diasConDatos)} ${p.diasConDatos === 1 ? 'día' : 'días'} con datos`;
+  if (p.desde === p.hasta) return `El ${fecha(p.desde)} (${dias})`;
   return `Del ${fecha(p.desde)} al ${fecha(p.hasta)} (${dias})`;
 }
 

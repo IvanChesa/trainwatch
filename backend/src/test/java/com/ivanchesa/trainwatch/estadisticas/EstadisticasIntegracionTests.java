@@ -493,6 +493,7 @@ class EstadisticasIntegracionTests {
         assertThat(n.get("nombre").asString()).isEqualTo("Rodalies de Catalunya");
         assertThat(n.at("/publicacion/publicado").asBoolean()).isTrue();
         assertThat(n.at("/publicacion/recogiendoDesde").asString()).isEqualTo("2026-10-23");
+        assertThat(n.at("/publicacion/muestraMinima").asInt()).isEqualTo(2);
         // El 24 está calculado, pero sin ninguna fila: no cuenta como día con datos.
         assertThat(n.at("/periodo/diasConDatos").asInt()).isEqualTo(2);
         // Viajes: RL4 3 + 2 y R3 2. Paradas: RL4 9 + 4 y R3 4.
