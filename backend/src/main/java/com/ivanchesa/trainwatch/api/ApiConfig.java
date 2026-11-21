@@ -15,7 +15,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * ({@code http://localhost:5173}), y solo para leer: es una API pública de solo lectura, sin cookies ni cabeceras de
  * autenticación. {@code Last-Event-ID} se admite porque el navegador la manda al reconectarse al directo.
  *
- * <p><b>{@code ETag}</b> en las líneas y las estaciones: el cuerpo se calcula igual, pero si no ha cambiado se responde
+ * <p><b>{@code ETag}</b> en las líneas, las estaciones y las estadísticas: el cuerpo se calcula igual, pero si no ha cambiado se responde
  * un 304 sin cuerpo. No se aplica al directo ({@code /api/directo}): el filtro guarda la respuesta entera en memoria
  * antes de mandarla, y un flujo SSE no termina nunca.
  */
@@ -43,7 +43,7 @@ public class ApiConfig implements WebMvcConfigurer {
     FilterRegistrationBean<ShallowEtagHeaderFilter> etagLineasYEstaciones() {
         FilterRegistrationBean<ShallowEtagHeaderFilter> registro = new FilterRegistrationBean<>(
                 new ShallowEtagHeaderFilter());
-        registro.addUrlPatterns("/api/lineas/*", "/api/estaciones", "/api/estaciones/*");
+        registro.addUrlPatterns("/api/lineas/*", "/api/estaciones", "/api/estaciones/*", "/api/estadisticas/*");
         registro.setName("etagLineasYEstaciones");
         return registro;
     }

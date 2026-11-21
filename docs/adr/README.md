@@ -23,3 +23,5 @@ Un fichero por decisión: `NNNN-titulo-corto.md`, con contexto, decisión, alter
 - [0019 · Terraform con estado remoto en Azure Storage, versiones fijadas y secretos que no pasan por el estado](0019-terraform-con-estado-remoto-en-azure.md)
 - [0020 · Despliegue continuo: GHCR, OIDC con identidad administrada federada, `az vm run-command` y wrangler](0020-despliegue-con-oidc-y-run-command.md)
 - [0021 · Copias: las gestionadas de PostgreSQL (14 días) y un `pg_dump` nocturno a Blob Storage (30 días)](0021-copias-gestionadas-y-pg-dump-nocturno.md)
+- [0022 · Qué es una cifra de puntualidad de TrainWatch](0022-definiciones-de-puntualidad.md)
+- [0023 · Agregados diarios con sumas, recuentos e histograma, calculados cada noche antes del horario nuevo](0023-agregados-diarios-y-tarea-nocturna.md)
