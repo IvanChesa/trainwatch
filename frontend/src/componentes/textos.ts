@@ -6,13 +6,15 @@ import { compararLineas } from '../mapa/retraso';
 /** Textos y orden de la interfaz (fuera de los componentes, para poder probarlos solos). */
 
 const ORDEN_ESTADO: Record<string, number> = { EN_MARCHA: 0, EN_ORIGEN: 1, CANCELADO: 2, TERMINADO: 3 };
+/** Uno para todas las comparaciones: `localeCompare` con idioma crea uno en cada llamada. */
+const COLADOR = new Intl.Collator('es');
 
 /** Con `nucleos` (toda España), primero por el nombre del núcleo. */
 export function ordenarTrenes(trenes: readonly TrenMapa[], nucleos?: ReadonlyMap<number, string>): TrenMapa[] {
   const nombre = (t: TrenMapa) => nucleos?.get(t.nucleo) ?? String(t.nucleo);
   return [...trenes].sort(
     (a, b) =>
-      (nucleos ? nombre(a).localeCompare(nombre(b), 'es') : 0) ||
+      (nucleos ? COLADOR.compare(nombre(a), nombre(b)) : 0) ||
       (ORDEN_ESTADO[a.estado] ?? 9) - (ORDEN_ESTADO[b.estado] ?? 9) ||
       compararLineas(a.linea ?? '', b.linea ?? '') ||
       (b.retrasoMin ?? -1) - (a.retrasoMin ?? -1) ||

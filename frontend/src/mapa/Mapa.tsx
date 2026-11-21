@@ -139,7 +139,8 @@ export default function Mapa(props: PropsMapa) {
       });
       encuadrado.current = true;
       if (movimiento?.tipo === 'limites') m.fitBounds(movimiento.limites, movimiento.opciones);
-      else if (movimiento?.tipo === 'centro') m.jumpTo({ center: movimiento.centro, zoom: movimiento.zoom });
+      else if (movimiento?.tipo === 'centro')
+        m.jumpTo({ center: movimiento.centro, zoom: movimiento.zoom, padding: movimiento.padding });
     };
     // Con el contenedor sin tamaño todavía, MapLibre no sabría calcular el zoom: se espera a que lo tenga.
     const { clientWidth, clientHeight } = m.getContainer();

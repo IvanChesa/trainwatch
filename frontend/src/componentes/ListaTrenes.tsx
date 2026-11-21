@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { TrenMapa } from '../api/tipos';
 import { hora, textoSalida } from '../mapa/retraso';
 import { ordenarTrenes } from './textos';
@@ -32,7 +33,8 @@ export function ListaTrenes({
   /** Con toda España: el nombre de cada núcleo, para enseñarlo en cada tren y ordenar por él. */
   nucleos?: ReadonlyMap<number, string>;
 }) {
-  const ordenados = ordenarTrenes(trenes, nucleos);
+  // Con toda España son unos 400: se ordenan solo cuando cambian, no en cada pintado de la aplicación.
+  const ordenados = useMemo(() => ordenarTrenes(trenes, nucleos), [trenes, nucleos]);
   return (
     <section className="lista" aria-labelledby="lista-titulo">
       <h2 id="lista-titulo" tabIndex={-1}>

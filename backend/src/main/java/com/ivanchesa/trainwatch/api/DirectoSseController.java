@@ -1,5 +1,7 @@
 package com.ivanchesa.trainwatch.api;
 
+import java.util.regex.Pattern;
+
 import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.http.HttpHeaders;
@@ -25,6 +27,7 @@ public class DirectoSseController {
 
     /** El valor de {@code nucleo} para el directo de todos los núcleos («Toda España» en la web). */
     static final String TODOS = "todos";
+    private static final Pattern CODIGO = Pattern.compile("[0-9]+");
 
     private final DifusorDirecto difusor;
     private final NucleosController nucleos;
@@ -73,11 +76,11 @@ public class DirectoSseController {
 
     /** El código de un núcleo, o un 400 como el de cualquier parámetro con un valor que no vale. */
     private static int codigo(String nucleo) {
-        try {
-            return Integer.parseInt(nucleo.strip());
-        } catch (NumberFormatException e) {
-            throw Problemas.parametroInvalido("nucleo", "El parámetro «nucleo» no tiene un valor válido: «" + nucleo
-                    + "». Tiene que ser el código de un núcleo o «todos».");
+        // Lo mismo que dice OpenAPI (^([0-9]+|todos)$): ni signos, ni espacios, ni cifras que no sean ASCII.
+        if (nucleo.length() <= 9 && CODIGO.matcher(nucleo).matches()) {
+            return Integer.parseInt(nucleo);
         }
+        throw Problemas.parametroInvalido("nucleo", "El parámetro «nucleo» no tiene un valor válido: «" + nucleo
+                + "». Tiene que ser el código de un núcleo o «todos».");
     }
 }

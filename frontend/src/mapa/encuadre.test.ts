@@ -22,6 +22,9 @@ describe('el encuadre de un núcleo', () => {
     ]);
     expect(m.opciones.padding.left).toBeGreaterThanOrEqual(352); // el panel: 12 px + 340 px
     expect(m.opciones.animate).toBe(true);
+    // El margen sustituye al que haya dejado la ficha de un tren, y nunca más cerca que una ciudad.
+    expect(m.opciones.absolutePadding).toBe(true);
+    expect(m.opciones.maxZoom).toBe(12);
   });
 
   it('en el móvil no deja el hueco del panel (va encima del mapa)', () => {
@@ -43,6 +46,7 @@ describe('el encuadre de un núcleo', () => {
       tipo: 'centro',
       centro: [rodalies.centro!.lon, rodalies.centro!.lat],
       zoom: rodalies.zoom,
+      padding: { top: 30, bottom: 50, left: 370, right: 30 },
     });
     expect(
       movimientoEncuadre({ clave: '99', limites: null, centro: null, zoom: null }, 800, {
@@ -69,7 +73,7 @@ describe('el encuadre de un núcleo', () => {
 describe('el encuadre de toda España', () => {
   it('contiene los límites de todos los núcleos', () => {
     const e = encuadreDeTodos(NUCLEOS);
-    expect(e.clave).toBe('todos');
+    expect(e.clave).toBe(`todos:${NUCLEOS.length}`);
     for (const n of NUCLEOS) {
       expect(e.limites!.lonMin).toBeLessThanOrEqual(n.limites!.lonMin);
       expect(e.limites!.latMin).toBeLessThanOrEqual(n.limites!.latMin);

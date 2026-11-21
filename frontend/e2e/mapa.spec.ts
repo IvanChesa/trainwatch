@@ -219,6 +219,21 @@ test('al abrir, el mapa encuadra Rodalies (Cataluña, sin media península) y al
   await expect.poll(() => lugaresVisibles(page)).toEqual(['Madrid']);
 });
 
+test('tras abrir y cerrar la ficha de un tren, cambiar de núcleo encuadra bien el nuevo', async ({ page }) => {
+  await preparar(page);
+  await page.goto('/?vista=lista');
+  await expect(page.locator('.mapa[data-listo="si"]')).toBeAttached({ timeout: 15_000 });
+  const lista = page.getByRole('region', { name: /^Trenes de Rodalies/ });
+  await lista.getByRole('button').nth(1).click();
+  await expect(page.getByRole('complementary', { name: 'R15 hacia Reus' })).toBeVisible();
+  // El mapa (oculto tras la lista) se ha acercado al tren con el margen de la ficha: MapLibre lo guarda.
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Mapa' }).click();
+  // Revisión de la fase 5b: fitBounds sumaba su margen al guardado y Madrid no cabía; el mapa no se movía.
+  await page.getByRole('combobox', { name: 'Núcleo' }).selectOption({ label: 'Madrid' });
+  await expect.poll(() => lugaresVisibles(page)).toEqual(['Madrid']);
+});
+
 test('«Toda España» enseña los trenes de todos los núcleos con la península encuadrada', async ({ page }) => {
   const vigilancia = await preparar(page);
   await page.goto('/?nucleo=todos');

@@ -214,7 +214,7 @@ describe('App', () => {
     // Los cuatro trenes en el mapa, encuadrando toda España.
     const mapa = await screen.findByTestId('mapa');
     expect(within(mapa).getAllByRole('button')).toHaveLength(4);
-    await waitFor(() => expect(mapa).toHaveAttribute('data-encuadre', 'todos'));
+    await waitFor(() => expect(mapa).toHaveAttribute('data-encuadre', expect.stringMatching(/^todos:/)));
     expect(mapa).toHaveAccessibleName(/^Mapa de toda España: 2 trenes en marcha y 2 en origen/);
     // Los avisos de todos los núcleos.
     expect(fetch).toHaveBeenCalledWith('/api/avisos', expect.anything());

@@ -554,6 +554,11 @@ class ApiIntegracionTests {
             assertThat(p.get("parametro").asString()).isEqualTo("nucleo");
             assertThat(p.get("detail").asString()).contains("todos");
         }
+        for (String mal : List.of("-5", "+51", "%2051", "99999999999")) {
+            try (ClienteSse sse = new ClienteSse(directo(mal), null)) {
+                assertThat(sse.estado()).as(mal).isEqualTo(400);
+            }
+        }
 
         try (ClienteSse todos = new ClienteSse(directo("todos"), null);
                 ClienteSse valencia = new ClienteSse(directo(40), null)) {
