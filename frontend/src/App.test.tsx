@@ -1,75 +1,209 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import avisos from '../../docs/api/avisos.json';
+import instantanea from '../../docs/api/directo.json';
+import fichaEstacion from '../../docs/api/fichaEstacion.json';
+import fichaTren from '../../docs/api/fichaTren.json';
+import nucleosEjemplo from '../../docs/api/nucleos.json';
+import type { PropsMapa } from './mapa/Mapa';
+import { FuenteFalsa } from './pruebas/FuenteFalsa';
 import App from './App';
 
-function respuestaJson(cuerpo: unknown, status = 200): Response {
-  return new Response(JSON.stringify(cuerpo), { status, headers: { 'Content-Type': 'application/json' } });
+// MapLibre necesita WebGL, que jsdom no tiene: el mapa se sustituye por botones (uno por tren pintado).
+vi.mock('./mapa/Mapa', () => ({
+  default: (props: PropsMapa) => (
+    <div data-testid="mapa" aria-label={props.descripcion}>
+      {props.trenes.map((t) => (
+        <button key={t.id} type="button" onClick={() => props.alPulsarTren(t.id)}>
+          símbolo {t.id}
+        </button>
+      ))}
+    </div>
+  ),
+}));
+
+// Bilbao, sin datos en directo (como en la fase 0), para probar su aviso.
+const nucleos = nucleosEjemplo.map((n) =>
+  n.id === 60 ? { ...n, estado: 'SIN_DATOS_EN_DIRECTO', estadoTexto: 'sin datos en directo' } : n,
+);
+
+function respuesta(cuerpo: unknown, status = 200) {
+  return Promise.resolve(
+    new Response(JSON.stringify(cuerpo), { status, headers: { 'Content-Type': 'application/json' } }),
+  );
 }
 
-describe('App', () => {
-  it('dice que está en construcción, avisa de que no es oficial y cita los datos', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
-    render(<App />);
+function prepararApi() {
+  const fetch = vi.fn((url: string) => {
+    if (url === '/api/nucleos') return respuesta(nucleos);
+    if (url.startsWith('/api/avisos')) return respuesta(avisos);
+    if (url.startsWith('/api/trenes/NO_EXISTE')) return respuesta({ title: 'No encontrado', status: 404 }, 404);
+    if (url.startsWith('/api/trenes/')) return respuesta(fichaTren);
+    if (url.startsWith('/api/estaciones/')) return respuesta(fichaEstacion);
+    return respuesta({ title: 'No encontrado' }, 404);
+  });
+  vi.stubGlobal('fetch', fetch);
+  vi.stubGlobal('EventSource', FuenteFalsa);
+  return fetch;
+}
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('TrainWatch · en construcción');
+async function conDirecto() {
+  render(<App />);
+  await waitFor(() => expect(FuenteFalsa.creadas.length).toBeGreaterThan(0));
+  act(() => {
+    FuenteFalsa.ultima().abrir();
+    FuenteFalsa.ultima().enviar('instantanea', instantanea);
+  });
+}
+
+beforeEach(() => {
+  FuenteFalsa.creadas = [];
+  window.history.replaceState(null, '', '/');
+});
+
+describe('App', () => {
+  it('avisa de que no es oficial y cita los datos y el mapa', async () => {
+    prepararApi();
+    render(<App />);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('TrainWatch');
     expect(screen.getByRole('note')).toHaveTextContent('no oficial');
     expect(screen.getByRole('contentinfo')).toHaveTextContent('Datos: Renfe (CC BY 4.0)');
-    await screen.findByText('Backend no disponible');
-    await screen.findByText('Estado de los datos no disponible.');
+    expect(screen.getByRole('link', { name: '© OpenStreetMap' })).toHaveAttribute('href', 'https://www.openstreetmap.org/copyright');
+    expect(screen.getByRole('link', { name: 'OpenFreeMap' })).toBeInTheDocument();
+    await screen.findByRole('option', { name: 'Madrid' });
   });
 
-  it('enseña el estado de los datos en directo', async () => {
-    const fetchSimulado = vi.fn((url: string) =>
-      Promise.resolve(
-        url.endsWith('/api/directo/estado')
-          ? respuestaJson({
-              ultimoDato: '2026-11-20T17:30:00Z',
-              antiguedadS: 12,
-              trenes: 404,
-              nucleos: [
-                { nucleo: 51, nombre: 'Rodalies de Catalunya', estado: 'EN_DIRECTO' },
-                { nucleo: 10, nombre: 'Madrid', estado: 'EN_DIRECTO' },
-                { nucleo: 60, nombre: 'Bilbao', estado: 'SIN_DATOS_EN_DIRECTO' },
-              ],
-            })
-          : respuestaJson({ aplicacion: 'TrainWatch', version: '0.0.1', hora: '2026-11-20T18:30:12+01:00' }),
-      ),
-    );
-    vi.stubGlobal('fetch', fetchSimulado);
+  it('abre el directo de Rodalies por defecto, con la RL4 destacada', async () => {
+    prepararApi();
+    await conDirecto();
+    expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=51');
+    expect(screen.getByRole('combobox', { name: 'Núcleo' })).toHaveValue('51');
+    expect(screen.getByRole('option', { name: 'RL4 (Lleida) ★' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /RL4 Lleida/ })).toBeInTheDocument();
+    expect(screen.getByText('2 trenes en marcha y 1 en origen')).toBeInTheDocument();
+    expect(screen.getByText(/^En directo · dato de Renfe hace 16 s$/)).toBeInTheDocument();
+    // Los tres trenes de la instantánea, en el mapa.
+    expect(within(screen.getByTestId('mapa')).getAllByRole('button')).toHaveLength(3);
+  });
+
+  it('enseña el estado del núcleo: «sin datos en directo» en Bilbao', async () => {
+    prepararApi();
+    await conDirecto();
+    const selector = screen.getByRole('combobox', { name: 'Núcleo' });
+    expect(within(selector).getByRole('option', { name: 'Bilbao (sin datos en directo)' })).toBeInTheDocument();
+    fireEvent.change(selector, { target: { value: '60' } });
+    expect(await screen.findByText(/Bilbao: sin datos en directo/)).toBeInTheDocument();
+    await waitFor(() => expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=60'));
+    expect(FuenteFalsa.creadas[0].cerrada).toBe(true);
+    expect(window.location.search).toBe('?nucleo=60');
+  });
+
+  it('filtra por línea en el mapa y en la lista', async () => {
+    prepararApi();
+    await conDirecto();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Línea' }), { target: { value: 'R13' } });
+    expect(within(screen.getByTestId('mapa')).getAllByRole('button')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Lista' }));
+    const lista = screen.getByRole('region', { name: /^Trenes de/ });
+    expect(within(lista).getAllByRole('button')).toHaveLength(1);
+    expect(lista).toHaveTextContent('Hacia La Plana-Picamoixons');
+  });
+
+  it('la lista tiene los mismos trenes, como botones, y abre la misma ficha; Escape la cierra y devuelve el foco', async () => {
+    prepararApi();
+    await conDirecto();
+    fireEvent.click(screen.getByRole('button', { name: 'Lista' }));
+    expect(screen.getByRole('button', { name: 'Lista' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('heading', { name: 'Trenes de Rodalies de Catalunya' })).toBeInTheDocument();
+    const botones = within(screen.getByRole('region', { name: /^Trenes de/ })).getAllByRole('button');
+    expect(botones).toHaveLength(3);
+    // En marcha primero; el de origen, con su hora de salida.
+    expect(botones[2]).toHaveTextContent('Sale a las 15:15');
+    expect(botones[0]).toHaveTextContent('R13');
+    expect(botones[1]).toHaveTextContent('5 min de retraso');
+
+    botones[1].focus();
+    fireEvent.click(botones[1]);
+    const ficha = await screen.findByRole('complementary', { name: 'R15 hacia Reus' });
+    expect(within(ficha).getByRole('heading', { name: 'R15 hacia Reus' })).toHaveFocus();
+    expect(within(ficha).getByText('Torredembarra')).toBeInTheDocument();
+    // Las paradas, de la ficha de la API.
+    expect(await within(ficha).findByText("L'Hospitalet de Llobregat → Blanes")).toBeInTheDocument();
+    expect(within(ficha).getByRole('heading', { name: 'Paradas' })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    await waitFor(() => expect(botones[1]).toHaveFocus());
+  });
+
+  it('pasa de la ficha del tren a la de una estación, con sus próximos trenes y avisos', async () => {
+    prepararApi();
+    await conDirecto();
+    fireEvent.click(screen.getByRole('button', { name: 'símbolo 5123V15033R15' }));
+    const ficha = await screen.findByRole('complementary');
+    fireEvent.click(await within(ficha).findByRole('button', { name: 'Barcelona-Sants' }));
+    const estacion = await screen.findByRole('complementary', { name: 'Barcelona-Sants' });
+    expect(within(estacion).getByRole('table', { name: 'Próximos trenes en Barcelona-Sants' })).toBeInTheDocument();
+    expect(within(estacion).getByRole('button', { name: 'R17 hacia Barcelona Estació de França' })).toBeInTheDocument();
+    expect(within(estacion).getByRole('heading', { name: 'Avisos' })).toBeInTheDocument();
+  });
+
+  it('enseña los avisos del núcleo', async () => {
+    prepararApi();
+    await conDirecto();
+    const boton = await screen.findByRole('button', { name: 'Avisos (3)' });
+    fireEvent.click(boton);
+    const hoja = await screen.findByRole('complementary', { name: 'Avisos de Rodalies de Catalunya' });
+    expect(within(hoja).getAllByRole('listitem')).toHaveLength(3);
+  });
+
+  it('cambiar de línea con los avisos abiertos cambia su título sin quitarle el foco al selector', async () => {
+    prepararApi();
+    await conDirecto();
+    fireEvent.click(await screen.findByRole('button', { name: 'Avisos (3)' }));
+    await screen.findByRole('complementary', { name: 'Avisos de Rodalies de Catalunya' });
+    const selector = screen.getByRole('combobox', { name: 'Línea' });
+    selector.focus();
+    fireEvent.change(selector, { target: { value: 'R13' } });
+    expect(await screen.findByRole('complementary', { name: 'Avisos de la R13' })).toBeInTheDocument();
+    expect(selector).toHaveFocus();
+  });
+
+  it('el botón de la RL4 se queda (pulsado) y no pierde el foco', async () => {
+    prepararApi();
+    await conDirecto();
+    const boton = screen.getByRole('button', { name: /RL4 Lleida/ });
+    expect(boton).toHaveAttribute('aria-pressed', 'false');
+    boton.focus();
+    fireEvent.click(boton);
+    expect(screen.getByRole('combobox', { name: 'Línea' })).toHaveValue('RL4');
+    expect(boton).toHaveAttribute('aria-pressed', 'true');
+    expect(boton).toHaveFocus();
+    fireEvent.click(boton);
+    expect(screen.getByRole('combobox', { name: 'Línea' })).toHaveValue('');
+  });
+
+  it('un núcleo de la URL que no existe vuelve a Rodalies', async () => {
+    prepararApi();
+    window.history.replaceState(null, '', '/?nucleo=999');
     render(<App />);
-
-    expect(await screen.findByText('Último dato de Renfe hace 12 s: 404 trenes en 2 núcleos.')).toBeInTheDocument();
-    expect(fetchSimulado).toHaveBeenCalledWith('/api/directo/estado', expect.anything());
+    await screen.findByRole('option', { name: 'Madrid' });
+    expect(screen.getByRole('combobox', { name: 'Núcleo' })).toHaveValue('51');
+    await waitFor(() => expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=51'));
   });
 
-  it('enseña la versión y la hora del backend', async () => {
-    const fetchSimulado = vi.fn().mockResolvedValue(
-      respuestaJson({ aplicacion: 'TrainWatch', version: '0.0.1-SNAPSHOT', hora: '2026-11-20T13:30:05+01:00' }),
-    );
-    vi.stubGlobal('fetch', fetchSimulado);
-    render(<App />);
-
-    expect(screen.getByRole('status')).toHaveTextContent('Consultando el backend…');
-    const estado = await screen.findByText(/Backend 0\.0\.1-SNAPSHOT/);
-    expect(estado).toHaveTextContent('20/11/26, 13:30:05');
-    expect(fetchSimulado).toHaveBeenCalledWith('/api/estado', expect.anything());
+  it('avisa con «datos de hace X min» si el directo se para', async () => {
+    prepararApi();
+    await conDirecto();
+    act(() => FuenteFalsa.ultima().enviar('latido', { instante: '', ultimoDato: '', antiguedadS: 400 }));
+    expect(screen.getByText('Datos de hace 6 min: el directo está parado')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Los datos en directo están parados.');
   });
 
-  it('cancela la petición al desmontarse', () => {
-    const fetchSimulado = vi.fn().mockReturnValue(new Promise<Response>(() => {}));
-    vi.stubGlobal('fetch', fetchSimulado);
-    const { unmount } = render(<App />);
-
-    const { signal } = fetchSimulado.mock.calls[0][1] as RequestInit;
-    expect(signal?.aborted).toBe(false);
-    unmount();
-    expect(signal?.aborted).toBe(true);
-  });
-
-  it('dice «backend no disponible» si responde con un error', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respuestaJson({ error: 'caído' }, 503)));
-    render(<App />);
-
-    expect(await screen.findByRole('status')).toHaveTextContent('Backend no disponible');
+  it('dice que reintenta si el directo responde con un error (503)', async () => {
+    prepararApi();
+    await conDirecto();
+    act(() => FuenteFalsa.ultima().fallar(true));
+    expect(screen.getByText(/Sin conexión con el directo: se reintenta en \d s/)).toBeInTheDocument();
   });
 });
