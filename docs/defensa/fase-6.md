@@ -2,7 +2,6 @@
 
 Lo que tienes que saber explicar de esta fase en una entrevista: **qué significa cada cifra, de dónde sale, por qué se precalcula y qué sesgos tiene**. Es la parte que más luce en LinkedIn y la que más preguntas va a traer («¿cómo sabes que la R2 Sud llega con 4 min?»). Este código no lo has escrito tú: repásalo con esta guía delante y abre cada fichero que se cita (en `backend/src/main/java/com/ivanchesa/trainwatch/estadisticas/` y `V6__estadisticas.sql`).
 
-> Estado: está hecho el **backend** (definiciones, agregados, tarea nocturna, API y pruebas). Las páginas de React llegan cuando se fusione la fase 5.
 
 ## 1. La foto en 30 segundos
 
@@ -126,9 +125,28 @@ WHERE nucleo = 51 AND linea = 'RL4' AND NOT inferido AND llegada_programada IS N
   AND extract(hour FROM llegada_programada AT TIME ZONE 'Europe/Madrid') = 8;
 ```
 
-El informe de la fase (`docs/informes/fase-6.md`, §5) tiene tres cifras comprobadas así contra la API con datos reales.
+El informe de la fase (`docs/informes/fase-6.md`, §6) tiene tres cifras comprobadas así contra la API con datos reales.
 
-## 7. Preguntas que te pueden hacer
+## 7. La web
+
+Abre `frontend/src/estadisticas/`. Tres páginas con ruta propia, `/estadisticas` (toda España), `/estadisticas/51` (un núcleo) y `/estadisticas/51/R4` (una línea), más la puntualidad en la ficha de la estación ([ADR 0027](../adr/0027-paginas-de-puntualidad-con-svg-propio.md)).
+
+| Decisión | Por qué | Alternativa |
+|---|---|---|
+| **Rutas sin enrutador** (`Raiz.tsx` mira `location.pathname`) | Tres páginas y enlaces normales; Cloudflare Pages sirve `index.html` en cualquier ruta | React Router |
+| **Trozo aparte** (`lazy`) | 4 KB con gzip; la página no carga MapLibre (1 MB) | Todo en un bundle |
+| **SVG propio** | Columnas de una serie y una barra al 100 %: unas 100 líneas. Una librería son 50-200 KB y necesitaría la tabla igual | Recharts, Chart.js |
+| **Cada gráfico con su tabla** | El SVG va con `aria-hidden`; la tabla, visible y con `caption`, es lo que lee un lector de pantalla. Cada columna lleva su valor escrito: nada depende del color ni de la altura | Gráfico con `role="img"` y una descripción larga |
+| **Toda España = ranking de núcleos** | Los nombres de línea se repiten (C1 en cinco núcleos) y comparar líneas de servicios tan distintos no es justo. Cada núcleo, con su cobertura | Ranking de todas las líneas |
+| **El titular no corona empates** | Con ~30 viajes, un porcentaje tiene un error típico de ~7 puntos: si el primero saca menos de 5 al siguiente, dice «igualadas» | «La más puntual» siempre |
+| **El periodo, con dos fechas y un botón que navega** | La CSP tiene `form-action 'none'`; la URL es el estado y se puede compartir | Formulario `GET` |
+
+**Lo que te pueden preguntar:**
+- **«¿Cómo es accesible un gráfico?»** No lo es por sí solo: lo accesible es su tabla al lado, con los mismos datos. El gráfico es un atajo visual para quien ve.
+- **«¿Por qué el gráfico no se adapta al ancho?»** Se dibuja a su tamaño natural (texto de 11 px de verdad); si no cabe (24 horas en un móvil), se desplaza dentro de su caja. Encogido, el texto bajaba a 3-6 px.
+- **«¿Y si cambia el umbral de 30 viajes?»** La API lo dice en `publicacion.muestraMinima` y la web lo usa en sus textos.
+
+## 8. Preguntas que te pueden hacer
 
 - **«¿Por qué parada y no viaje?»** Es lo que vive el viajero en su andén y tiene más muestra; el viaje (última parada vista) va como cifra secundaria. Lo que no hago es mezclarlas.
 - **«¿Por qué 3 minutos?»** Es el primer color del mapa y un umbral habitual para cercanías; con 5 min casi todo sería puntual.

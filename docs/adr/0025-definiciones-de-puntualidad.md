@@ -68,4 +68,6 @@ Nada público antes de tener semanas de datos (punto 8 de «Cambios tras la fase
 
 - Cada respuesta de la API lleva el periodo, los viajes y paradas usados, cuántas inferidas y sin hora se quitaron, los cancelados y la cobertura del núcleo, para que la cifra se pueda explicar sola.
 - Un núcleo con poca cobertura da cifras de **los trenes que se ven**. Si Renfe deja de emitir justo los trenes con problemas, la cifra sale mejor de lo que es; la cobertura es la forma de avisarlo, no de corregirlo.
+- Los tramos de la estadística no son exactamente los colores del mapa: en el mapa, 1-2 min ya es amarillo; aquí cuenta como «menos de 3». La web usa los mismos colores, pero siempre con su texto (ADR 0027).
+- La API dice el umbral en cada respuesta (`publicacion.muestraMinima`), para que la web no lo escriba a mano.
 - Los minutos enteros dan medias con un decimal que son exactas (son medias de enteros), pero un tren con 2 min 59 s de retraso real sale como «menos de 3» o no según cómo lo redondee Renfe.
