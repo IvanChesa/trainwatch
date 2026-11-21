@@ -76,6 +76,11 @@ TrainWatch está en producción en `trainwatch.ivanchesa.com` (web) y `trainwatc
      - **JSON-LD honesto:** `WebSite` y `Person` (Iván como autor), sin valoraciones ni FAQ de relleno.
    - **Search Console y Bing Webmaster Tools:** deja en `docs/despliegue.md` los pasos para que Iván dé de alta `trainwatch.ivanchesa.com` y envíe el sitemap. La verificación por DNS en la zona compartida `ivanchesa.com` la hace Iván, o se pide a la sesión de control: tú no tocas Cloudflare.
 
+9. **«Toda España» por defecto** (Iván, 21-11: «por defecto quiero que aparezca toda España»).
+   - Al abrir la web sin `?nucleo=`, se ve «Toda España» con la península encuadrada, no Rodalies.
+   - Los enlaces con `?nucleo=` siguen igual.
+   - Ajusta las pruebas que daban Rodalies por defecto, el texto del plan (`docs/PLAN.md`, que dice «Rodalies por defecto») y las capturas si hace falta.
+
 ## Antes de cerrar
 
 - **`security-review`** de la API pública: CORS, límites del directo, validación de parámetros (también `cerca` y `radio`) y cabeceras.
@@ -101,7 +106,7 @@ TrainWatch está en producción en `trainwatch.ivanchesa.com` (web) y `trainwatc
   - nada fuera de la carpeta `trainwatch`;
   - nada de pago;
   - **sin push** ni cambios en `infra/`: la sesión de control revisa y sube, y la CI despliega sola.
-- **Si el presupuesto es limitado,** este es el orden: 7, 8, 1, 3, 6, 2, 4. Haz commits frecuentes.
+- **Si el presupuesto es limitado,** este es el orden: 7, 9, 8, 1, 3, 6, 2, 4. Haz commits frecuentes.
 - **Al terminar:** resumen de 10 líneas como máximo:
   - qué funciona;
   - el antes y el después del rendimiento;
