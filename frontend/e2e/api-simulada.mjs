@@ -20,6 +20,13 @@ const linea = ejemplo('linea');
 const avisos = ejemplo('avisos');
 const trenes = ejemplo('trenesDeNucleo');
 
+/** Con `nucleo=todos`, además de los de Rodalies: un tren en Madrid, otro en Sevilla y otro en Bilbao. */
+const DE_OTROS_NUCLEOS = [
+  { id: '1099C5', linea: 'C5', nucleo: 10, destino: 'Humanes', lat: 40.4065, lon: -3.6913 },
+  { id: '3099C1', linea: 'C1', nucleo: 30, destino: 'Lora del Río', lat: 37.3917, lon: -5.9751 },
+  { id: '6099C3', linea: 'C3', nucleo: 60, destino: 'Muskiz', lat: 43.2591, lon: -2.9264 },
+];
+
 /** El tren que se mueve: el R15 en marcha hacia Torredembarra (rumbo 251°, hacia el suroeste). */
 export const TREN_QUE_SE_MUEVE = '5123V15033R15';
 let rechazar = 0;
@@ -45,7 +52,14 @@ function directo(req, res, nucleo) {
   const ahora = () => new Date().toISOString();
   const enviar = (evento, datos) => res.write(`id: ${secuencia++}\nevent: ${evento}\ndata: ${JSON.stringify(datos)}\n\n`);
 
-  const base = structuredClone(instantanea.trenes).map((t) => ({ ...t, nucleo }));
+  // El directo de todos (nucleo=todos) lleva `nucleo: null` en sus eventos y cada tren con el suyo.
+  const todos = nucleo === 'todos';
+  const base = structuredClone(instantanea.trenes).map((t) => ({ ...t, nucleo: todos ? 51 : nucleo }));
+  if (todos) {
+    const modelo = instantanea.trenes.find((t) => t.estado === 'EN_MARCHA');
+    for (const otro of DE_OTROS_NUCLEOS) base.push({ ...structuredClone(modelo), ...otro, proximaParada: null });
+    nucleo = null;
+  }
   enviar('instantanea', { ...instantanea, nucleo, secuencia, generado: ahora(), ultimoDato: ahora(), trenes: base });
 
   let paso = 0;
@@ -74,7 +88,10 @@ createServer((req, res) => {
     return json(res, { rechazar });
   }
   if (ruta === '/api/nucleos') return json(res, nucleos);
-  if (ruta === '/api/directo') return directo(req, res, Number(url.searchParams.get('nucleo') ?? 51));
+  if (ruta === '/api/directo') {
+    const nucleo = url.searchParams.get('nucleo') ?? '51';
+    return directo(req, res, nucleo === 'todos' ? 'todos' : Number(nucleo));
+  }
   if (ruta === '/api/avisos') return json(res, avisos);
   if (/^\/api\/nucleos\/\d+\/trenes$/.test(ruta)) return json(res, trenes);
   if (ruta.startsWith('/api/trenes/')) return json(res, { ...fichaTren, id: decodeURIComponent(ruta.slice(12)) });

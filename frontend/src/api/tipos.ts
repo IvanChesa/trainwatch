@@ -54,7 +54,8 @@ export interface TrenMapa {
 
 export interface Instantanea {
   secuencia: number;
-  nucleo: number;
+  /** `null` en el directo de todos los núcleos. */
+  nucleo: number | null;
   generado: string;
   ultimoDato: string | null;
   trenes: TrenMapa[];
@@ -62,7 +63,7 @@ export interface Instantanea {
 
 export interface Cambios {
   secuencia: number;
-  nucleo: number;
+  nucleo: number | null;
   generado: string;
   ultimoDato: string | null;
   altas: TrenMapa[];

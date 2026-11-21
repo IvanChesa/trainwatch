@@ -12,7 +12,12 @@ import App from './App';
 // MapLibre necesita WebGL, que jsdom no tiene: el mapa se sustituye por botones (uno por tren pintado).
 vi.mock('./mapa/Mapa', () => ({
   default: (props: PropsMapa) => (
-    <div data-testid="mapa" aria-label={props.descripcion}>
+    <div
+      data-testid="mapa"
+      aria-label={props.descripcion}
+      data-encuadre={props.encuadre?.clave ?? ''}
+      data-destacada={props.destacada ? `${props.destacada.nucleo}:${props.destacada.linea}` : ''}
+    >
       {props.trenes.map((t) => (
         <button key={t.id} type="button" onClick={() => props.alPulsarTren(t.id)}>
           símbolo {t.id}
@@ -47,14 +52,21 @@ function prepararApi() {
   return fetch;
 }
 
-async function conDirecto() {
+async function conDirecto(foto: unknown = instantanea) {
   render(<App />);
   await waitFor(() => expect(FuenteFalsa.creadas.length).toBeGreaterThan(0));
   act(() => {
     FuenteFalsa.ultima().abrir();
-    FuenteFalsa.ultima().enviar('instantanea', instantanea);
+    FuenteFalsa.ultima().enviar('instantanea', foto);
   });
 }
+
+/** La instantánea de toda España: los trenes de Rodalies del ejemplo y un C5 de Madrid. */
+const instantaneaDeTodos = {
+  ...instantanea,
+  nucleo: null,
+  trenes: [...instantanea.trenes, { ...instantanea.trenes[0], id: '1099C5', linea: 'C5', nucleo: 10, destino: 'Humanes' }],
+};
 
 beforeEach(() => {
   FuenteFalsa.creadas = [];
@@ -181,6 +193,55 @@ describe('App', () => {
     expect(boton).toHaveFocus();
     fireEvent.click(boton);
     expect(screen.getByRole('combobox', { name: 'Línea' })).toHaveValue('');
+  });
+
+  it('con «Toda España» (por URL) abre el directo de todos, sin filtro de línea y con el núcleo en la lista', async () => {
+    const fetch = prepararApi();
+    window.history.replaceState(null, '', '/?nucleo=todos&linea=R13');
+    await conDirecto(instantaneaDeTodos);
+    expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=todos');
+    expect(screen.getByRole('combobox', { name: 'Núcleo' })).toHaveValue('todos');
+    // Sin filtro de línea (los nombres se repiten entre núcleos), y dice por qué.
+    const lineas = screen.getByRole('combobox', { name: 'Línea' });
+    expect(lineas).toBeDisabled();
+    expect(lineas).toHaveAccessibleDescription(/elige un núcleo/);
+    expect(window.location.search).toBe('?nucleo=todos');
+    // Los cuatro trenes en el mapa, encuadrando toda España, con la RL4 de Rodalies destacada.
+    const mapa = await screen.findByTestId('mapa');
+    expect(within(mapa).getAllByRole('button')).toHaveLength(4);
+    await waitFor(() => expect(mapa).toHaveAttribute('data-encuadre', 'todos'));
+    expect(mapa).toHaveAttribute('data-destacada', '51:RL4');
+    expect(mapa).toHaveAccessibleName(/^Mapa de toda España: 2 trenes en marcha y 2 en origen/);
+    // Los avisos de todos los núcleos.
+    expect(fetch).toHaveBeenCalledWith('/api/avisos', expect.anything());
+
+    // La lista: el núcleo de cada tren, ordenada por núcleo (Madrid antes que Rodalies).
+    fireEvent.click(screen.getByRole('button', { name: 'Lista' }));
+    const lista = screen.getByRole('region', { name: 'Trenes de toda España' });
+    const botones = within(lista).getAllByRole('button');
+    expect(botones).toHaveLength(4);
+    expect(botones[0]).toHaveTextContent(/^C5Madrid/);
+    expect(botones[1]).toHaveTextContent('Rodalies de Catalunya');
+  });
+
+  it('«Toda España» se elige en el selector y el botón de la RL4 lleva a Rodalies con la RL4', async () => {
+    prepararApi();
+    await conDirecto();
+    expect(screen.getByTestId('mapa')).toHaveAttribute('data-encuadre', '51');
+    const selector = screen.getByRole('combobox', { name: 'Núcleo' });
+    expect(within(selector).getAllByRole('option')[0]).toHaveTextContent('Toda España');
+    fireEvent.change(selector, { target: { value: 'todos' } });
+    await waitFor(() => expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=todos'));
+    expect(window.location.search).toBe('?nucleo=todos');
+
+    const rl4 = screen.getByRole('button', { name: /RL4 Lleida/ });
+    expect(rl4).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(rl4);
+    await waitFor(() => expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=51'));
+    expect(selector).toHaveValue('51');
+    expect(screen.getByRole('combobox', { name: 'Línea' })).toHaveValue('RL4');
+    expect(rl4).toHaveAttribute('aria-pressed', 'true');
+    expect(window.location.search).toBe('?linea=RL4');
   });
 
   it('un núcleo de la URL que no existe vuelve a Rodalies', async () => {

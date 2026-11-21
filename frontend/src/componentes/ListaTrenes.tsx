@@ -23,13 +23,16 @@ export function ListaTrenes({
   titulo,
   seleccionado,
   alAbrir,
+  nucleos,
 }: {
   trenes: readonly TrenMapa[];
   titulo: string;
   seleccionado: string | null;
   alAbrir(id: string): void;
+  /** Con toda España: el nombre de cada núcleo, para enseñarlo en cada tren y ordenar por él. */
+  nucleos?: ReadonlyMap<number, string>;
 }) {
-  const ordenados = ordenarTrenes(trenes);
+  const ordenados = ordenarTrenes(trenes, nucleos);
   return (
     <section className="lista" aria-labelledby="lista-titulo">
       <h2 id="lista-titulo" tabIndex={-1}>
@@ -49,6 +52,7 @@ export function ListaTrenes({
               >
                 <span className="lista__linea">{t.linea ?? '¿?'}</span>
                 <span className="lista__texto">
+                  {nucleos && <span className="lista__nucleo">{nucleos.get(t.nucleo) ?? `Núcleo ${t.nucleo}`}</span>}
                   <span className="lista__destino">{t.destino ? `Hacia ${t.destino}` : 'Destino desconocido'}</span>
                   <span className="lista__detalle">{situacion(t)}</span>
                 </span>

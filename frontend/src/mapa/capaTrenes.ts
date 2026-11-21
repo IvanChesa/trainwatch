@@ -1,4 +1,4 @@
-import type { GeoJSONSource, Map as MapaLibre, MapLayerMouseEvent } from 'maplibre-gl';
+import type { FilterSpecification, GeoJSONSource, Map as MapaLibre, MapLayerMouseEvent } from 'maplibre-gl';
 import type { Feature, FeatureCollection, Point } from 'geojson';
 import type { TrenMapa } from '../api/tipos';
 import { Interpolador } from './interpolacion';
@@ -17,12 +17,21 @@ export interface CapaDeTrenes {
   actualizar(trenes: readonly TrenMapa[], nuevoDato: boolean): void;
   /** Resalta un tren (el de la ficha abierta) o ninguno. */
   seleccionar(id: string | null): void;
-  /** Resalta una línea (la RL4 en Rodalies) o ninguna. */
-  destacarLinea(linea: string | null): void;
+  /** Resalta una línea de un núcleo (la RL4 de Rodalies, también con toda España) o ninguna. */
+  destacarLinea(linea: LineaDestacada | null): void;
   /** `false` con `prefers-reduced-motion`: los trenes saltan a su posición nueva. */
   animar(si: boolean): void;
   destruir(): void;
 }
+
+/** Una línea de un núcleo: los nombres se repiten entre núcleos (hay una C1 en Madrid y otra en Valencia). */
+export interface LineaDestacada {
+  nucleo: number;
+  linea: string;
+}
+
+/** Un filtro que no deja pasar ningún tren (ninguno tiene el id vacío). */
+const NINGUNO = ['==', ['get', 'id'], ''] as FilterSpecification;
 
 const FUENTE = 'tw-trenes';
 export const CAPA_SIMBOLOS = 'tw-trenes-simbolos';
@@ -121,7 +130,7 @@ export class CapaTrenes2D implements CapaDeTrenes {
       id: CAPA_DESTACADA,
       type: 'circle',
       source: FUENTE,
-      filter: ['==', ['get', 'linea'], ''],
+      filter: NINGUNO,
       paint: {
         'circle-radius': 13,
         'circle-color': 'rgba(142, 174, 255, 0.18)',
@@ -133,7 +142,7 @@ export class CapaTrenes2D implements CapaDeTrenes {
       id: CAPA_HALO,
       type: 'circle',
       source: FUENTE,
-      filter: ['==', ['get', 'id'], ''],
+      filter: NINGUNO,
       paint: {
         'circle-radius': 17,
         'circle-color': 'rgba(255, 255, 255, 0.12)',
@@ -188,8 +197,13 @@ export class CapaTrenes2D implements CapaDeTrenes {
     this.mapa.setFilter(CAPA_HALO, ['==', ['get', 'id'], id ?? '']);
   }
 
-  destacarLinea(linea: string | null): void {
-    this.mapa.setFilter(CAPA_DESTACADA, ['==', ['get', 'linea'], linea ?? '']);
+  destacarLinea(destacada: LineaDestacada | null): void {
+    this.mapa.setFilter(
+      CAPA_DESTACADA,
+      destacada
+        ? ['all', ['==', ['get', 'linea'], destacada.linea], ['==', ['get', 'nucleo'], destacada.nucleo]]
+        : NINGUNO,
+    );
   }
 
   animar(si: boolean): void {
@@ -228,6 +242,7 @@ export class CapaTrenes2D implements CapaDeTrenes {
         properties: {
           id: tren.id,
           linea: tren.linea ?? '',
+          nucleo: tren.nucleo,
           icono: icono(tren, categoria),
           rumbo: tren.estado === 'EN_ORIGEN' ? 0 : (tren.rumbo ?? 0),
           // «+7» si va con retraso y «?» si no se sabe: el color nunca va solo.

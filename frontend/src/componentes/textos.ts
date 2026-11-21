@@ -7,9 +7,12 @@ import { compararLineas } from '../mapa/retraso';
 
 const ORDEN_ESTADO: Record<string, number> = { EN_MARCHA: 0, EN_ORIGEN: 1, CANCELADO: 2, TERMINADO: 3 };
 
-export function ordenarTrenes(trenes: readonly TrenMapa[]): TrenMapa[] {
+/** Con `nucleos` (toda España), primero por el nombre del núcleo. */
+export function ordenarTrenes(trenes: readonly TrenMapa[], nucleos?: ReadonlyMap<number, string>): TrenMapa[] {
+  const nombre = (t: TrenMapa) => nucleos?.get(t.nucleo) ?? String(t.nucleo);
   return [...trenes].sort(
     (a, b) =>
+      (nucleos ? nombre(a).localeCompare(nombre(b), 'es') : 0) ||
       (ORDEN_ESTADO[a.estado] ?? 9) - (ORDEN_ESTADO[b.estado] ?? 9) ||
       compararLineas(a.linea ?? '', b.linea ?? '') ||
       (b.retrasoMin ?? -1) - (a.retrasoMin ?? -1) ||

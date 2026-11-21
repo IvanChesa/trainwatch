@@ -216,3 +216,31 @@ test('al abrir, el mapa encuadra Rodalies (Cataluña, sin media península) y al
   await expect(page).toHaveURL(/nucleo=10/);
   await expect.poll(() => lugaresVisibles(page)).toEqual(['Madrid']);
 });
+
+test('«Toda España» enseña los trenes de todos los núcleos con la península encuadrada', async ({ page }) => {
+  const vigilancia = await preparar(page);
+  await page.goto('/?nucleo=todos');
+  await expect(page.locator('.mapa[data-listo="si"]')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('combobox', { name: 'Núcleo' })).toHaveValue('todos');
+  await expect(page.getByRole('combobox', { name: 'Línea' })).toBeDisabled();
+  // Los 3 de Rodalies y los de Madrid, Sevilla y Bilbao, en el mapa.
+  await expect(page.locator('canvas.maplibregl-canvas')).toHaveAttribute('aria-label', /toda España: 5 trenes en marcha y 1 en origen/);
+  await expect.poll(() => posicion(page, '6099C3')).not.toBeNull();
+  // La península entera a la vista (sin lo que tapa el panel).
+  await expect
+    .poll(() => lugaresVisibles(page))
+    .toEqual(expect.arrayContaining(['Barcelona', 'Madrid', 'Sevilla', 'Bilbao', 'Valencia', 'Lleida']));
+  // El tren de Rodalies se sigue moviendo con la interpolación.
+  const antes = (await posicion(page, TREN))![0];
+  await page.waitForTimeout(1200);
+  expect((await posicion(page, TREN))![0]).toBeLessThan(antes);
+
+  // La lista, con el núcleo de cada tren.
+  await page.getByRole('button', { name: 'Lista' }).click();
+  const lista = page.getByRole('region', { name: 'Trenes de toda España' });
+  await expect(lista.getByRole('button')).toHaveCount(6);
+  await expect(lista.getByRole('button').first()).toContainText('Bilbao');
+  await expect(lista).toContainText('Madrid');
+  await expect(lista).toContainText('Rodalies de Catalunya');
+  expect(vigilancia.errores).toEqual([]);
+});

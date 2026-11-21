@@ -38,5 +38,7 @@ export const consultas = {
     pedirJson<FichaEstacion>(`/api/estaciones/${encodeURIComponent(id)}`, signal),
   linea: (nucleo: number, linea: string, signal?: AbortSignal) =>
     pedirJson<Linea>(`/api/lineas/${nucleo}/${encodeURIComponent(linea)}`, signal),
-  avisos: (nucleo: number, signal?: AbortSignal) => pedirJson<Aviso[]>(`/api/avisos?nucleo=${nucleo}`, signal),
+  /** Los de un núcleo o, con `'todos'`, los de todos. */
+  avisos: (nucleo: number | 'todos', signal?: AbortSignal) =>
+    pedirJson<Aviso[]>(nucleo === 'todos' ? '/api/avisos' : `/api/avisos?nucleo=${nucleo}`, signal),
 };
