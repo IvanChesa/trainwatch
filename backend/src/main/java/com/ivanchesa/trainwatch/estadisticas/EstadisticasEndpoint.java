@@ -9,6 +9,7 @@ import java.util.Map;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
 import org.springframework.boot.actuate.endpoint.annotation.WriteOperation;
+import org.springframework.boot.actuate.endpoint.web.WebEndpointResponse;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
@@ -48,12 +49,31 @@ public class EstadisticasEndpoint {
                 .list();
     }
 
+    /** Lo que salió de un día: su resultado o, si falló, el error (los demás días se calculan igual). */
+    public record Recalculo(LocalDate fecha, CalculoEstadisticas.Resultado resultado, String error) {
+    }
+
+    /** 400 si las fechas no valen; si no, 200 con un {@link Recalculo} por día. */
     @WriteOperation
-    public Object recalcular(String desde, String hasta) {
+    public WebEndpointResponse<Object> recalcular(String desde, String hasta) {
+        LocalDate d;
+        LocalDate h;
         try {
-            return calculo.recalcular(LocalDate.parse(desde), LocalDate.parse(hasta));
+            d = LocalDate.parse(desde);
+            h = LocalDate.parse(hasta);
+            calculo.validar(d, h);
         } catch (DateTimeParseException | IllegalArgumentException e) {
-            return Map.of("error", "Fechas no válidas (AAAA-MM-DD, desde ≤ hasta): " + e.getMessage());
+            return new WebEndpointResponse<>(Map.of("error", "Fechas no válidas (AAAA-MM-DD, desde ≤ hasta): "
+                    + e.getMessage()), WebEndpointResponse.STATUS_BAD_REQUEST);
         }
+        List<Recalculo> dias = new java.util.ArrayList<>();
+        for (LocalDate f = d; !f.isAfter(h); f = f.plusDays(1)) {
+            try {
+                dias.add(new Recalculo(f, calculo.calcular(f), null));
+            } catch (RuntimeException e) {
+                dias.add(new Recalculo(f, null, e.getClass().getSimpleName() + ": " + e.getMessage()));
+            }
+        }
+        return new WebEndpointResponse<>(dias, WebEndpointResponse.STATUS_OK);
     }
 }

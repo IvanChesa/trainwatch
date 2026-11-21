@@ -1,7 +1,10 @@
 package com.ivanchesa.trainwatch.estadisticas;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.Cifras;
-import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.LlegadaFinal;
+import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.LlegadaDestino;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.Porcentajes;
 
 /**
@@ -22,8 +25,9 @@ final class Acumulado {
     int de16OMas;
     final int[] histograma = new int[POSICIONES];
     int finales;
-    long sumaFinales;
-    int finalesMenosDe3;
+    int destinos;
+    long sumaDestinos;
+    int destinosMenosDe3;
 
     void sumar(Fila f) {
         paradas += f.paradas();
@@ -36,13 +40,14 @@ final class Acumulado {
             histograma[i] += f.histograma()[i];
         }
         finales += f.finales();
-        sumaFinales += f.sumaFinales();
-        finalesMenosDe3 += f.finalesMenosDe3();
+        destinos += f.destinos();
+        sumaDestinos += f.sumaDestinos();
+        destinosMenosDe3 += f.destinosMenosDe3();
     }
 
-    /** Una fila de {@code estad_linea_hora} o {@code estad_estacion_dia} (sin llegada final, a 0). */
+    /** Una fila de {@code estad_linea_hora} o {@code estad_estacion_dia} (sin llegadas a destino, a 0). */
     record Fila(int viajes, int paradas, long sumaMinutos, int menosDe3, int de3a5, int de6a15, int de16OMas,
-            int[] histograma, int finales, long sumaFinales, int finalesMenosDe3) {
+            int[] histograma, int finales, int destinos, long sumaDestinos, int destinosMenosDe3) {
     }
 
     /**
@@ -54,15 +59,19 @@ final class Acumulado {
         if (!suficiente) {
             return new Cifras(viajes, paradas, false, null, null, null, null);
         }
-        return new Cifras(viajes, paradas, true, decimal((double) sumaMinutos / paradas), percentil(50),
+        return new Cifras(viajes, paradas, true, decimal(sumaMinutos, paradas), percentil(50),
                 percentil(90), new Porcentajes(porcentaje(menosDe3, paradas), porcentaje(de3a5, paradas),
                         porcentaje(de6a15, paradas), porcentaje(de16OMas, paradas)));
     }
 
-    LlegadaFinal llegadaFinal(int minimo) {
-        boolean suficiente = finales >= minimo;
-        return new LlegadaFinal(finales, suficiente, suficiente ? decimal((double) sumaFinales / finales) : null,
-                suficiente ? porcentaje(finalesMenosDe3, finales) : null);
+    /**
+     * La cifra por viaje: solo los viajes que se vieron llegar a su destino (la última parada del horario). Los que
+     * dejaron de verse antes se cuentan, pero no entran: han tenido menos recorrido para acumular retraso.
+     */
+    LlegadaDestino llegadaDestino(int minimo) {
+        boolean suficiente = destinos >= minimo;
+        return new LlegadaDestino(finales, destinos, suficiente, suficiente ? decimal(sumaDestinos, destinos) : null,
+                suficiente ? porcentaje(destinosMenosDe3, destinos) : null);
     }
 
     /**
@@ -84,11 +93,17 @@ final class Acumulado {
         return POSICIONES - 1;
     }
 
-    static Double decimal(double x) {
-        return Math.round(x * 10) / 10.0;
+    /**
+     * {@code numerador / denominador} con un decimal, redondeando la mitad lejos del cero, como {@code round(x, 1)} de
+     * PostgreSQL sobre {@code numeric} (-2,25 → -2,3): así la API y una consulta a mano dan lo mismo.
+     */
+    static Double decimal(long numerador, long denominador) {
+        return BigDecimal.valueOf(numerador).divide(BigDecimal.valueOf(denominador), 1, RoundingMode.HALF_UP)
+                .doubleValue();
     }
 
+    /** {@code 100 * parte / total} con un decimal (como {@link #decimal}); {@code null} si el total es 0. */
     static Double porcentaje(long parte, long total) {
-        return total == 0 ? null : Math.round(1000.0 * parte / total) / 10.0;
+        return total == 0 ? null : decimal(100 * parte, total);
     }
 }

@@ -7,15 +7,22 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import java.sql.Connection;
+import java.sql.SQLException;
+
+import javax.sql.DataSource;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ivanchesa.trainwatch.RelojConfig;
+import com.ivanchesa.trainwatch.horario.ImportadorHorario;
 
 /**
  * Calcula los agregados de puntualidad de un día de servicio (ADR 0022 y 0023) a partir de {@code retrasos}, del
@@ -40,13 +47,15 @@ public class CalculoEstadisticas {
     }
 
     private final JdbcClient jdbc;
+    private final DataSource dataSource;
     private final TransactionTemplate transaccion;
     private final EstadisticasProperties propiedades;
     private final Clock reloj;
 
-    public CalculoEstadisticas(JdbcClient jdbc, PlatformTransactionManager transacciones,
+    public CalculoEstadisticas(JdbcClient jdbc, DataSource dataSource, PlatformTransactionManager transacciones,
             EstadisticasProperties propiedades, Clock reloj) {
         this.jdbc = jdbc;
+        this.dataSource = dataSource;
         this.transaccion = new TransactionTemplate(transacciones);
         this.propiedades = propiedades;
         this.reloj = reloj;
@@ -82,13 +91,7 @@ public class CalculoEstadisticas {
 
     /** Recalcula los días de {@code desde} a {@code hasta}, ambos incluidos, cada uno en su transacción. */
     public List<Resultado> recalcular(LocalDate desde, LocalDate hasta) {
-        if (hasta.isBefore(desde)) {
-            throw new IllegalArgumentException("«hasta» no puede ser anterior a «desde»");
-        }
-        long dias = java.time.temporal.ChronoUnit.DAYS.between(desde, hasta) + 1;
-        if (dias > propiedades.periodoMaximoDias()) {
-            throw new IllegalArgumentException("Como mucho " + propiedades.periodoMaximoDias() + " días de una vez");
-        }
+        validar(desde, hasta);
         List<Resultado> resultados = new ArrayList<>();
         for (LocalDate d = desde; !d.isAfter(hasta); d = d.plusDays(1)) {
             resultados.add(calcular(d));
@@ -96,19 +99,50 @@ public class CalculoEstadisticas {
         return resultados;
     }
 
+    /** Un intervalo que se puede recalcular de una vez: {@code desde ≤ hasta} y no más del periodo máximo. */
+    void validar(LocalDate desde, LocalDate hasta) {
+        if (hasta.isBefore(desde)) {
+            throw new IllegalArgumentException("«hasta» no puede ser anterior a «desde»");
+        }
+        long dias = java.time.temporal.ChronoUnit.DAYS.between(desde, hasta) + 1;
+        if (dias > propiedades.periodoMaximoDias()) {
+            throw new IllegalArgumentException("Como mucho " + propiedades.periodoMaximoDias() + " días de una vez");
+        }
+    }
+
     boolean calculado(LocalDate fecha) {
         return jdbc.sql("SELECT EXISTS (SELECT 1 FROM estad_dias WHERE fecha_servicio = :f)").param("f", fecha)
                 .query(Boolean.class).single();
     }
 
-    /** Calcula (o recalcula) un día de servicio entero, en una transacción. */
+    /**
+     * Calcula (o recalcula) un día de servicio entero, en una transacción:
+     * <ul>
+     * <li>{@code statement_timeout} y {@code lock_timeout} solo en esta transacción, y el plazo de red de la conexión
+     * (el {@code socketTimeout} de 30 s del driver) un minuto por encima, para que una sentencia lenta la corte
+     * PostgreSQL con un error limpio y no el driver a los 30 s. Hikari devuelve el plazo de red al soltar la
+     * conexión;</li>
+     * <li>el cerrojo consultivo de la importación del horario, en modo compartido: mientras dura el cálculo, el horario
+     * no cambia de esquema a mitad (si la importación está en marcha, se espera como mucho {@code lock_timeout} y
+     * falla); y un cerrojo por día, para que la nocturna y un recálculo a mano no escriban el mismo día a la vez.</li>
+     * </ul>
+     */
     public Resultado calcular(LocalDate fecha) {
         long t0 = System.nanoTime();
         return transaccion.execute(estado -> {
+            Connection conexion = DataSourceUtils.getConnection(dataSource); // la de esta transacción
+            try {
+                conexion.setNetworkTimeout(Runnable::run,
+                        (int) propiedades.plazoSentencia().plusMinutes(1).toMillis());
+            } catch (SQLException e) {
+                throw new IllegalStateException("No se pudo ampliar el plazo de red de la conexión", e);
+            }
             jdbc.sql("SELECT set_config('statement_timeout', :v, true)")
                     .param("v", propiedades.plazoSentencia().toMillis() + "ms").query(String.class).single();
             jdbc.sql("SELECT set_config('lock_timeout', :v, true)")
                     .param("v", propiedades.esperaCerrojo().toMillis() + "ms").query(String.class).single();
+            jdbc.sql("SELECT pg_advisory_xact_lock_shared(:clave)").param("clave", ImportadorHorario.CLAVE_CERROJO)
+                    .query((rs, n) -> 1).single();
             jdbc.sql("SELECT pg_advisory_xact_lock(:clase, :dia)").param("clase", CLASE_CERROJO)
                     .param("dia", (int) fecha.toEpochDay()).query((rs, n) -> 1).single();
             return calcularEnTransaccion(fecha, t0);
@@ -122,29 +156,48 @@ public class CalculoEstadisticas {
                     WHERE NOT t.es_autobus AND c.start_date <= :f AND c.end_date >= :f AND c.%s)"""
                 .formatted(columnaDia(fecha)))
                 .param("f", fecha).query(Boolean.class).single();
-        boolean conPosiciones = jdbc.sql("SELECT to_regclass(:nombre) IS NOT NULL")
+        // La partición del día unida a posiciones (no una tabla separada a medio borrar: DETACH hecho, DROP no).
+        boolean conPosiciones = jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid
+                    WHERE i.inhparent = 'posiciones'::regclass AND c.relname = :nombre AND NOT i.inhdetachpending)""")
                 .param("nombre", "posiciones_p" + fecha.toString().replace("-", "")).query(Boolean.class).single();
         int filas = jdbc.sql("SELECT count(*) FROM retrasos WHERE fecha_servicio = :f").param("f", fecha)
                 .query(Integer.class).single();
 
-        // Lo que no se puede volver a sacar si su fuente ya no está.
+        // Lo que no se puede volver a sacar si su fuente ya no está: viajes y paradas programados y llegadas a destino
+        // (horario), cancelados (posiciones) y tramos (el orden de las paradas sale del horario).
+        jdbc.sql("""
+                CREATE TEMP TABLE estad_anterior_hora ON COMMIT DROP AS
+                SELECT nucleo, linea, hora, destinos, suma_destinos, destinos_menos_de_3
+                FROM estad_linea_hora WHERE fecha_servicio = :f""")
+                .param("f", fecha).update();
+        boolean conservarTramos = !conHorario && jdbc.sql(
+                "SELECT EXISTS (SELECT 1 FROM estad_tramo_dia WHERE fecha_servicio = :f)").param("f", fecha)
+                .query(Boolean.class).single();
         jdbc.sql("""
                 CREATE TEMP TABLE estad_anterior ON COMMIT DROP AS
-                SELECT nucleo, linea, viajes_programados, cancelados FROM estad_linea_dia WHERE fecha_servicio = :f""")
+                SELECT nucleo, linea, viajes_programados, paradas_programadas, cancelados
+                FROM estad_linea_dia WHERE fecha_servicio = :f""")
                 .param("f", fecha).update();
         for (String tabla : List.of("estad_linea_hora", "estad_linea_dia", "estad_estacion_dia", "estad_tramo_dia",
                 "estad_dias")) {
-            jdbc.sql("DELETE FROM " + tabla + " WHERE fecha_servicio = :f").param("f", fecha).update();
+            if (!(conservarTramos && tabla.equals("estad_tramo_dia"))) {
+                jdbc.sql("DELETE FROM " + tabla + " WHERE fecha_servicio = :f").param("f", fecha).update();
+            }
         }
 
-        int lineasHora = jdbc.sql(SQL_LINEA_HORA).param("f", fecha).update();
+        int lineasHora = jdbc.sql(SQL_LINEA_HORA).param("f", fecha).param("conHorario", conHorario).update();
         OffsetDateTime inicio = fecha.atStartOfDay(RelojConfig.ZONA).toOffsetDateTime();
         OffsetDateTime fin = fecha.plusDays(2).atStartOfDay(RelojConfig.ZONA).toOffsetDateTime();
         int lineasDia = jdbc.sql(SQL_LINEA_DIA.formatted(columnaDia(fecha))).param("f", fecha)
                 .param("conHorario", conHorario).param("conPosiciones", conPosiciones)
                 .param("inicio", inicio).param("fin", fin).update();
         int estaciones = jdbc.sql(SQL_ESTACION_DIA).param("f", fecha).update();
-        int tramos = jdbc.sql(SQL_TRAMO_DIA).param("f", fecha).update();
+        int tramos = conservarTramos
+                ? jdbc.sql("SELECT count(*) FROM estad_tramo_dia WHERE fecha_servicio = :f").param("f", fecha)
+                        .query(Integer.class).single()
+                : jdbc.sql(SQL_TRAMO_DIA).param("f", fecha).update();
         jdbc.sql("""
                 INSERT INTO estad_dias (fecha_servicio, calculado, filas_retrasos, con_horario, con_posiciones)
                 VALUES (:f, :ahora, :filas, :conHorario, :conPosiciones)""")
@@ -210,11 +263,16 @@ public class CalculoEstadisticas {
     static final String SQL_LINEA_HORA = """
             WITH %s,
             %s,
-            vistas AS (
+            ordenadas AS (
                 SELECT b.*, row_number() OVER (PARTITION BY b.trip_id ORDER BY b.stop_sequence DESC) = 1 AS final
-                FROM base b WHERE b.valida)
+                FROM base b WHERE b.valida),
+            vistas AS (
+                -- destino: la última parada vista del viaje es la última que le da el horario.
+                SELECT o.*, o.final AND o.stop_sequence = (SELECT max(s.stop_sequence) FROM horario.stop_times s
+                                                           WHERE s.trip_id = o.trip_id) AS destino
+                FROM ordenadas o)
             INSERT INTO estad_linea_hora (fecha_servicio, nucleo, linea, hora, viajes, paradas, suma_minutos, menos_de_3,
-                de_3_a_5, de_6_a_15, de_16_o_mas, histograma, finales, suma_finales, finales_menos_de_3)
+                de_3_a_5, de_6_a_15, de_16_o_mas, histograma, finales, destinos, suma_destinos, destinos_menos_de_3)
             SELECT CAST(:f AS date), v.nucleo, v.linea, v.hora, count(DISTINCT v.trip_id), count(*), sum(v.minutos),
                    count(*) FILTER (WHERE v.minutos < 3),
                    count(*) FILTER (WHERE v.minutos BETWEEN 3 AND 5),
@@ -222,10 +280,15 @@ public class CalculoEstadisticas {
                    count(*) FILTER (WHERE v.minutos >= 16),
                    h.histograma,
                    count(*) FILTER (WHERE v.final),
-                   coalesce(sum(v.minutos) FILTER (WHERE v.final), 0),
-                   count(*) FILTER (WHERE v.final AND v.minutos < 3)
+                   CASE WHEN CAST(:conHorario AS boolean) THEN count(*) FILTER (WHERE v.destino)
+                        ELSE coalesce(max(a.destinos), 0) END,
+                   CASE WHEN CAST(:conHorario AS boolean) THEN coalesce(sum(v.minutos) FILTER (WHERE v.destino), 0)
+                        ELSE coalesce(max(a.suma_destinos), 0) END,
+                   CASE WHEN CAST(:conHorario AS boolean) THEN count(*) FILTER (WHERE v.destino AND v.minutos < 3)
+                        ELSE coalesce(max(a.destinos_menos_de_3), 0) END
             FROM vistas v
             JOIN histogramas h ON h.nucleo = v.nucleo AND h.linea = v.linea AND h.hora = v.hora
+            LEFT JOIN estad_anterior_hora a ON a.nucleo = v.nucleo AND a.linea = v.linea AND a.hora = v.hora
             GROUP BY v.nucleo, v.linea, v.hora, h.histograma""".formatted(BASE, histogramas("nucleo, linea, hora"));
 
     /**
@@ -239,11 +302,13 @@ public class CalculoEstadisticas {
                 SELECT nucleo, linea,
                        count(DISTINCT trip_id) FILTER (WHERE valida) AS viajes,
                        count(DISTINCT trip_id) AS viajes_con_datos,
+                       count(*) AS paradas_con_datos,
                        count(*) FILTER (WHERE inferido) AS inferidas,
                        count(*) FILTER (WHERE NOT inferido AND llegada_programada IS NULL) AS sin_hora
                 FROM base GROUP BY nucleo, linea),
             p AS (
-                SELECT ro.nucleo, ro.route_short_name AS linea, count(*) AS programados
+                SELECT ro.nucleo, ro.route_short_name AS linea, count(*) AS programados,
+                       sum((SELECT count(*) FROM horario.stop_times s WHERE s.trip_id = t.trip_id)) AS paradas_programadas
                 FROM horario.trips t
                 JOIN horario.routes ro ON ro.route_id = t.route_id
                 JOIN horario.calendar c ON c.service_id = t.service_id
@@ -258,16 +323,20 @@ public class CalculoEstadisticas {
                 GROUP BY nucleo, linea),
             juntas AS (
                 SELECT nucleo, linea, coalesce(r.viajes, 0) AS viajes, coalesce(r.viajes_con_datos, 0) AS viajes_con_datos,
+                       coalesce(r.paradas_con_datos, 0) AS paradas_con_datos,
                        coalesce(r.inferidas, 0) AS inferidas, coalesce(r.sin_hora, 0) AS sin_hora,
                        CASE WHEN CAST(:conHorario AS boolean) THEN coalesce(p.programados, 0)
                             ELSE a.viajes_programados END AS programados,
+                       CASE WHEN CAST(:conHorario AS boolean) THEN coalesce(p.paradas_programadas, 0)
+                            ELSE a.paradas_programadas END AS paradas_programadas,
                        CASE WHEN CAST(:conPosiciones AS boolean) THEN coalesce(c.cancelados, 0)
                             ELSE a.cancelados END AS cancelados
                 FROM r FULL JOIN p USING (nucleo, linea) FULL JOIN c USING (nucleo, linea)
                 FULL JOIN estad_anterior a USING (nucleo, linea))
-            INSERT INTO estad_linea_dia (fecha_servicio, nucleo, linea, viajes, viajes_con_datos, paradas_inferidas,
-                paradas_sin_hora, viajes_programados, cancelados)
-            SELECT CAST(:f AS date), nucleo, linea, viajes, viajes_con_datos, inferidas, sin_hora, programados, cancelados
+            INSERT INTO estad_linea_dia (fecha_servicio, nucleo, linea, viajes, viajes_con_datos, paradas_con_datos,
+                paradas_inferidas, paradas_sin_hora, viajes_programados, paradas_programadas, cancelados)
+            SELECT CAST(:f AS date), nucleo, linea, viajes, viajes_con_datos, paradas_con_datos, inferidas, sin_hora,
+                   programados, paradas_programadas, cancelados
             FROM juntas
             WHERE viajes_con_datos > 0 OR coalesce(programados, 0) > 0 OR coalesce(cancelados, 0) > 0""".formatted(BASE);
 
@@ -275,7 +344,7 @@ public class CalculoEstadisticas {
             WITH %s,
             %s
             INSERT INTO estad_estacion_dia (fecha_servicio, stop_id, nucleo, linea, viajes, paradas, suma_minutos,
-                menos_de_3, de_3_a_5, de_6_a_15, de_16_o_mas, histograma, paradas_inferidas)
+                menos_de_3, de_3_a_5, de_6_a_15, de_16_o_mas, histograma, paradas_inferidas, paradas_sin_hora)
             SELECT CAST(:f AS date), b.stop_id, b.nucleo, b.linea,
                    count(DISTINCT b.trip_id) FILTER (WHERE b.valida),
                    count(*) FILTER (WHERE b.valida),
@@ -285,7 +354,8 @@ public class CalculoEstadisticas {
                    count(*) FILTER (WHERE b.valida AND b.minutos BETWEEN 6 AND 15),
                    count(*) FILTER (WHERE b.valida AND b.minutos >= 16),
                    coalesce(h.histograma, array_fill(0, ARRAY[61])),
-                   count(*) FILTER (WHERE b.inferido)
+                   count(*) FILTER (WHERE b.inferido),
+                   count(*) FILTER (WHERE NOT b.inferido AND b.llegada_programada IS NULL)
             FROM base b
             LEFT JOIN histogramas h ON h.nucleo = b.nucleo AND h.linea = b.linea AND h.stop_id = b.stop_id
             GROUP BY b.stop_id, b.nucleo, b.linea, h.histograma""".formatted(BASE, histogramas("nucleo, linea, stop_id"));
@@ -293,7 +363,8 @@ public class CalculoEstadisticas {
     /**
      * Tramos: con {@code LAG} sobre todas las filas del viaje en orden (las inferidas cortan el tramo). Cuenta si las
      * dos paradas son válidas y, si el horario conoce el viaje, la anterior es justo la que el horario pone antes
-     * ({@code stop_sequence} de Renfe tiene huecos). Si el horario ya no tiene el viaje, vale la fila anterior.
+     * ({@code stop_sequence} de Renfe tiene huecos). Al recalcular un día que el horario ya no cubre, se conservan los
+     * tramos que hubiera; si no hay ninguno, vale la fila anterior de {@code retrasos}.
      */
     static final String SQL_TRAMO_DIA = """
             WITH %s,

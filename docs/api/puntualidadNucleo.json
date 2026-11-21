@@ -1,0 +1,79 @@
+{
+  "nucleo": 51,
+  "nombre": "Rodalies de Catalunya",
+  "publicacion": {
+    "publicado": true,
+    "recogiendoDesde": "2026-11-21",
+    "cifrasDesde": "2026-01-01",
+    "texto": "Datos recogidos desde el 21-11-2026."
+  },
+  "periodo": {
+    "desde": "2026-11-21",
+    "hasta": "2026-11-21",
+    "diasConDatos": 1
+  },
+  "muestra": {
+    "viajes": 56,
+    "paradas": 129,
+    "paradasInferidasQuitadas": 2,
+    "paradasSinHoraQuitadas": 0,
+    "cancelados": 4
+  },
+  "cobertura": {
+    "viajesProgramados": 694,
+    "viajesVistos": 57,
+    "porcentaje": 8.2,
+    "paradasProgramadas": 11402,
+    "paradasVistas": 131,
+    "porcentajeParadas": 1.1
+  },
+  "lineas": [
+    {
+      "puesto": null,
+      "linea": "RL4",
+      "destacada": true,
+      "cifras": {
+        "viajes": 1,
+        "paradas": 1,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      },
+      "cancelados": 0,
+      "cobertura": {
+        "viajesProgramados": 8,
+        "viajesVistos": 1,
+        "porcentaje": 12.5,
+        "paradasProgramadas": 124,
+        "paradasVistas": 1,
+        "porcentajeParadas": 0.8
+      }
+    },
+    {
+      "puesto": null,
+      "linea": "R1",
+      "destacada": false,
+      "cifras": {
+        "viajes": 12,
+        "paradas": 35,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      },
+      "cancelados": 3,
+      "cobertura": {
+        "viajesProgramados": 130,
+        "viajesVistos": 12,
+        "porcentaje": 9.2,
+        "paradasProgramadas": 2690,
+        "paradasVistas": 35,
+        "porcentajeParadas": 1.3
+      }
+    }
+  ],
+  "fuente": "Datos: Renfe (CC BY 4.0). Cifras propias de TrainWatch, proyecto no oficial: solo trenes vistos en directo; las paradas inferidas no cuentan."
+}

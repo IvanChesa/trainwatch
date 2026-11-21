@@ -35,10 +35,14 @@ CREATE TABLE estad_linea_hora (
     de_6_a_15          INTEGER   NOT NULL,
     de_16_o_mas        INTEGER   NOT NULL,
     histograma         INTEGER[] NOT NULL CHECK (cardinality(histograma) = 61),
-    -- Llegada a la última parada vista de cada viaje (la cifra «por viaje»): cuenta en la hora de esa parada.
-    finales            INTEGER   NOT NULL,
-    suma_finales       INTEGER   NOT NULL,
-    finales_menos_de_3 INTEGER   NOT NULL,
+    -- La cifra «por viaje», en la hora de la última parada vista de cada viaje. finales: viajes cuya última parada
+    -- vista cae en esta hora; destinos: los que de ellos se vieron en su destino (la última parada del horario), con
+    -- su retraso al llegar. Solo los destinos dan la cifra: un tren que deja de verse a mitad ha tenido menos tiempo
+    -- de acumular retraso.
+    finales             INTEGER   NOT NULL,
+    destinos            INTEGER   NOT NULL,
+    suma_destinos       INTEGER   NOT NULL,
+    destinos_menos_de_3 INTEGER   NOT NULL,
     PRIMARY KEY (fecha_servicio, nucleo, linea, hora),
     CHECK (menos_de_3 + de_3_a_5 + de_6_a_15 + de_16_o_mas = paradas)
 );
@@ -52,9 +56,11 @@ CREATE TABLE estad_linea_dia (
     linea              TEXT      NOT NULL,
     viajes             INTEGER   NOT NULL,   -- con alguna parada vista con hora: los de las cifras
     viajes_con_datos   INTEGER   NOT NULL,   -- con alguna fila en retrasos: los «vistos» de la cobertura
+    paradas_con_datos  INTEGER   NOT NULL,   -- filas en retrasos (vistas, inferidas o sin hora): cobertura por paradas
     paradas_inferidas  INTEGER   NOT NULL,
     paradas_sin_hora   INTEGER   NOT NULL,   -- vistas, pero sin llegada_programada (antes de la V5)
     viajes_programados INTEGER,              -- del horario de ese día; NULL si no se supo
+    paradas_programadas INTEGER,             -- paradas de esos viajes en el horario; NULL si no se supo
     cancelados         INTEGER,              -- viajes con estado CANCELADO en posiciones; NULL si no se supo
     PRIMARY KEY (fecha_servicio, nucleo, linea)
 );
@@ -75,6 +81,7 @@ CREATE TABLE estad_estacion_dia (
     de_16_o_mas       INTEGER   NOT NULL,
     histograma        INTEGER[] NOT NULL CHECK (cardinality(histograma) = 61),
     paradas_inferidas INTEGER   NOT NULL,
+    paradas_sin_hora  INTEGER   NOT NULL,
     PRIMARY KEY (fecha_servicio, stop_id, nucleo, linea),
     CHECK (menos_de_3 + de_3_a_5 + de_6_a_15 + de_16_o_mas = paradas)
 );

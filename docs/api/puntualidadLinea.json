@@ -1,0 +1,115 @@
+{
+  "nucleo": 51,
+  "nombreNucleo": "Rodalies de Catalunya",
+  "linea": "R1",
+  "destacada": false,
+  "publicacion": {
+    "publicado": true,
+    "recogiendoDesde": "2026-11-21",
+    "cifrasDesde": "2026-01-01",
+    "texto": "Datos recogidos desde el 21-11-2026."
+  },
+  "periodo": {
+    "desde": "2026-11-21",
+    "hasta": "2026-11-21",
+    "diasConDatos": 1
+  },
+  "muestra": {
+    "viajes": 12,
+    "paradas": 35,
+    "paradasInferidasQuitadas": 0,
+    "paradasSinHoraQuitadas": 0,
+    "cancelados": 3
+  },
+  "coberturaNucleo": {
+    "viajesProgramados": 694,
+    "viajesVistos": 57,
+    "porcentaje": 8.2,
+    "paradasProgramadas": 11402,
+    "paradasVistas": 131,
+    "porcentajeParadas": 1.1
+  },
+  "coberturaLinea": {
+    "viajesProgramados": 130,
+    "viajesVistos": 12,
+    "porcentaje": 9.2,
+    "paradasProgramadas": 2690,
+    "paradasVistas": 35,
+    "porcentajeParadas": 1.3
+  },
+  "resumen": {
+    "viajes": 12,
+    "paradas": 35,
+    "suficiente": false,
+    "mediaMinutos": null,
+    "medianaMinutos": null,
+    "p90Minutos": null,
+    "porcentajes": null
+  },
+  "llegadaDestino": {
+    "viajes": 12,
+    "viajesEnDestino": 3,
+    "suficiente": false,
+    "mediaMinutos": null,
+    "menosDe3": null
+  },
+  "porHora": [
+    {
+      "hora": 12,
+      "cifras": {
+        "viajes": 12,
+        "paradas": 33,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      }
+    },
+    {
+      "hora": 13,
+      "cifras": {
+        "viajes": 2,
+        "paradas": 2,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      }
+    }
+  ],
+  "porDiaSemana": [
+    {
+      "dia": 6,
+      "nombre": "sábado",
+      "dias": 1,
+      "cifras": {
+        "viajes": 12,
+        "paradas": 35,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      }
+    }
+  ],
+  "porSemana": [
+    {
+      "lunes": "2026-11-16",
+      "dias": 1,
+      "cifras": {
+        "viajes": 12,
+        "paradas": 35,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      }
+    }
+  ],
+  "tramos": [],
+  "fuente": "Datos: Renfe (CC BY 4.0). Cifras propias de TrainWatch, proyecto no oficial: solo trenes vistos en directo; las paradas inferidas no cuentan."
+}

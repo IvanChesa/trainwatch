@@ -23,6 +23,11 @@ La documentación completa (campos, parámetros y errores) está en `GET /api/do
 | `directo-cambios.json` | evento `cambios` | `Cambios` |
 | `directo-latido.json` | evento `latido` | `Latido` |
 | `error.json` | cualquier error (aquí, un 404) | `ProblemDetail` (RFC 9457) |
+| `puntualidadNucleo.json` | `GET /api/estadisticas/nucleos/51` (fase 6) | `PuntualidadNucleo`: ranking de las líneas (recortado) |
+| `puntualidadLinea.json` | `GET /api/estadisticas/lineas/51/{linea}` (fase 6) | `PuntualidadLinea`: por hora (recortado), día, semana y tramos |
+| `puntualidadEstacion.json` | `GET /api/estadisticas/estaciones/71801` (fase 6) | `PuntualidadEstacion` |
+
+Los tres de estadísticas salen de la aplicación en local con unas horas de ingesta real del 21-11-2026 (con `muestra-minima` de 30, casi todo sale «insuficiente»: es lo que verá la web con pocos datos). Las cifras **no son publicables**: en producción la API no da ninguna antes del 19-12-2026 (`publicacion.publicado = false`).
 
 ## Cómo se consume el directo
 

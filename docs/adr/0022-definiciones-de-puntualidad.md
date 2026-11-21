@@ -20,7 +20,7 @@ Hay que decidir la unidad, qué entra, cómo se asigna la hora y el día, y cuá
 
   Es lo que vive el viajero en su andén, cualquiera que sea su parada, y es la muestra más grande. «Puntual» en los textos es **menos de 3 min**.
 - **Además, la mediana y el percentil 90** (por parada), que salen de un histograma por minuto (ADR 0023). La media sola engaña cuando unos pocos trenes llevan 40 min: la mediana dice lo típico y el p90, lo malo.
-- **Por viaje, como cifra secundaria:** el retraso al llegar a su **última parada vista** (media y % de menos de 3 min). Responde «¿llegó a tiempo?». No es siempre el destino: si el tren deja de verse antes, es la última en que se vio, y así se dice.
+- **Por viaje, como cifra secundaria:** el retraso al **llegar a su destino** (la última parada que le da el horario), media y % de menos de 3 min, **solo de los viajes que se vieron llegar a él**. Responde «¿llegó a tiempo?». Los que dejan de verse antes se cuentan («de 1.843 viajes, 1.520 vistos en destino»), pero no entran: han hecho menos recorrido y han tenido menos ocasión de acumular retraso, así que meterlos con su última parada vista inclinaría la cifra hacia «puntual».
 - **No se mezclan:** cada número dice si es «de las paradas» o «de los viajes».
 
 ### 2. Qué entra
@@ -31,7 +31,7 @@ Hay que decidir la unidad, qué entra, cómo se asigna la hora y el día, y cuá
 | | Paradas **sin hora programada** (filas anteriores a la V5) | Autobuses de sustitución (`route_type` 3) |
 | | Viajes **cancelados** con `CANCELED` explícito: se cuentan por día y línea, nunca como retraso | Filas sin núcleo o sin línea |
 
-- **Cobertura del núcleo:** de los viajes de tren que el horario daba ese día, cuántos dejaron alguna fila en `retrasos`. Cada respuesta la lleva: una línea con un 40 % de cobertura no dice lo mismo que una con un 95 %.
+- **Cobertura:** de los viajes de tren que el horario daba ese día, cuántos dejaron alguna fila en `retrasos`; y, **por paradas**, cuántas de sus paradas programadas tienen fila (un tren que solo se ve en 2 de sus 20 paradas cuenta entero como viaje, no como paradas). Va en cada respuesta, del núcleo y de la línea: una línea con un 40 % de cobertura no dice lo mismo que una con un 95 %.
 
 ### 3. La franja horaria: la hora programada, en hora de Madrid
 

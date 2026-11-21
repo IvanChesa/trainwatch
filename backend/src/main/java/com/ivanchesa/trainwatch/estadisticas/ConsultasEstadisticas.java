@@ -17,8 +17,8 @@ import com.ivanchesa.trainwatch.estadisticas.Acumulado.Fila;
 public class ConsultasEstadisticas {
 
     /** Una fila de {@code estad_linea_dia}. */
-    record LineaDia(LocalDate fecha, int nucleo, String linea, int viajes, int viajesConDatos, int inferidas,
-            int sinHora, Integer programados, Integer cancelados) {
+    record LineaDia(LocalDate fecha, int nucleo, String linea, int viajes, int viajesConDatos, int paradasConDatos,
+            int inferidas, int sinHora, Integer programados, Integer paradasProgramadas, Integer cancelados) {
     }
 
     /** Una fila de {@code estad_linea_hora}. */
@@ -26,7 +26,7 @@ public class ConsultasEstadisticas {
     }
 
     /** Una fila de {@code estad_estacion_dia}. */
-    record EstacionDia(LocalDate fecha, int nucleo, String linea, int inferidas, Fila fila) {
+    record EstacionDia(LocalDate fecha, int nucleo, String linea, int inferidas, int sinHora, Fila fila) {
     }
 
     /** Un tramo sumado en el periodo, con los nombres de las paradas del horario actual. */
@@ -41,12 +41,17 @@ public class ConsultasEstadisticas {
     }
 
     Optional<LocalDate> primerDia() {
-        return jdbc.sql("SELECT min(fecha_servicio) FROM estad_dias").query(LocalDate.class).list().stream()
+        // El primer día con filas: un día calculado vacío (un recálculo a mano de antes de empezar) no cuenta.
+        return jdbc.sql("SELECT min(fecha_servicio) FROM estad_dias WHERE filas_retrasos > 0").query(LocalDate.class)
+                .list().stream()
                 .filter(java.util.Objects::nonNull).findFirst();
     }
 
-    List<LocalDate> diasCalculados(LocalDate desde, LocalDate hasta) {
-        return jdbc.sql("SELECT fecha_servicio FROM estad_dias WHERE fecha_servicio BETWEEN :d AND :h ORDER BY 1")
+    /** Los días calculados del periodo que tienen alguna fila (un día con la ingesta caída no cuenta). */
+    List<LocalDate> diasConDatos(LocalDate desde, LocalDate hasta) {
+        return jdbc.sql("""
+                SELECT fecha_servicio FROM estad_dias
+                WHERE fecha_servicio BETWEEN :d AND :h AND filas_retrasos > 0 ORDER BY 1""")
                 .param("d", desde).param("h", hasta).query(LocalDate.class).list();
     }
 
@@ -85,14 +90,12 @@ public class ConsultasEstadisticas {
     /** Las filas por día y línea de un núcleo (o de una línea, si no es {@code null}). */
     List<LineaDia> lineaDia(int nucleo, String linea, LocalDate desde, LocalDate hasta) {
         return jdbc.sql("""
-                SELECT fecha_servicio, nucleo, linea, viajes, viajes_con_datos, paradas_inferidas, paradas_sin_hora,
-                       viajes_programados, cancelados
+                SELECT fecha_servicio, nucleo, linea, viajes, viajes_con_datos, paradas_con_datos, paradas_inferidas,
+                       paradas_sin_hora, viajes_programados, paradas_programadas, cancelados
                 FROM estad_linea_dia
                 WHERE nucleo = :n AND (CAST(:l AS text) IS NULL OR linea = :l) AND fecha_servicio BETWEEN :d AND :h""")
                 .param("n", nucleo).param("l", linea).param("d", desde).param("h", hasta)
-                .query((rs, i) -> new LineaDia(rs.getObject(1, LocalDate.class), rs.getInt(2), rs.getString(3),
-                        rs.getInt(4), rs.getInt(5), rs.getInt(6), rs.getInt(7), (Integer) rs.getObject(8),
-                        (Integer) rs.getObject(9)))
+                .query(ConsultasEstadisticas::lineaDia)
                 .list();
     }
 
@@ -102,38 +105,37 @@ public class ConsultasEstadisticas {
             return List.of();
         }
         return jdbc.sql("""
-                SELECT fecha_servicio, nucleo, linea, viajes, viajes_con_datos, paradas_inferidas, paradas_sin_hora,
-                       viajes_programados, cancelados
+                SELECT fecha_servicio, nucleo, linea, viajes, viajes_con_datos, paradas_con_datos, paradas_inferidas,
+                       paradas_sin_hora, viajes_programados, paradas_programadas, cancelados
                 FROM estad_linea_dia WHERE nucleo IN (:n) AND fecha_servicio BETWEEN :d AND :h""")
                 .param("n", nucleos).param("d", desde).param("h", hasta)
-                .query((rs, i) -> new LineaDia(rs.getObject(1, LocalDate.class), rs.getInt(2), rs.getString(3),
-                        rs.getInt(4), rs.getInt(5), rs.getInt(6), rs.getInt(7), (Integer) rs.getObject(8),
-                        (Integer) rs.getObject(9)))
+                .query(ConsultasEstadisticas::lineaDia)
                 .list();
     }
 
     List<LineaHora> lineaHora(int nucleo, String linea, LocalDate desde, LocalDate hasta) {
         return jdbc.sql("""
                 SELECT fecha_servicio, linea, hora, viajes, paradas, suma_minutos, menos_de_3, de_3_a_5, de_6_a_15,
-                       de_16_o_mas, histograma, finales, suma_finales, finales_menos_de_3
+                       de_16_o_mas, histograma, finales, destinos, suma_destinos, destinos_menos_de_3
                 FROM estad_linea_hora
                 WHERE nucleo = :n AND (CAST(:l AS text) IS NULL OR linea = :l) AND fecha_servicio BETWEEN :d AND :h""")
                 .param("n", nucleo).param("l", linea).param("d", desde).param("h", hasta)
                 .query((rs, i) -> new LineaHora(rs.getObject(1, LocalDate.class), rs.getString(2), rs.getInt(3),
                         new Fila(rs.getInt(4), rs.getInt(5), rs.getLong(6), rs.getInt(7), rs.getInt(8), rs.getInt(9),
-                                rs.getInt(10), histograma(rs, 11), rs.getInt(12), rs.getLong(13), rs.getInt(14))))
+                                rs.getInt(10), histograma(rs, 11), rs.getInt(12), rs.getInt(13), rs.getLong(14),
+                                rs.getInt(15))))
                 .list();
     }
 
     List<EstacionDia> estacionDia(String stopId, LocalDate desde, LocalDate hasta) {
         return jdbc.sql("""
-                SELECT fecha_servicio, nucleo, linea, paradas_inferidas, viajes, paradas, suma_minutos, menos_de_3,
-                       de_3_a_5, de_6_a_15, de_16_o_mas, histograma
+                SELECT fecha_servicio, nucleo, linea, paradas_inferidas, paradas_sin_hora, viajes, paradas, suma_minutos,
+                       menos_de_3, de_3_a_5, de_6_a_15, de_16_o_mas, histograma
                 FROM estad_estacion_dia WHERE stop_id = :s AND fecha_servicio BETWEEN :d AND :h""")
                 .param("s", stopId).param("d", desde).param("h", hasta)
                 .query((rs, i) -> new EstacionDia(rs.getObject(1, LocalDate.class), rs.getInt(2), rs.getString(3),
-                        rs.getInt(4), new Fila(rs.getInt(5), rs.getInt(6), rs.getLong(7), rs.getInt(8), rs.getInt(9),
-                                rs.getInt(10), rs.getInt(11), histograma(rs, 12), 0, 0, 0)))
+                        rs.getInt(4), rs.getInt(5), new Fila(rs.getInt(6), rs.getInt(7), rs.getLong(8), rs.getInt(9),
+                                rs.getInt(10), rs.getInt(11), rs.getInt(12), histograma(rs, 13), 0, 0, 0, 0)))
                 .list();
     }
 
@@ -160,6 +162,12 @@ public class ConsultasEstadisticas {
                 .query((rs, i) -> new TramoSumado(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4),
                         rs.getInt(5), rs.getLong(6), rs.getInt(7), rs.getInt(8)))
                 .list();
+    }
+
+    private static LineaDia lineaDia(ResultSet rs, int i) throws SQLException {
+        return new LineaDia(rs.getObject(1, LocalDate.class), rs.getInt(2), rs.getString(3), rs.getInt(4), rs.getInt(5),
+                rs.getInt(6), rs.getInt(7), rs.getInt(8), (Integer) rs.getObject(9), (Integer) rs.getObject(10),
+                (Integer) rs.getObject(11));
     }
 
     private static int[] histograma(ResultSet rs, int columna) throws SQLException {

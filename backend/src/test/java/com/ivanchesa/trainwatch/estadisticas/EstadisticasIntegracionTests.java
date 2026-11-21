@@ -53,6 +53,7 @@ import tools.jackson.databind.json.JsonMapper;
  *   RL4 T2  A 08:30 4 · B 08:50 4 INFERIDA · C 09:10 10 · D 09:30 -1 (adelanto)
  *   RL4 T3  A 23:40 20 · B 00:10 (del 24) 18 · C 00:30 3 SIN HORA
  *   RL4 T4  programado, no se ve · T6 programado y CANCELADO (solo en posiciones)
+ *   RL4 T12 CANCELADO a las 01:30 del 24 (en la partición del 24), sin horario
  *   R3  T7  A 10:00 1 · C 10:20 1 (B no se cerró: A→C no es un tramo)
  *   R3  T8  A 10:00 0 · B 10:10 0
  *   BUS T5  autobús (route_type 3) A 08:10 30: no entra en nada
@@ -60,6 +61,8 @@ import tools.jackson.databind.json.JsonMapper;
  *   RL4 T9  A 00:30Z (02:30 CEST) 1 · B 01:30Z (02:30 CET) 3 · C 02:30Z (03:30 CET) 4
  *   RL4 T10 A 08:00Z (09:00 CET) 0
  * </pre>
+ *
+ * <p>El destino de todos los viajes es D (secuencia 5): solo T1 y T2 se ven llegar a él.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "trainwatch.estadisticas.muestra-minima=2",
@@ -121,6 +124,7 @@ class EstadisticasIntegracionTests {
     @BeforeAll
     void datos() {
         particionDiaria(D1);
+        particionDiaria(D1.plusDays(1));
 
         particionDiaria(D2);
         particionDiaria(D2.plusDays(1));
@@ -185,7 +189,8 @@ class EstadisticasIntegracionTests {
                     ('2026-10-23T05:00:00Z', 'T6', '2026-10-23', 51, 'RL4', 'CANCELADO'),
                     ('2026-10-23T05:10:00Z', 'T6', '2026-10-23', 51, 'RL4', 'CANCELADO'),
                     ('2026-10-23T05:00:00Z', 'T1', '2026-10-23', 51, 'RL4', 'EN_ORIGEN'),
-                    ('2026-10-23T06:00:00Z', 'OTRO', '2026-10-22', 51, 'RL4', 'CANCELADO')""").update();
+                    ('2026-10-23T06:00:00Z', 'OTRO', '2026-10-22', 51, 'RL4', 'CANCELADO'),
+                    ('2026-10-23T23:30:00Z', 'T12', '2026-10-23', 51, 'RL4', 'CANCELADO')""").update();
     }
 
     void fila(LocalDate fecha, String trip, int seq, String stop, String linea, int minutos, boolean inferido,
@@ -208,8 +213,8 @@ class EstadisticasIntegracionTests {
 
     Map<String, Object> hora(LocalDate fecha, String linea, int hora) {
         return jdbc.sql("""
-                SELECT viajes, paradas, suma_minutos, menos_de_3, de_3_a_5, de_6_a_15, de_16_o_mas, finales, suma_finales,
-                       finales_menos_de_3, histograma::text AS histograma
+                SELECT viajes, paradas, suma_minutos, menos_de_3, de_3_a_5, de_6_a_15, de_16_o_mas, finales, destinos,
+                       suma_destinos, destinos_menos_de_3, histograma::text AS histograma
                 FROM estad_linea_hora WHERE fecha_servicio = :f AND linea = :l AND hora = :h""")
                 .param("f", fecha).param("l", linea).param("h", hora).query().singleRow();
     }
@@ -251,11 +256,12 @@ class EstadisticasIntegracionTests {
                 .containsEntry("de_16_o_mas", 0).containsEntry("finales", 0);
         assertThat(h8.get("histograma")).isEqualTo(histograma(Map.of(0, 1, 2, 1, 4, 1, 5, 1)));
         // 9:00 → T1 D 6, T2 C 10 y D -1 (el adelanto va a la posición 0 y a «menos de 3», y la suma lo lleva tal cual).
-        // Las últimas paradas vistas de T1 (6) y T2 (-1) son de esta hora: finales 2, suma 5, una con menos de 3.
+        // Las últimas paradas vistas de T1 (6) y T2 (-1) son de esta hora y son su destino (D): suma 5, una con menos
+        // de 3.
         Map<String, Object> h9 = hora(D1, "RL4", 9);
         assertThat(h9).containsEntry("viajes", 2).containsEntry("paradas", 3).containsEntry("suma_minutos", 15)
                 .containsEntry("menos_de_3", 1).containsEntry("de_6_a_15", 2).containsEntry("finales", 2)
-                .containsEntry("suma_finales", 5).containsEntry("finales_menos_de_3", 1);
+                .containsEntry("destinos", 2).containsEntry("suma_destinos", 5).containsEntry("destinos_menos_de_3", 1);
         assertThat(h9.get("histograma")).isEqualTo(histograma(Map.of(0, 1, 6, 1, 10, 1)));
         // 08:00 en hora de Madrid son las 06:00 UTC: no hay nada en las franjas 6 y 7.
         assertThat(jdbc.sql("SELECT count(*) FROM estad_linea_hora WHERE fecha_servicio = :f AND hora IN (6, 7)")
@@ -268,9 +274,9 @@ class EstadisticasIntegracionTests {
     @Order(2)
     void elDiaDeServicioPasadaLaMedianocheYElCambioDeHora() {
         // T3: la B es a las 00:10 del 24, pero su día de servicio es el 23: franja 0 del 23, y es su última parada vista
-        // (la C no tiene hora).
+        // (la C no tiene hora), pero no su destino.
         assertThat(hora(D1, "RL4", 0)).containsEntry("paradas", 1).containsEntry("suma_minutos", 18)
-                .containsEntry("de_16_o_mas", 1).containsEntry("finales", 1).containsEntry("suma_finales", 18);
+                .containsEntry("de_16_o_mas", 1).containsEntry("finales", 1).containsEntry("destinos", 0);
         assertThat(hora(D1, "RL4", 23)).containsEntry("paradas", 1).containsEntry("suma_minutos", 20);
         assertThat(jdbc.sql("SELECT count(*) FROM estad_linea_hora WHERE fecha_servicio = '2026-10-24'")
                 .query(Integer.class).single()).isZero();
@@ -278,7 +284,7 @@ class EstadisticasIntegracionTests {
         assertThat(hora(D2, "RL4", 2)).containsEntry("viajes", 1).containsEntry("paradas", 2)
                 .containsEntry("suma_minutos", 4);
         assertThat(hora(D2, "RL4", 3)).containsEntry("paradas", 1).containsEntry("suma_minutos", 4)
-                .containsEntry("finales", 1);
+                .containsEntry("finales", 1).containsEntry("destinos", 0);
     }
 
     @Test
@@ -286,10 +292,12 @@ class EstadisticasIntegracionTests {
     void porLineaYDiaInferidasSinHoraCanceladasYCobertura() {
         Map<String, Object> rl4 = jdbc.sql("SELECT * FROM estad_linea_dia WHERE fecha_servicio = :f AND linea = 'RL4'")
                 .param("f", D1).query().singleRow();
-        // Viajes con alguna parada válida: T1, T2 y T3. Programados: T1, T2, T3, T4 y T6 (no el autobús).
+        // Viajes con alguna parada válida: T1, T2 y T3. Programados: T1, T2, T3, T4 y T6 (no el autobús), con 4
+        // paradas cada uno. Cancelados: T6 y T12 (este, pasada la medianoche, en la partición del 24).
         assertThat(rl4).containsEntry("viajes", 3).containsEntry("viajes_con_datos", 3)
-                .containsEntry("paradas_inferidas", 1).containsEntry("paradas_sin_hora", 1)
-                .containsEntry("viajes_programados", 5).containsEntry("cancelados", 1);
+                .containsEntry("paradas_con_datos", 11).containsEntry("paradas_inferidas", 1)
+                .containsEntry("paradas_sin_hora", 1).containsEntry("viajes_programados", 5)
+                .containsEntry("paradas_programadas", 20).containsEntry("cancelados", 2);
         Map<String, Object> r3 = jdbc.sql("SELECT * FROM estad_linea_dia WHERE fecha_servicio = :f AND linea = 'R3'")
                 .param("f", D1).query().singleRow();
         assertThat(r3).containsEntry("viajes", 2).containsEntry("viajes_programados", 2).containsEntry("cancelados", 0);
@@ -305,9 +313,9 @@ class EstadisticasIntegracionTests {
                 .query().singleRow();
         assertThat(dia).containsEntry("filas_retrasos", 16).containsEntry("con_horario", true)
                 .containsEntry("con_posiciones", true);
-        // El 24 no tiene horario ni partición de posiciones: se calcula vacío y lo dice.
-        assertThat(jdbc.sql("SELECT con_horario, con_posiciones FROM estad_dias WHERE fecha_servicio = '2026-10-24'")
-                .query().singleRow()).containsEntry("con_horario", false).containsEntry("con_posiciones", false);
+        // El 24 no tiene horario: se calcula vacío y lo dice.
+        assertThat(jdbc.sql("SELECT filas_retrasos, con_horario FROM estad_dias WHERE fecha_servicio = '2026-10-24'")
+                .query().singleRow()).containsEntry("filas_retrasos", 0).containsEntry("con_horario", false);
     }
 
     @Test
@@ -362,7 +370,10 @@ class EstadisticasIntegracionTests {
     @Test
     @Order(7)
     void unaFilaNuevaSustituyeElDiaYLoQueYaNoEstaSeConserva() throws Exception {
-        // Sin el horario ni la partición de posiciones del 23, al recalcular se conservan programados y cancelados.
+        // Sin el horario ni la partición de posiciones del 23, al recalcular se conservan programados, cancelados,
+        // llegadas a destino y tramos.
+        List<String> tramos = jdbc.sql("SELECT t::text FROM estad_tramo_dia t WHERE fecha_servicio = :f ORDER BY 1")
+                .param("f", D1).query(String.class).list();
         jdbc.sql("UPDATE horario.calendar SET start_date = '2026-01-01', end_date = '2026-01-01' WHERE service_id = 'S23'")
                 .update();
         try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
@@ -376,15 +387,19 @@ class EstadisticasIntegracionTests {
         assertThat(r.conPosiciones()).isFalse();
         Map<String, Object> rl4 = jdbc.sql("SELECT * FROM estad_linea_dia WHERE fecha_servicio = :f AND linea = 'RL4'")
                 .param("f", D1).query().singleRow();
-        assertThat(rl4).containsEntry("viajes", 4).containsEntry("viajes_programados", 5).containsEntry("cancelados", 1);
+        assertThat(rl4).containsEntry("viajes", 4).containsEntry("viajes_programados", 5)
+                .containsEntry("paradas_programadas", 20).containsEntry("cancelados", 2);
         assertThat(hora(D1, "RL4", 11)).containsEntry("paradas", 1).containsEntry("suma_minutos", 7);
+        assertThat(hora(D1, "RL4", 9)).containsEntry("destinos", 2).containsEntry("suma_destinos", 5);
+        assertThat(jdbc.sql("SELECT t::text FROM estad_tramo_dia t WHERE fecha_servicio = :f ORDER BY 1")
+                .param("f", D1).query(String.class).list()).isEqualTo(tramos);
         // Se deja todo como estaba para las pruebas de la API.
         jdbc.sql("DELETE FROM retrasos WHERE trip_id = 'T4'").update();
+        jdbc.sql("UPDATE horario.calendar SET start_date = '2026-10-23', end_date = '2026-10-23' WHERE service_id = 'S23'")
+                .update();
         calculo.calcular(D1);
         assertThat(jdbc.sql("SELECT viajes FROM estad_linea_dia WHERE fecha_servicio = :f AND linea = 'RL4'")
                 .param("f", D1).query(Integer.class).single()).isEqualTo(3);
-        jdbc.sql("UPDATE horario.calendar SET start_date = '2026-10-23', end_date = '2026-10-23' WHERE service_id = 'S23'")
-                .update();
     }
 
     @Test
@@ -398,20 +413,31 @@ class EstadisticasIntegracionTests {
 
     @Test
     @Order(9)
-    void unaEscrituraALaMitadNoFrenaElCalculoYUnCerrojoSobreSusTablasLoHaceFallarEnSegundos() throws Exception {
-        // La ingesta con un INSERT sin confirmar en retrasos: el cálculo solo lee y no la espera.
-        try (Connection ingesta = dataSource.getConnection(); Statement st = ingesta.createStatement()) {
-            ingesta.setAutoCommit(false);
-            st.execute("""
-                    INSERT INTO retrasos (fecha_servicio, trip_id, stop_sequence, stop_id, linea, nucleo, minutos, registrado)
-                    VALUES ('2026-10-23', 'EN_CURSO', 1, '90001', 'RL4', 51, 3, now())""");
-            long t0 = System.nanoTime();
-            calculo.calcular(D1);
-            assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0)).isLessThan(5_000);
-            ingesta.rollback();
-        }
-        // Algo que retiene una tabla de agregados: el cálculo falla con lock_timeout (1 s aquí) en vez de hacer cola.
+    void losCerrojosHacenFallarElCalculoEnSegundosSinDejarElDiaAMedias() throws Exception {
         String antes = volcado(D1);
+        // Otro cálculo del mismo día (su cerrojo consultivo) y una importación del horario en marcha (el suyo): el
+        // cálculo espera como mucho lock_timeout (1 s aquí) y falla, sin tocar nada.
+        for (String cerrojo : List.of("SELECT pg_advisory_xact_lock(6, " + D1.toEpochDay() + ")",
+                "SELECT pg_advisory_xact_lock(" + com.ivanchesa.trainwatch.horario.ImportadorHorario.CLAVE_CERROJO
+                        + ")")) {
+            try (Connection otro = dataSource.getConnection(); Statement st = otro.createStatement()) {
+                otro.setAutoCommit(false);
+                st.execute(cerrojo);
+                long t0 = System.nanoTime();
+                assertThatThrownBy(() -> calculo.calcular(D1)).as(cerrojo).hasStackTraceContaining("lock timeout");
+                assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0)).isLessThan(10_000);
+                otro.rollback();
+            }
+        }
+        // Otro día sí se puede calcular mientras tanto: el cerrojo es por día.
+        try (Connection otro = dataSource.getConnection(); Statement st = otro.createStatement()) {
+            otro.setAutoCommit(false);
+            st.execute("SELECT pg_advisory_xact_lock(6, " + D2.toEpochDay() + ")");
+            calculo.calcular(D1);
+            otro.rollback();
+        }
+        assertThat(volcado(D1)).isEqualTo(antes);
+        // Algo que retiene una tabla de agregados: lo mismo.
         CountDownLatch cogido = new CountDownLatch(1);
         CountDownLatch soltar = new CountDownLatch(1);
         CompletableFuture<Void> bloqueo = CompletableFuture.runAsync(() -> {
@@ -467,17 +493,22 @@ class EstadisticasIntegracionTests {
         assertThat(n.get("nombre").asString()).isEqualTo("Rodalies de Catalunya");
         assertThat(n.at("/publicacion/publicado").asBoolean()).isTrue();
         assertThat(n.at("/publicacion/recogiendoDesde").asString()).isEqualTo("2026-10-23");
-        assertThat(n.at("/periodo/diasConDatos").asInt()).isEqualTo(3);
+        // El 24 está calculado, pero sin ninguna fila: no cuenta como día con datos.
+        assertThat(n.at("/periodo/diasConDatos").asInt()).isEqualTo(2);
         // Viajes: RL4 3 + 2 y R3 2. Paradas: RL4 9 + 4 y R3 4.
         assertThat(n.at("/muestra/viajes").asInt()).isEqualTo(7);
         assertThat(n.at("/muestra/paradas").asInt()).isEqualTo(17);
         assertThat(n.at("/muestra/paradasInferidasQuitadas").asInt()).isEqualTo(1);
         assertThat(n.at("/muestra/paradasSinHoraQuitadas").asInt()).isEqualTo(1);
-        assertThat(n.at("/muestra/cancelados").asInt()).isEqualTo(1);
+        assertThat(n.at("/muestra/cancelados").asInt()).isEqualTo(2);
         // Cobertura: el 23, 7 programados (RL4 5, R3 2) y 5 vistos; el 25, 2 y 2. 7 de 9 = 77,8 %.
         assertThat(n.at("/cobertura/viajesProgramados").asInt()).isEqualTo(9);
         assertThat(n.at("/cobertura/viajesVistos").asInt()).isEqualTo(7);
         assertThat(n.at("/cobertura/porcentaje").asDouble()).isEqualTo(77.8);
+        // Por paradas: programadas 20 + 8 (el 23) y 8 (el 25) = 36; con fila, 11 + 4 y 4 = 19 → 52,8 %.
+        assertThat(n.at("/cobertura/paradasProgramadas").asInt()).isEqualTo(36);
+        assertThat(n.at("/cobertura/paradasVistas").asInt()).isEqualTo(19);
+        assertThat(n.at("/cobertura/porcentajeParadas").asDouble()).isEqualTo(52.8);
         // R3: 4 paradas con 1, 1, 0 y 0 → 100 % con menos de 3, media 0,5. RL4: 5 de 13 = 38,5 %.
         JsonNode lineas = n.get("lineas");
         assertThat(lineas).hasSize(2);
@@ -489,7 +520,7 @@ class EstadisticasIntegracionTests {
         assertThat(lineas.get(1).get("puesto").asInt()).isEqualTo(2);
         assertThat(lineas.get(1).get("destacada").asBoolean()).isTrue();
         assertThat(lineas.get(1).at("/cifras/porcentajes/menosDe3").asDouble()).isEqualTo(38.5);
-        assertThat(lineas.get(1).get("cancelados").asInt()).isEqualTo(1);
+        assertThat(lineas.get(1).get("cancelados").asInt()).isEqualTo(2);
         assertThat(lineas.get(1).at("/cobertura/porcentaje").asDouble()).isEqualTo(71.4);
         assertThat(n.get("fuente").asString()).contains("Datos: Renfe (CC BY 4.0)").contains("vistos en directo");
     }
@@ -513,10 +544,12 @@ class EstadisticasIntegracionTests {
         assertThat(r.at("/porcentajes/de3a5").asDouble()).isEqualTo(30.8);
         assertThat(r.at("/porcentajes/de6a15").asDouble()).isEqualTo(15.4);
         assertThat(r.at("/porcentajes/de16OMas").asDouble()).isEqualTo(15.4);
-        // Última parada vista: T1 6, T2 -1, T3 18, T9 4, T10 0 → 27 / 5 = 5,4; menos de 3: 2 de 5.
-        assertThat(l.at("/llegadaUltimaParada/viajes").asInt()).isEqualTo(5);
-        assertThat(l.at("/llegadaUltimaParada/mediaMinutos").asDouble()).isEqualTo(5.4);
-        assertThat(l.at("/llegadaUltimaParada/menosDe3").asDouble()).isEqualTo(40.0);
+        // Por viaje, solo los que se vieron en su destino (D): T1 con 6 y T2 con -1 → 2,5; menos de 3: 1 de 2. T3, T9 y
+        // T10 dejaron de verse antes: cuentan en viajes, no en la cifra.
+        assertThat(l.at("/llegadaDestino/viajes").asInt()).isEqualTo(5);
+        assertThat(l.at("/llegadaDestino/viajesEnDestino").asInt()).isEqualTo(2);
+        assertThat(l.at("/llegadaDestino/mediaMinutos").asDouble()).isEqualTo(2.5);
+        assertThat(l.at("/llegadaDestino/menosDe3").asDouble()).isEqualTo(50.0);
         assertThat(l.at("/coberturaLinea/porcentaje").asDouble()).isEqualTo(71.4);
 
         // Por hora: 0, 2, 3, 8, 9 y 23. La de las 9: 23-10 (6, 10, -1) y 25-10 (0) → 15 / 4 = 3,75 → 3,8; 3 viajes.
@@ -533,18 +566,19 @@ class EstadisticasIntegracionTests {
         assertThat(h23.get("mediaMinutos").isNull()).isTrue();
         assertThat(h23.get("porcentajes").isNull()).isTrue();
 
-        // Días de la semana del periodo: viernes (3 viajes), sábado (calculado, sin datos) y domingo (2).
+        // Días de la semana con datos: viernes (3 viajes, 64 / 9 = 7,1) y domingo (2 viajes, 8 / 4 = 2,0). El sábado
+        // está calculado, pero vacío.
         JsonNode dias = l.get("porDiaSemana");
         assertThat(dias.valueStream().map(d -> d.get("nombre").asString()).toList())
-                .containsExactly("viernes", "sábado", "domingo");
+                .containsExactly("viernes", "domingo");
+        assertThat(dias.get(0).get("dias").asInt()).isEqualTo(1);
         assertThat(dias.get(0).at("/cifras/viajes").asInt()).isEqualTo(3);
         assertThat(dias.get(0).at("/cifras/mediaMinutos").asDouble()).isEqualTo(7.1);
-        assertThat(dias.get(1).at("/cifras/suficiente").asBoolean()).isFalse();
-        assertThat(dias.get(2).at("/cifras/mediaMinutos").asDouble()).isEqualTo(2.0);
-        // Una semana (la del lunes 19-10) con 3 días.
+        assertThat(dias.get(1).at("/cifras/mediaMinutos").asDouble()).isEqualTo(2.0);
+        // Una semana (la del lunes 19-10) con 2 días con datos.
         assertThat(l.get("porSemana")).hasSize(1);
         assertThat(l.at("/porSemana/0/lunes").asString()).isEqualTo("2026-10-19");
-        assertThat(l.at("/porSemana/0/dias").asInt()).isEqualTo(3);
+        assertThat(l.at("/porSemana/0/dias").asInt()).isEqualTo(2);
 
         // Tramos con 2 pasos o más, de más a menos minutos perdidos: B→C (+3 y +1 = 2,0), A→B (+2, -2, +2 = 0,7) y
         // C→D (+1, -11 = -5,0).
@@ -574,6 +608,9 @@ class EstadisticasIntegracionTests {
         assertThat(lineas.get(1).at("/cifras/mediaMinutos").asDouble()).isEqualTo(5.0);
         assertThat(lineas.get(1).at("/cifras/porcentajes/menosDe3").asDouble()).isEqualTo(60.0);
         assertThat(get("/api/estadisticas/estaciones/90002" + PERIODO).at("/muestra/paradasInferidasQuitadas").asInt())
+                .isEqualTo(1);
+        // En C, la de T3 no tiene hora: tampoco entra, y se cuenta aparte.
+        assertThat(get("/api/estadisticas/estaciones/90003" + PERIODO).at("/muestra/paradasSinHoraQuitadas").asInt())
                 .isEqualTo(1);
     }
 
@@ -642,7 +679,10 @@ class EstadisticasIntegracionTests {
         JsonNode r = json.readTree(cuerpo);
         assertThat(r).hasSize(3);
         assertThat(r.get(0).get("fecha").asString()).isEqualTo("2026-10-23");
-        assertThat(r.get(0).get("filasRetrasos").asInt()).isEqualTo(16);
+        assertThat(r.get(0).at("/resultado/filasRetrasos").asInt()).isEqualTo(16);
+        assertThat(r.get(0).get("error").isNull()).isTrue();
+        http().post().uri("/actuator/estadisticas").contentType(MediaType.APPLICATION_JSON)
+                .body("{\"desde\": \"2026-10-25\", \"hasta\": \"2026-10-23\"}").exchange().expectStatus().isBadRequest();
         JsonNode calculados = json.readTree(http().get().uri("/actuator/estadisticas").exchange().expectStatus().isOk()
                 .expectBody(String.class).returnResult().getResponseBody());
         assertThat(calculados.get(0).get("fecha").asString()).isEqualTo("2026-10-25");

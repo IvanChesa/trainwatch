@@ -140,7 +140,7 @@ public class EstadisticasController {
 
     @GetMapping("/lineas/{nucleo}/{linea}")
     @Operation(operationId = "puntualidadLinea", summary = "Puntualidad de una línea",
-            description = "Todo el periodo, la llegada a la última parada vista de cada viaje, por hora programada (hora"
+            description = "Todo el periodo, la llegada a destino de los viajes que se vieron llegar, por hora programada (hora"
                     + " de Madrid), por día de la semana, semana a semana y los tramos que más minutos pierden."
                     + DESCRIPCION_PERIODO)
     @RespuestasDeError
@@ -163,7 +163,7 @@ public class EstadisticasController {
         List<LineaDia> delNucleo = consultas.lineaDia(nucleo, null, periodo.desde(), periodo.hasta());
         List<LineaDia> dias = delNucleo.stream().filter(d -> d.linea().equals(nombre)).toList();
         List<LineaHora> horas = consultas.lineaHora(nucleo, nombre, periodo.desde(), periodo.hasta());
-        List<LocalDate> calculados = consultas.diasCalculados(periodo.desde(), periodo.hasta());
+        List<LocalDate> calculados = consultas.diasConDatos(periodo.desde(), periodo.hasta());
 
         Acumulado total = new Acumulado();
         horas.forEach(h -> total.sumar(h.fila()));
@@ -189,13 +189,13 @@ public class EstadisticasController {
         List<Tramo> tramos = consultas.tramos(nucleo, nombre, periodo.desde(), periodo.hasta(), minimo,
                 propiedades.maximoTramos()).stream()
                 .map(t -> new Tramo(new Parada(t.desde(), t.nombreDesde()), new Parada(t.hasta(), t.nombreHasta()),
-                        t.pasos(), true, Acumulado.decimal((double) t.suma() / t.pasos()),
+                        t.pasos(), true, Acumulado.decimal(t.suma(), t.pasos()),
                         Acumulado.porcentaje(t.pierden(), t.pasos()), Acumulado.porcentaje(t.ganan(), t.pasos())))
                 .toList();
 
         return ok(new PuntualidadLinea(nucleo, Nucleos.nombre(nucleo), nombre, destacada, publicacion, periodo,
                 muestra(dias, horas), cobertura(delNucleo), cobertura(dias), total.cifras(viajes, minimo),
-                total.llegadaFinal(minimo), franjas, porDia, porSemana, tramos, RespuestasEstadisticas.FUENTE));
+                total.llegadaDestino(minimo), franjas, porDia, porSemana, tramos, RespuestasEstadisticas.FUENTE));
     }
 
     private record Grupo(Acumulado acumulado, int viajes, int dias) {
@@ -253,6 +253,7 @@ public class EstadisticasController {
         Set<Integer> nucleos = new TreeSet<>();
         int viajes = 0;
         int inferidas = 0;
+        int sinHora = 0;
         for (EstacionDia f : filas) {
             String clave = f.nucleo() + ":" + f.linea();
             total.sumar(f.fila());
@@ -261,6 +262,7 @@ public class EstadisticasController {
             nucleos.add(f.nucleo());
             viajes += f.fila().viajes();
             inferidas += f.inferidas();
+            sinHora += f.sinHora();
         }
         List<LineaEnEstacion> lineas = new ArrayList<>();
         porLinea.forEach((clave, a) -> {
@@ -271,7 +273,7 @@ public class EstadisticasController {
         Cobertura cobertura = nucleos.isEmpty() ? null
                 : cobertura(consultas.lineaDiaDeNucleos(List.copyOf(nucleos), periodo.desde(), periodo.hasta()));
         return ok(new PuntualidadEstacion(stopId, nombre, publicacion, periodo,
-                new Muestra(viajes, total.paradas, inferidas, 0, null), cobertura, total.cifras(viajes, minimo), lineas,
+                new Muestra(viajes, total.paradas, inferidas, sinHora, null), cobertura, total.cifras(viajes, minimo), lineas,
                 RespuestasEstadisticas.FUENTE));
     }
 
@@ -289,7 +291,7 @@ public class EstadisticasController {
             throw Problemas.parametroInvalido("hasta",
                     "El periodo no puede pasar de " + propiedades.periodoMaximoDias() + " días.");
         }
-        return new Periodo(d, h, consultas.diasCalculados(d, h).size());
+        return new Periodo(d, h, consultas.diasConDatos(d, h).size());
     }
 
     Publicacion publicacion() {
@@ -324,23 +326,35 @@ public class EstadisticasController {
                 : null;
     }
 
-    /** De los días en que se sabe cuántos viajes daba el horario, cuántos se vieron (como mucho, el 100 %). */
+    /**
+     * De los días en que se sabe qué daba el horario, cuánto se vio: viajes y paradas (como mucho, el 100 %: puede
+     * haber viajes vistos de otra versión del horario).
+     */
     static Cobertura cobertura(List<LineaDia> dias) {
         long programados = 0;
         long vistos = 0;
+        long paradasProgramadas = 0;
+        long paradasVistas = 0;
         boolean alguno = false;
         for (LineaDia d : dias) {
             if (d.programados() != null) {
                 alguno = true;
                 programados += d.programados();
                 vistos += d.viajesConDatos();
+                paradasProgramadas += d.paradasProgramadas() == null ? 0 : d.paradasProgramadas();
+                paradasVistas += d.paradasConDatos();
             }
         }
         if (!alguno) {
-            return new Cobertura(null, null, null);
+            return new Cobertura(null, null, null, null, null, null);
         }
-        Double porcentaje = programados == 0 ? null : Math.min(100.0, Acumulado.porcentaje(vistos, programados));
-        return new Cobertura((int) programados, (int) vistos, porcentaje);
+        return new Cobertura((int) programados, (int) vistos, hastaCien(vistos, programados), (int) paradasProgramadas,
+                (int) paradasVistas, hastaCien(paradasVistas, paradasProgramadas));
+    }
+
+    private static Double hastaCien(long parte, long total) {
+        Double p = Acumulado.porcentaje(parte, total);
+        return p == null ? null : Math.min(100.0, p);
     }
 
     private static <T> ResponseEntity<T> ok(T cuerpo) {

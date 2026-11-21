@@ -44,11 +44,14 @@ public final class RespuestasEstadisticas {
             @Schema(description = "Viajes cancelados con CANCELED explícito (no cuentan como retraso); null si no se sabe", example = "3") Integer cancelados) {
     }
 
-    @Schema(description = "Cobertura: de los viajes de tren que daba el horario, cuántos se vieron en directo")
+    @Schema(description = "Cobertura: de lo que daba el horario, cuánto se vio en directo. Por viajes (alguna parada vista) y por paradas (un tren que solo se ve en 2 de sus 20 paradas cuenta entero en los viajes, pero no en las paradas)")
     public record Cobertura(
             @Schema(example = "2120") Integer viajesProgramados,
             @Schema(example = "1890") Integer viajesVistos,
-            @Schema(description = "viajesVistos / viajesProgramados en %, con un decimal; null si no se sabe", example = "89.2") Double porcentaje) {
+            @Schema(description = "viajesVistos / viajesProgramados en %, con un decimal; null si no se sabe", example = "89.2") Double porcentaje,
+            @Schema(example = "30410") Integer paradasProgramadas,
+            @Schema(description = "Paradas con fila en retrasos (vistas, inferidas o sin hora)", example = "24800") Integer paradasVistas,
+            @Schema(description = "paradasVistas / paradasProgramadas en %, con un decimal; null si no se sabe", example = "81.6") Double porcentajeParadas) {
     }
 
     @Schema(description = "Reparto de las paradas por tramos de retraso (los colores del mapa), en %, con un decimal")
@@ -70,12 +73,13 @@ public final class RespuestasEstadisticas {
             Porcentajes porcentajes) {
     }
 
-    @Schema(description = "Por viaje: el retraso al llegar a su última parada vista (no siempre el destino)")
-    public record LlegadaFinal(
-            @Schema(example = "1843") int viajes,
-            @Schema(example = "true") boolean suficiente,
+    @Schema(description = "Por viaje: el retraso al llegar a su destino, solo de los viajes que se vieron llegar a él")
+    public record LlegadaDestino(
+            @Schema(description = "Viajes con alguna parada vista", example = "1843") int viajes,
+            @Schema(description = "De ellos, los que se vieron en su destino (la última parada del horario): los de la cifra", example = "1520") int viajesEnDestino,
+            @Schema(description = "Hay viajes en destino suficientes para enseñar la cifra", example = "true") boolean suficiente,
             @Schema(example = "3.1") Double mediaMinutos,
-            @Schema(description = "% de viajes con menos de 3 min en su última parada vista", example = "71.5") Double menosDe3) {
+            @Schema(description = "% de esos viajes con menos de 3 min al llegar a su destino", example = "71.5") Double menosDe3) {
     }
 
     @Schema(description = "Una franja horaria: la hora programada de llegada a la parada, en hora de Madrid")
@@ -143,7 +147,7 @@ public final class RespuestasEstadisticas {
             @Schema(description = "Cobertura de su núcleo en el periodo") Cobertura coberturaNucleo,
             @Schema(description = "Cobertura de la línea en el periodo") Cobertura coberturaLinea,
             @Schema(description = "Todo el periodo") Cifras resumen,
-            LlegadaFinal llegadaUltimaParada,
+            LlegadaDestino llegadaDestino,
             @Schema(description = "Solo las horas con alguna parada") List<Franja> porHora,
             @Schema(description = "Los días de la semana que hay en el periodo") List<DiaSemana> porDiaSemana,
             List<Semana> porSemana,
