@@ -1,119 +1,265 @@
 # Fase 6 · Estadísticas de puntualidad: informe
 
-**Fecha:** 21-11-2026. **Rama:** `fase-6-estadisticas` (sin fusionar). **Resultado:** **hecho el backend; falta la web.** Están las definiciones (ADR 0025), los agregados diarios con su tarea nocturna (V6, ADR 0026), la API de estadísticas con OpenAPI, la fecha mínima de publicación, las pruebas y la comprobación con datos reales. Las páginas de React (punto 4 del encargo) esperan a que se fusione la fase 5, que se hace a la vez en otra sesión.
+**Fecha:** 21-11-2026. **Rama:** `fase-6-estadisticas`. **Resultado:** **hecha.** Lo que entró:
 
-> Excepciones al encargo, por indicación de la sesión de control: no se espera a la fusión de la fase 5, no se toca `frontend/` y **no se fusiona en `main`**: todo queda en la rama con commits.
+- las definiciones ([ADR 0025](../adr/0025-definiciones-de-puntualidad.md));
+- los agregados diarios con su tarea nocturna (V6, [ADR 0026](../adr/0026-agregados-diarios-y-tarea-nocturna.md));
+- la API de estadísticas, con la fecha mínima de publicación;
+- las páginas de la web: toda España, núcleo, línea y la ficha de la estación ([ADR 0027](../adr/0027-paginas-de-puntualidad-con-svg-propio.md));
+- las pruebas y la comprobación con datos reales.
+
+Pruebas: 159 en el backend (1 omitida), 76 de Vitest y 28 e2e. Las tres cifras comprobadas a mano coinciden exactamente con la API.
+
+> La comprobación con datos reales es **provisional**: se hizo con 1 h 45 min de ingesta local (4.036 filas), porque Iván prefirió avanzar a esperar más horas. Otra sesión la repetirá contra producción con más datos (§6). Las cifras son de prueba: no se publican.
+
+**Cómo se hizo:**
+
+- **El backend**, sin esperar a la fase 5, que se hacía a la vez en otra sesión.
+- **La web**, cuando la sesión de control avisó de que se habían fusionado la 5 y la 5b. Desde entonces aplica dos decisiones de Iván: la **RL4 no se destaca** y existe **«Toda España»**.
+- **Dos cosas añadidas a petición de la sesión de control:**
+  - el porcentaje **con 5 min o menos**;
+  - los **cancelados en la página de la línea**, como cota inferior.
 
 ## 1. Especificación
 
-Punto de partida: `docs/prompts/fase-6.md`, la fase 6 del §6 del plan y los puntos 3 y 8 de «Cambios tras la fase 0».
+Punto de partida:
 
-**Entra (backend):**
+- el encargo, `docs/prompts/fase-6.md`, con la corrección de `main`: la RL4, sin destacar;
+- la fase 6 del §6 del plan;
+- los puntos 3 y 8 de «Cambios tras la fase 0».
 
-1. **Definiciones** antes del código, en este informe y en el [ADR 0025](../adr/0025-definiciones-de-puntualidad.md) (resumen en el §2).
-2. **Agregados para siempre** (Flyway V6) por día de servicio: por núcleo, línea y hora; por línea y día; por estación; por tramo; y los cancelados explícitos. Solo sumas, recuentos e histograma. **Tarea nocturna** idempotente antes del cambio de horario, **recálculo a mano** por Actuator y cuidado con los cerrojos ([ADR 0026](../adr/0026-agregados-diarios-y-tarea-nocturna.md)).
-3. **API** en el estilo de la fase 4: ranking del núcleo, línea (por hora, día de la semana, semana y tramos) y estación, con `desde`/`hasta` (por defecto 4 semanas), periodo, viajes, paradas, inferidas quitadas y cobertura; `ProblemDetail`, caché y OpenAPI con un ejemplo por endpoint en `docs/api/`.
-4. **Publicación con fecha mínima** (solo el backend).
-5. **Pruebas** del cálculo (Testcontainers, filas a mano), de la idempotencia y de cada endpoint.
-6. **Comprobación con datos reales**: 3 cifras recalculadas con SQL directo y comparadas con la API.
+**Entra:**
 
-**No entra:** las páginas de React, los enlaces desde el mapa y el e2e de Playwright (cuando se fusione la fase 5); la fusión en `main`, el diario y el despliegue.
+1. **Definiciones** antes del código (§2 y ADR 0025).
+2. **Agregados que se guardan para siempre** (Flyway V6), por día de servicio:
+   - por núcleo, línea y hora;
+   - por línea y día;
+   - por estación;
+   - por tramo;
+   - los cancelados explícitos.
+
+   Solo sumas, recuentos e histograma. Una **tarea nocturna** idempotente antes del horario nuevo, un **recálculo a mano** por Actuator y cuidado con los cerrojos (ADR 0026).
+3. **API** en el estilo de la fase 4: toda España, núcleo, línea y estación.
+   - Con `desde` y `hasta`; por defecto, las últimas 4 semanas.
+   - Cada respuesta lleva el periodo, los viajes, las paradas, las inferidas quitadas y la cobertura.
+   - `ProblemDetail`, caché y OpenAPI, con un ejemplo por endpoint en `docs/api/`.
+4. **Web:**
+   - página de línea (por hora, por día, semana a semana y tramos);
+   - página del núcleo con el ranking;
+   - toda España;
+   - la puntualidad en la ficha de la estación;
+   - enlaces desde el mapa y la lista.
+
+   Cada gráfico, con su tabla. Siempre a la vista: el periodo, «solo trenes vistos en directo», la cobertura, «Datos: Renfe (CC BY 4.0)» y el aviso de no oficial.
+5. **Nada público antes de tiempo:** la propiedad `publicar-desde`.
+6. **Pruebas:** del cálculo con filas a mano, de la idempotencia, de los endpoints, Vitest y el e2e de una página de línea.
+7. **Comprobación con datos reales:** 3 cifras recalculadas con SQL y comparadas con la API.
+
+**No entra:**
+
+- el despliegue, y el recálculo en producción de los días desde el 21-11 (§7);
+- el historial por número de tren (§7).
 
 **Aceptación:**
 
-1. `./mvnw verify` en verde con las pruebas del cálculo (medias, porcentajes, horas en Madrid con un día de cambio de hora, día de servicio pasada la medianoche, inferidas, canceladas, muestra mínima), de la idempotencia y de los endpoints (contrato, errores, sin datos).
+1. `./mvnw verify`, `npm test` y el e2e en verde, con las pruebas de la lista.
 2. Tres cifras de la API (una media por línea y hora, un porcentaje y un tramo) iguales a las calculadas con SQL directo sobre `retrasos`.
 
-## 2. Definiciones elegidas (ADR 0025)
+## 2. Definiciones (ADR 0025)
 
-- **Unidad:** la **parada** (el retraso al llegar a cada parada vista) como cifra principal; **por viaje**, el retraso al llegar a su **destino**, solo de los viajes que se vieron llegar (los demás se cuentan aparte), como secundaria. Nunca se mezclan.
-- **Cifras:** media de minutos (un decimal), **mediana** y **p90** (del histograma por minuto), y el % de paradas con **menos de 3 min** (adelantos incluidos), de 3 a 5, de 6 a 15 y 16 o más.
-- **Qué entra:** solo paradas **vistas** de trenes vistos en directo, con hora programada. **Inferidas** y **sin hora** fuera, contadas aparte. **Autobuses** fuera. **Cancelados** explícitos aparte, nunca como retraso; un tren que no aparece baja la **cobertura** (vistos / programados por el horario de ese día, por viajes y por paradas).
-- **Franja:** la hora **programada** de llegada en **hora de Madrid**. El día de cambio de hora, las dos 02:30 van a la franja de las 2. Las filas antiguas sin hora (anteriores a la V5) quedan fuera de todas las cifras, también de las diarias, para que el día sea la suma exacta de sus horas.
-- **Día:** el **día de servicio** (`fecha_servicio`); día de la semana y semana ISO, también de servicio.
-- **Muestra mínima:** **30 viajes** (no paradas) por cifra, y 30 pasos por tramo; por debajo, «datos insuficientes» con su número de viajes.
-- **Publicación:** `trainwatch.estadisticas.publicar-desde`, en producción el **19-12-2026** (4 semanas completas desde el 21-11).
+- **Unidad:**
+  - la cifra principal es por **parada**: el retraso al llegar a cada parada vista;
+  - la secundaria, por **viaje**: el retraso al llegar al **destino**, solo de los viajes que se vieron llegar (los demás se cuentan aparte).
+
+  Nunca se mezclan.
+- **Cifras:**
+  - la media (con un decimal), la **mediana** y el **p90**, en minutos;
+  - el reparto de las paradas: **menos de 3 min** (con los adelantos), de 3 a 5, de 6 a 15 y 16 o más;
+  - el porcentaje **con 5 min o menos**: el umbral que suele usar Renfe en Cercanías. Sale de contar las paradas, no de sumar dos porcentajes ya redondeados.
+- **Qué entra:**
+  - solo paradas **vistas** de trenes en directo, con hora programada;
+  - las **inferidas** y las paradas **sin hora** quedan fuera y se cuentan aparte;
+  - los **autobuses** quedan fuera;
+  - los **cancelados** explícitos se cuentan aparte, nunca como retraso.
+- **Cancelados:** son una **cota inferior**. Solo cuentan los que Renfe marca `CANCELED` en las posiciones: uno que solo se anuncia en los retrasos no se cuenta, y un tren que no aparece no cuenta como cancelado.
+- **Cobertura:** de lo que daba el horario ese día, cuánto se vio en directo, por **viajes** y por **paradas**. Se enseña la del núcleo y, en la página de la línea, también la suya.
+- **Franja horaria:** la hora **programada** de llegada, en **hora de Madrid**.
+  - El día del cambio de hora, las dos 02:30 van a la franja de las 2.
+  - Las filas sin hora quedan fuera de todas las cifras.
+- **Día:** el **día de servicio**.
+- **Muestra mínima:** **30 viajes** por cifra y 30 pasos por tramo. La API lo dice en `publicacion.muestraMinima`.
+- **Publicación:** la propiedad `trainwatch.estadisticas.publicar-desde`. En producción, el **19-12-2026**.
+- **Toda España:** un ranking de **núcleos**, no de líneas. Los nombres de línea se repiten entre núcleos, y cada núcleo va con su cobertura.
 
 ## 3. Qué se hizo
 
 | Pieza | Detalle |
 |---|---|
-| **V6** | `estad_linea_hora` (día, núcleo, línea, hora: viajes, paradas, suma, tramos, histograma de 61 posiciones y la llegada a destino), `estad_linea_dia` (viajes distintos, viajes y paradas con datos, inferidas, sin hora, viajes y paradas programados, cancelados), `estad_estacion_dia`, `estad_tramo_dia` y `estad_dias` (qué días están calculados y con qué fuentes). `CHECK` de que los tramos suman las paradas |
-| `CalculoEstadisticas` | Un día en una transacción: `statement_timeout` 2 min (con el plazo de red por encima) y `lock_timeout` 5 s locales, el cerrojo de la importación en modo compartido y `pg_advisory_xact_lock(6, día)`, copia en tablas temporales de lo que no se puede volver a sacar (programados, destinos y cancelados; los tramos, si no hay horario, se dejan como estaban), `DELETE` del día en las cinco tablas y cuatro `INSERT … SELECT` (`GROUP BY` con `FILTER`, histograma con `generate_series` y `array_agg`, `row_number` para la última parada vista, comparada con la última del horario para saber si es el destino, y `LAG` para los tramos, con la parada anterior según el horario). Tarea `@Scheduled` a las **03:45** de Madrid: ayer y los dos días anteriores sin calcular |
-| `EstadisticasEndpoint` | Actuator `GET /actuator/estadisticas` (últimos 14 días calculados) y `POST` con `{"desde", "hasta"}` (como mucho 400 días). Expuesto en `local`, en las pruebas y en producción, donde Actuator está en el 8081, que no sale de la máquina |
-| `EstadisticasController` | `GET /api/estadisticas/nucleos/{nucleo}`, `/lineas/{nucleo}/{linea}` y `/estaciones/{stopId}`, con `desde` y `hasta`. 404 y 400 como `ProblemDetail`; `Cache-Control` 1 h y `ETag`. Antes de la fecha de publicación, el mismo formato con `publicacion` y el periodo y **ninguna cifra** |
-| `Acumulado` | Suma de filas en Java: sumas, recuentos e histograma posición a posición; media y porcentajes con un decimal; mediana y p90 en enteros (igual que `percentile_disc`) |
-| Configuración | `trainwatch.estadisticas.*` (`EstadisticasProperties`): cron, muestra mínima (30), publicar desde (19-12-2026), ventana (28 días), periodo máximo, días a recuperar, líneas destacadas (`51:RL4`), plazos. El programador pasa a 4 hilos |
-| `docs/api/` | `puntualidadNucleo.json`, `puntualidadLinea.json` y `puntualidadEstacion.json`, sacados de la aplicación con datos reales (§5) |
-| Documentación | ADR 0025 y 0026, este informe y la [guía de defensa](../defensa/fase-6.md) |
+| **V6** | Cinco tablas: `estad_linea_hora`, `estad_linea_dia`, `estad_estacion_dia`, `estad_tramo_dia` y `estad_dias`. Solo sumas, recuentos e histograma de 61 posiciones, con `CHECK`. Ver el ADR 0026 |
+| `CalculoEstadisticas` | Calcula un día en una transacción: con plazos propios, el cerrojo de la importación en modo compartido y uno por día, las copias de lo que ya no se puede volver a sacar, el `DELETE` del día y cuatro `INSERT … SELECT` (`GROUP BY` con `FILTER`, histograma con `generate_series`, `row_number` y `LAG`). La tarea nocturna va a las **03:45**: calcula ayer y recupera los dos días anteriores |
+| `EstadisticasEndpoint` | Actuator: `GET` y `POST /actuator/estadisticas`, con el intervalo y un resultado por día. En producción, en el 8081, que no sale de la máquina |
+| `EstadisticasController` | `GET /api/estadisticas/nucleos/todos`, `/nucleos/{n}`, `/lineas/{n}/{linea}` y `/estaciones/{id}`. Errores como `ProblemDetail`, `Cache-Control` de 1 h y `ETag`. Antes de la fecha de publicación, ninguna cifra |
+| `Acumulado` | Suma las filas sin perder exactitud. Media y porcentajes como `round(numeric, 1)`; mediana y p90 como `percentile_disc` |
+| Web: `frontend/src/estadisticas/` | `Raiz.tsx` elige entre el mapa y las páginas por la ruta. Las páginas van en un trozo aparte de 4 KB con gzip. Llevan gráficos en SVG propio (columnas de una serie y la barra del reparto), cada uno con su tabla. Las cifras, por este orden: la media, el % con menos de 3 min, el % con 5 o menos, la mediana y el p90. Además, el titular del ranking, el contexto con las dos coberturas, el periodo con dos fechas, las migas y los estados sin publicar, insuficiente, cargando y error |
+| Enlaces | En la cabecera del mapa, «Puntualidad» va a la del núcleo, a la de la línea filtrada o a toda España. En la ficha del tren, «Puntualidad de la R4». En la ficha de la estación, su puntualidad, con enlace a cada línea |
+| `docs/api/` | `puntualidadTodos`, `puntualidadNucleo`, `puntualidadLinea` y `puntualidadEstacion`, de la aplicación con datos reales |
+| Documentación | Los ADR 0025, 0026 y 0027; `fase-6-comprobacion.sql` (la consulta del §6); este informe y la [guía de defensa](../defensa/fase-6.md) |
 
 ### Decisiones tomadas sin consultar
 
-- **Histograma en `integer[]`** (61 posiciones, recortado a 0 y 60) además de la suma exacta, en vez de una fila por minuto: 5-10 veces menos filas; se suma en Java.
-- **Tramos con el horario:** `stop_sequence` tiene huecos en el 1,5 % de los viajes de Renfe (1.894 de 129.867 en el ZIP del 20-11), así que la parada anterior se pregunta al horario de esa noche; sin horario (recálculo de un día viejo), la fila anterior.
-- **Ranking** por % de menos de 3 min y luego por media; las líneas sin muestra suficiente, al final y sin puesto. La RL4 va marcada como `destacada`.
-- **La línea en la URL** sin distinguir mayúsculas (como en la fase 4); la respuesta da el nombre tal como está en los datos.
-- **Periodo:** por defecto, 28 días hasta **ayer**; como mucho 400 días. Un periodo sin datos responde 200 con ceros y `suficiente: false`, no 404.
-- **Los nombres de estación** salen del horario actual (`null` si ya no está); los agregados guardan solo el `stop_id`.
+- **El histograma va en un `integer[]`** de 61 posiciones, además de la suma exacta: así hay de 5 a 10 veces menos filas.
+- **Tramos con el horario.** `stop_sequence` tiene huecos en el 1,5 % de los viajes de Renfe (1.894 de 129.867), así que la parada anterior se le pregunta al horario de esa noche.
+- **Ranking:** por el % con menos de 3 min y luego por la media. Las líneas o núcleos sin muestra suficiente van al final, sin puesto.
+- **El titular del ranking no corona empates.** Si el primero saca al siguiente menos de 5 puntos, dice «igualadas». Si el primero tiene poca cobertura, también lo dice.
+- **Rutas sin enrutador** y **gráficos sin librería** (ADR 0027). El gráfico de 24 horas se dibuja a su tamaño natural y, si no cabe, se desplaza dentro de su caja.
+- **Las horas van en el orden del día de servicio**, de las 4 a las 3: lo de pasada la medianoche, al final.
+- **Periodo:** por defecto, 28 días hasta ayer; como mucho, 400. Un periodo sin datos da un 200 con ceros, no un 404.
+- **Se corrigió un fallo de la fase 4:** los endpoints con `@RespuestasDeError` salían en OpenAPI **sin la respuesta 200**, y sin su ejemplo. La prueba de la fase 4 solo miraba `/api/nucleos`.
 
-## 4. Cifras
+## 4. Pruebas
 
-### Pruebas
+| | `main` (`d3fc2f6`) | Ahora |
+|---|---:|---:|
+| `./mvnw verify` | 133 (1 omitida) | **159 (1 omitida)** |
+| `npm test` (Vitest) | 61 | **76** |
+| e2e (Playwright: escritorio y móvil) | 20 | **28** |
 
-`./mvnw verify`: **149 pruebas, 0 fallos, 1 omitida** (la manual de la fase 2). En `main` (`8849f0b`) eran 125. Nuevas:
+**Backend:**
 
-- `EstadisticasIntegracionTests` (16, con PostGIS en Testcontainers). Un puñado de filas de `retrasos` escritas a mano (dos días, 22 filas, 10 viajes) y las cifras **calculadas a mano en los comentarios** de la prueba:
-  - **por hora en hora de Madrid**: sumas, tramos e histograma de las 8 y las 9 (con un adelanto de −1 que va a «menos de 3» y a la posición 0, y cuenta tal cual en la suma); nada en las franjas UTC; las 08:00 UTC del 25-10 son la franja de las 9 (horario de invierno);
-  - **día de servicio pasada la medianoche** (una parada a las 00:10 del 24 va a la franja 0 del 23) y **cambio de hora** (las dos 02:30 del 25-10 van a la franja de las 2);
-  - **inferidas** y **sin hora** fuera y contadas, **autobús** fuera de todo, **cancelados** de `posiciones` (también uno pasada la medianoche, en la partición del día siguiente, y uno de otro día que no cuenta), viajes y paradas programados y cobertura;
-  - **tramos** con `LAG`: una parada inferida corta el tramo y, con `stop_sequence` 1, 2, 4 y 5, B→C cuenta pero A→C (B sin cerrar) no;
-  - **por estación**, con sus inferidas y sin hora;
-  - **idempotencia**: recalcular dos veces da las mismas filas;
-  - **lo que ya no está se conserva**: sin horario ni partición de `posiciones`, al recalcular siguen los programados, los cancelados, las llegadas a destino y los tramos;
-  - la **nocturna** calcula ayer y recupera los días que faltan;
-  - **cerrojos**: con otro cálculo del mismo día, con una importación del horario en marcha o con una tabla de agregados retenida, el cálculo falla en ~1 s (`lock_timeout`) sin dejar el día a medias; otro día sí se calcula;
-  - **API**: ranking del núcleo (orden, puestos, destacada, cobertura por viajes y por paradas), línea (media 5,5, mediana 4, p90 18, tramos de 4, llegada a destino, por hora con la **muestra mínima**, por día de la semana y por semana), estación, periodo sin datos, periodo por defecto, una línea del horario sin datos, errores (404 de núcleo, línea y estación; 400 de `desde > hasta`, fecha mal escrita y periodo de más de 400 días), **antes de la fecha de publicación no hay ninguna cifra**, Actuator (recálculo, 400 con fechas malas) y OpenAPI con los ejemplos.
-- `AcumuladoTests` (5): suma de filas, el percentil del histograma frente a `percentile_disc` en 500 listas al azar, la muestra mínima, los redondeos como `round(numeric, 1)` de PostgreSQL y el ranking.
-- `EjemplosApiTests`: los tres ejemplos nuevos de `docs/api/` encajan con sus records (13 en total).
+- **`EstadisticasIntegracionTests`** (17, con PostGIS en Testcontainers). Usa 22 filas de `retrasos` escritas a mano, con las cifras **calculadas a mano en los comentarios**. Cubre:
+  - las **horas en Madrid**: un adelanto de −1, la franja de las 9 en horario de invierno;
+  - el **día de servicio** pasada la medianoche y el **cambio de hora**, con las dos 02:30;
+  - las **inferidas**, las paradas **sin hora**, el **autobús**, los **cancelados** (también uno pasada la medianoche) y la cobertura por viajes y por paradas;
+  - los **tramos** con `LAG` y un hueco en `stop_sequence`;
+  - **por estación**, la **idempotencia**, lo que **se conserva** sin horario ni `posiciones`, y la **nocturna**;
+  - los **cerrojos**: el mismo día, con la importación en marcha o con una tabla retenida, falla en ~1 s sin dejar el día a medias;
+  - la **API**:
+    - toda España, con el histograma sumado en SQL: mediana 2 y p90 18 a mano;
+    - el núcleo, la línea (media 5,5, % con 5 o menos 69,2, mediana 4, p90 18, destino 2,5) y la estación;
+    - los casos sin datos, el periodo por defecto y los errores;
+    - que **antes de publicar no salga ninguna cifra**;
+    - Actuator y OpenAPI.
+- **`AcumuladoTests`** (5): compara el percentil con `percentile_disc` en 500 listas al azar, y prueba la muestra mínima, los redondeos, el % con 5 o menos (calculado sobre las paradas, 71,4 y no 71,5) y el ranking.
+- **`EjemplosApiTests`:** los cuatro ejemplos nuevos.
+
+**Web:**
+
+- **Vitest** (15 nuevas):
+  - las rutas, incluida una con un `%` mal formado;
+  - los textos: espacio de no separación, «60 min o más» y las horas de 4 a 3;
+  - el titular del ranking: igualadas y poca cobertura;
+  - la página de línea:
+    - el contexto obligatorio y las dos coberturas;
+    - la tabla de cada gráfico, con el valor escrito en cada columna;
+    - el reparto con su texto, el % con 5 o menos y los cancelados como cota inferior;
+    - la flecha de los tramos, que no se lee;
+  - que el periodo llegue a la petición, con el error ligado a los campos;
+  - sin publicar, 404, los rankings y la estación.
+- **e2e** (4 nuevas × 2 proyectos), contra la build de producción con la CSP. La línea usa un JSON con datos suficientes. Prueban:
+  - el gráfico de 20 horas a tamaño natural, con 18 columnas;
+  - el reparto, los tramos y las dos coberturas;
+  - las migas hasta toda España;
+  - el periodo en la URL;
+  - el paso del mapa a la puntualidad;
+  - que en el móvil no haya desplazamiento lateral y que AvPág desplace la página;
+  - 0 errores de consola y 0 violaciones de la CSP.
+
+  Hubo que afinar una prueba del mapa, porque la ficha de la estación tiene ahora dos tablas.
 
 ### Lo que se vio por el camino
 
-- **Docker Desktop no arrancaba**: se caía al no poder borrar sockets AF_UNIX viejos de la sesión anterior (`%LOCALAPPDATA%\Docker\run\dockerInference` y `docker-secrets-engine\engine.sock`). Se resolvió renombrando esas carpetas, sin tocar volúmenes ni configuración (nota en la carpeta compartida de las sesiones).
-- **La primera importación del horario de la prueba real falló** con `NoSuchFileException` del ZIP temporal: `ProgramacionHorario.alArrancar` borra **todos** los `trainwatch-horario-*.zip` de `java.io.tmpdir`, así que cualquier otra instancia que arranque en la misma máquina (otras pruebas, otra sesión) le borra el ZIP a una importación en curso. En producción hay una sola instancia y no pasa; aquí se evitó con un `java.io.tmpdir` propio. Queda como seguimiento (§7).
+- **Docker Desktop no arrancaba.** No podía borrar sockets AF_UNIX viejos de la sesión anterior. Se resolvió renombrando `%LOCALAPPDATA%\Docker\run` y `docker-secrets-engine`, sin tocar los volúmenes; hay una nota en la carpeta compartida.
+- **`ProgramacionHorario.alArrancar` borra todos los `trainwatch-horario-*.zip` de `java.io.tmpdir`.** Así le quitó el ZIP a la importación de la ingesta local cuando otra instancia arrancó en la misma máquina. En producción no pasa, porque hay una sola instancia (§7).
 
-## 5. Comprobación con datos reales
+## 5. Revisiones independientes
 
-PENDIENTE
+### Backend
 
-## 6. Revisión independiente
-
-Un subagente sin contexto de la conversación revisó el código y las definiciones contra el encargo y los ADR, solo leyendo (sin ejecutar nada), con la pregunta expresa de si alguna cifra puede engañar. Dio por buenos los agregados (solo sumas, recuentos e histograma; media, porcentajes, mediana y p90 exactos al sumar días), la hora y el día, la exclusión de inferidas y filas sin hora, los viajes que no se suman por horas, el `LAG` de los tramos con el orden del horario, la idempotencia y que la API no deja salir ninguna cifra antes de publicar. **Todo lo de gravedad media se corrigió**, con prueba salvo donde se dice.
+Un subagente sin contexto revisó el código y las definiciones, con la pregunta expresa de si alguna cifra podía engañar. **Se corrigió todo lo de gravedad media**:
 
 | # | Hallazgo | Qué se hizo |
 |---|---|---|
-| 1 (media) | El `statement_timeout` de 2 min no se cumple: el `socketTimeout` de 30 s del driver corta antes, sin error limpio | **Corregido** como en la importación: `setNetworkTimeout` de la conexión de la transacción al plazo más 1 min (Hikari lo restaura). Sin prueba automática (haría falta una consulta de más de 30 s) |
-| 2 (media) | **La cifra por viaje engañaba**: con la «última parada vista», un tren que deja de verse tras su primera parada cuenta como llegada con el retraso de salida, y eso inclina la cifra hacia «puntual» | **Corregido**: la cifra por viaje es ahora la **llegada a destino** (la última parada del horario, mirada esa noche), solo de los viajes que se vieron llegar; los demás se cuentan aparte (`viajes` y `viajesEnDestino`). ADR 0025 al día. Prueba: de 5 viajes, 2 en destino, media 2,5 |
-| 3 (media-baja) | La cobertura por viajes da un 100 % a una línea cuyos trenes solo se ven en 2 de sus 20 paradas | **Corregido**: también **por paradas** (paradas con fila / programadas por el horario), por núcleo y por línea. Prueba: 19 de 36, 52,8 % |
-| 4 (media-baja) | `diasConDatos` contaba días calculados vacíos (la ingesta caída) | **Corregido**: solo los días con filas, también en los días de la semana y las semanas. Prueba: el 24 (vacío) no cuenta |
-| 5 (baja) | El ADR decía que el cambio de esquema del horario espera a la tarea, y no es así: una sentencia posterior vería el horario nuevo y podría dejar los programados a 0 | **Corregido**: el cálculo toma en modo compartido el cerrojo consultivo de la importación (`pg_advisory_xact_lock_shared`), y el ADR 0026 lo explica. Prueba: con una importación en marcha, el cálculo falla en ~1 s |
-| 6 (baja) | Una partición de `posiciones` separada y a medio borrar seguía contando como «hay posiciones», con cancelados 0 | **Corregido**: se mira `pg_inherits` (unida y sin `DETACH` pendiente) |
-| 7 (baja) | Sin horario, recalcular un día cambiaba sus tramos (el caso A→C entraría) | **Corregido**: sin horario se conservan los tramos que hubiera (y las llegadas a destino). Prueba en la de conservar |
-| 8 (baja) | Redondeo distinto del de SQL (−2,25 → −2,2 en Java, −2,3 en `round(numeric)`) y doble redondeo | **Corregido** con `BigDecimal` y `HALF_UP` sobre los enteros. Prueba |
-| 9 (baja) | Actuator respondía 200 con fechas malas, y un día que fallaba cortaba el resto | **Corregido**: 400; cada día va aparte y la respuesta dice el error del que falle. Prueba del 400 |
-| 10 | Pruebas: la de «una escritura a la mitad» pasaba aunque el código estuviera mal; faltaban el plazo, dos cálculos a la vez, el cancelado pasada la medianoche y conservar tramos | **Añadidas** las de cerrojos (mismo día, importación, otro día sí), el cancelado pasada la medianoche y la de tramos y destinos conservados; quitada la de la escritura. El plazo, sin prueba (punto 1). `AcumuladoTests` compara con una versión en Java de `percentile_disc`; la comparación con PostgreSQL de verdad está en la prueba de integración (mediana y p90 a mano) y en la comprobación con datos reales (§5) |
+| 1 | El `socketTimeout` de 30 s cortaba antes que el plazo de 2 min | Se usa `setNetworkTimeout`, como en la importación. Sin prueba: haría falta una consulta de más de 30 s |
+| 2 | **La cifra por viaje engañaba:** la «última parada vista» de un tren que deja de verse pronto inclina la cifra hacia «puntual» | Ahora es la **llegada a destino**, solo de los viajes que llegan |
+| 3 | La cobertura solo iba por viajes | Ahora va también **por paradas** |
+| 4 | `diasConDatos` contaba días vacíos | Ahora solo cuenta los días con filas |
+| 5 | El cambio de esquema del horario no espera a quien lo lee | El cálculo toma el cerrojo de la importación en modo compartido |
+| 6-9 | La partición a medio borrar, los tramos sin horario, el redondeo distinto del de SQL y Actuator | Corregidos, con prueba |
+| 10 | Pruebas débiles o que faltaban | Añadidas las de cerrojos, la de un cancelado pasada la medianoche y la de lo que se conserva |
 
-Además, al arreglar la prueba de OpenAPI apareció un **fallo de la fase 4**: los endpoints con `@RespuestasDeError` salían en OpenAPI **sin respuesta 200** (con alguna `@ApiResponse` en el método, springdoc ya no pone la suya), así que sus ejemplos de `docs/api/` no se veían en `/api/docs`. La prueba de la fase 4 solo miraba `/api/nucleos`, que no lleva esa anotación. **Corregido** en la anotación: ahora todos los endpoints tienen su 200 con el esquema y el ejemplo.
+### Web
+
+Hubo tres revisiones de lo nuevo, todas con un subagente:
+
+- **la independiente del código**;
+- **`web-design-guidelines`**, con las reglas de Vercel;
+- **`design:accessibility-review`**, la de WCAG 2.1 AA, que **no encontró nada bloqueante**. Calculó los contrastes: el texto secundario da 8,3:1 y los enlaces, 8,7:1.
+
+Las tres se corrigieron, con prueba donde cabía:
+
+| Hallazgo | Revisión | Qué se hizo |
+|---|---|---|
+| La página de línea no enseñaba la cobertura del núcleo | Código | Ahora salen las dos |
+| **«La más puntual» coronaba diferencias que la muestra no permite** (Asturias, con un 11 % de cobertura, delante de Rodalies por 0,1 puntos) | Código | Ahora dice «igualadas» por debajo de 5 puntos, y avisa de la cobertura baja |
+| El e2e de la línea no pintaba ningún gráfico (todo «insuficiente») | Código | Se añadió un JSON con datos suficientes |
+| El eje se rotulaba mal con medias de menos de 0,2 min | Código | Pasos sin acumular errores y claves por índice |
+| Una URL con `%` mal formado dejaba la página en blanco | Código | `try`, y la ruta se trata como inexistente |
+| La madrugada salía la primera en la tabla por horas | Código | Ahora van de 4 a 3 |
+| Con 24 columnas, el gráfico encogía el texto a 3-6 px | Accesibilidad | El gráfico va a tamaño natural y se desplaza; con más de 12 columnas, rotula de 3 en 3 |
+| El borde de los campos de fecha tenía un contraste de 1,76:1 | Accesibilidad | Ahora 3,8:1 (`#6b7079`) |
+| Los estados de carga no se anunciaban | Accesibilidad y Vercel | `role="status"` y `aria-live` |
+| Las cifras se partían de su unidad («32,7 / %») | Vercel | Espacio de no separación |
+| El botón se desactivaba con un periodo al revés, sin error ligado a los campos | Accesibilidad y Vercel | El botón sigue activo; el error se liga con `aria-invalid` y `aria-describedby` |
+| La página se desplazaba dentro de un `div` | Accesibilidad y Vercel | Ahora se desplaza el documento (`html.con-desplazamiento`) |
+| Las cabeceras numéricas iban alineadas al revés que sus cifras; los separadores de las migas y la flecha de los tramos se leían en voz alta; la figura no tenía nombre | Vercel y Accesibilidad | Corregido |
+
+Lo menor que queda: `translate="no"` solo en la marca y en los nombres de línea de la estación, y el texto de «Cargando las estadísticas…».
+
+## 6. Comprobación con datos reales (provisional)
+
+**Datos:**
+
+- ingesta local contra los feeds de Renfe, el 21-11-2026 de 12:46 a 14:32 de Madrid, con unos minutos parados en tres reinicios para cambiar el jar;
+- **4.036 filas** de `retrasos` de **461 viajes**, con **214 inferidas** (5,3 %);
+- **0 errores** en el registro.
+
+**Cómo se calculó:**
+
+- Se recalculó el día con `POST /actuator/estadisticas`.
+- Cada cifra se recalculó con la consulta de `docs/informes/fase-6-comprobacion.sql`, solo sobre las filas registradas antes de ese cálculo (`registrado <= estad_dias.calculado`), porque la ingesta seguía escribiendo.
+- La API, en dos sitios: la ingesta, con la configuración de producción (muestra mínima de 30), y una segunda instancia de solo lectura sobre la misma base, con la muestra mínima a 5, porque con 1 h 45 min ninguna hora ni ningún tramo llega a 30.
+
+| Cifra | SQL directo sobre `retrasos` | API | ¿Igual? |
+|---|---|---|---|
+| **1. Media de la C5 de Madrid a las 13:00** | 8,3 min · 227 paradas · 21 viajes | `porHora[13]`: 8,3 min · 227 · 21 (mínimo 5). Con el mínimo de 30: «datos insuficientes: 21 viajes» | **Sí** |
+| **2. Porcentajes de la C5, todo el día** | < 3 min: **30,1 %** · ≤ 5 min: **60,5 %** · media 7,8 · mediana 4 · p90 18 · 395 paradas · 30 viajes | `resumen` con el mínimo de 30: 30,1 · 60,5 · 7,8 · 4 · 18 · 395 · 30 | **Sí** |
+| **3. Tramo Embajadores → Laguna (C5)** | +5,2 min de media · 12 pasos · el 100 % pierde 2 min o más | `tramos[0]`: +5,2 · 12 · 100 % (mínimo 5) | **Sí** |
+
+**Lo que dicen estas cifras, sin publicarlas:**
+
+- **La C5 iba mal ese mediodía:** solo el 30 % de las paradas con menos de 3 min.
+- **El tramo Embajadores → Laguna suma 4 min a casi todos los trenes:** 10 de 12, todos los posteriores a las 13:00.
+  - Una suma tan constante en cada tren parece más el horario (o cómo recalcula Renfe el retraso en ese punto) que una incidencia.
+  - Es la pregunta que estas estadísticas permiten hacer; se responderá con semanas de datos.
+
+La **comprobación definitiva** se repetirá contra producción, con días completos y la muestra mínima de 30. La hará otra sesión con la misma consulta, que solo necesita cambiar la fecha, la línea y el tramo.
 
 ## 7. Qué quedó fuera o pendiente
 
-- **La web (punto 4):** página por línea, página del núcleo con el ranking, la RL4 destacada, la puntualidad en la ficha de la estación y los enlaces desde el mapa y la lista, con tablas junto a los gráficos. También el e2e de Playwright con una página de línea. Cuando se fusione la fase 5.
-- **Fusión, diario y despliegue:** los hace la sesión de control. Al desplegar, la V6 se aplica sola y la tarea empieza esa noche; para tener desde el primer día, recalcular a mano desde el 21-11 (`POST /actuator/estadisticas` en el 8081) mientras el horario y `posiciones` aún tengan esos días: **cuanto antes**, porque los cancelados del 21-11 se pierden a las 48-72 h y los programados con el horario del día.
-- **Cancelados que solo vienen en `trip_updates`:** no dejan fila en `posiciones` y no se cuentan. Para contarlos, la ingesta tendría que apuntarlos en una tabla propia.
+- **El despliegue y el recálculo en producción.** Al desplegar, la V6 se aplica sola y la tarea empieza esa misma noche.
+  - Para tener los días desde el 21-11, hay que recalcularlos a mano **cuanto antes** con `POST /actuator/estadisticas` en el 8081.
+  - Lo que sale de `retrasos` se puede recalcular siempre. Lo que sale de `posiciones` (los cancelados) se pierde a las 48-72 h, y los viajes programados, en cuanto el horario ya no cubre ese día.
+- **El historial por número de tren** («este R13 de las 14:40 llegó puntual el X % de los últimos 30 días») va a una fase posterior, la de la «ficha de tren e historial». Los agregados no guardan el número de tren.
+  - `retrasos` sí guarda **para siempre** el `trip_id` de cada día, que lleva el número dentro (`4023V24219C1` → 24219).
+  - Así, se podrá hacer **sin perder historial**: con una tabla nueva en la tarea nocturna y su recálculo desde el 21-11.
+- **Los cancelados que solo vienen en `trip_updates`** no se cuentan. Para contarlos, la ingesta tendría que apuntarlos en una tabla propia.
 - **`alArrancar` borra los ZIP temporales de otras instancias** (§4).
-- **Lo que se queda sin prueba automática:** el plazo de red de 2 min + 1 (punto 1 de la revisión).
-- **Las cifras por hora de la RL4:** con pocos trenes al día, muchas franjas no llegarán a 30 viajes en cuatro semanas y saldrán como «datos insuficientes». Es lo honesto; si Iván prefiere enseñar más, la alternativa es agrupar en franjas de 2-3 horas para las líneas con poco servicio, no bajar el umbral.
+- **Sin prueba automática:** el plazo de red de 2 min + 1.
+- **Las líneas con poco servicio, como la RL4,** tendrán muchas franjas horarias como «datos insuficientes». Si se quiere enseñar más, lo honrado es agrupar en franjas de 2-3 horas, no bajar el umbral.
+- **Capturas** de las páginas con datos reales, cuando haya semanas de datos (`frontend/scripts/capturas.mjs`).
 
 ## 8. Qué cambiaría del plan
 
-- **§6, fase 6:** la aceptación («cifras comprobadas a mano contra los datos sin procesar en una muestra») se cumple con pocas horas de datos; las cifras **publicables** necesitan las cuatro semanas.
-- **Despliegue:** hay que lanzar el recálculo del 21-11 en adelante en producción en cuanto esté la V6, por lo dicho en el §7.
+- **§6, fase 6:** la aceptación del plan («cifras comprobadas a mano contra los datos sin procesar en una muestra») se cumple ya, de forma provisional. Las cifras **publicables** necesitan cuatro semanas: a partir del 19-12.
+- **Despliegue:** el recálculo de los días desde el 21-11 en producción debería ir en cuanto esté la V6 (§7).
+- **Una fase de «ficha de tren e historial»**, con el número de tren (§7).

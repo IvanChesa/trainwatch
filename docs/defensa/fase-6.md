@@ -14,7 +14,7 @@ Si te preguntan «¿qué es puntual?», contesta con esto:
 | Pregunta | Respuesta |
 |---|---|
 | **¿Unidad?** | La **parada**: el retraso con que el tren llega a cada parada vista. Es lo que vive el viajero en su andén. Además, **por viaje**: el retraso al llegar a su **destino**, solo de los viajes que se vieron llegar (los demás se cuentan, no entran) |
-| **¿Puntual?** | **Menos de 3 min**, incluidos los adelantos. Tramos: < 3, 3-5, 6-15, ≥ 16 (los colores del mapa) |
+| **¿Puntual?** | **Menos de 3 min**, incluidos los adelantos. Tramos: < 3, 3-5, 6-15, ≥ 16 (los colores del mapa). Y aparte, **5 min o menos**, el umbral que suele usar Renfe en Cercanías: se calcula contando paradas, no sumando dos porcentajes redondeados |
 | **¿Media, mediana, p90?** | Las tres. La media sola engaña con unos pocos trenes muy tarde; la mediana dice lo típico y el p90 lo malo |
 | **¿Qué hora?** | La **programada** de llegada, en hora de Madrid. No la hora en que se cerró el retraso: un tren 20 min tarde caería en otra franja |
 | **¿Qué día?** | El **día de servicio**: el tren de las 23:50 que llega a las 00:30 cuenta en el día en que salió |
@@ -104,7 +104,7 @@ GROUP BY nucleo, linea, stop_anterior, stop_id    -- sum(minutos - minutos_anter
 | **Núcleos con poca cobertura** | Una cifra de Cádiz con un 50 % no vale lo mismo que una de Madrid con un 93 % | La cobertura va al lado de la cifra; la web la enseñará siempre |
 | **Minutos enteros** | Renfe da el retraso en múltiplos de 60 s: 2 min 59 s reales pueden salir como 2 o 3 | Por eso se publican medias y porcentajes, no «el tren X llegó con 2 min 30 s». Una media de minutos enteros sí puede tener decimales y es exacta |
 | **Muestras pequeñas** | Una franja con 5 trenes baila de una semana a otra | Muestra mínima de 30 viajes: por debajo, «datos insuficientes» |
-| **Cancelados** | Solo se ven los que llegan a `vehicle_positions` con `CANCELED`; los que solo están en `trip_updates` no dejan fila | Se dicen como «cancelados explícitos» (cota inferior) y nunca entran en el retraso |
+| **Cancelados** | Solo se ven los que llegan a `vehicle_positions` con `CANCELED`; los que solo están en `trip_updates` no dejan fila | Se dicen como **cota inferior**, con esa explicación en la web, y nunca entran en el retraso |
 | **Viajes que dejan de verse** | Un tren que deja de verse a mitad ha hecho menos recorrido: si su última parada vista contara como «llegada», la cifra por viaje saldría mejor | La cifra por viaje es **solo de los que se vieron en su destino** (la última parada del horario, que se mira esa noche); los demás se cuentan aparte |
 | **Cobertura por viajes** | Un tren visto en 2 de sus 20 paradas cuenta entero como «visto» | La cobertura también va **por paradas** (con fila / programadas) |
 
@@ -125,7 +125,7 @@ WHERE nucleo = 51 AND linea = 'RL4' AND NOT inferido AND llegada_programada IS N
   AND extract(hour FROM llegada_programada AT TIME ZONE 'Europe/Madrid') = 8;
 ```
 
-El informe de la fase (`docs/informes/fase-6.md`, §6) tiene tres cifras comprobadas así contra la API con datos reales.
+El informe de la fase (`docs/informes/fase-6.md`, §6) tiene tres cifras comprobadas así contra la API con datos reales (provisional, 1 h 45 min de datos). Por ejemplo, la C5 de Madrid el 21-11 a mediodía: el 30,1 % de las paradas con menos de 3 min y el 60,5 % con 5 o menos, igual en SQL y en la API; y el tramo Embajadores → Laguna sumaba 4 min a casi todos los trenes, lo que apunta más al horario que a una incidencia. La consulta está en `docs/informes/fase-6-comprobacion.sql`.
 
 ## 7. La web
 
