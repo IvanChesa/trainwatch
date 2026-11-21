@@ -32,6 +32,16 @@ Proyecto Java de portfolio de Iván Chesa: mapa con los trenes de Cercanías y R
 - Commits **en español**, en imperativo o descriptivos y cortos («Añade la importación del GTFS estático»).
 - Rama por fase y fusión `--no-ff`; `main` siempre compila y pasa las pruebas.
 
+## Skills de diseño (frontend)
+
+Las sesiones que tocan `frontend/` las usan (Iván, 21-11). Las locales están en `.claude/skills/` (Git no las sigue); `modern-web-guidance` es un plugin de usuario.
+
+- **`modern-web-guidance`** (de Google Chrome): antes de implementar cada patrón de UI o API del navegador, con `npx -y modern-web-guidance@latest search "<consulta>"`. La primera vez Iván tiene que aprobar el `npx`.
+- **`ui-ux-pro-max`** y **`frontend-design`**: paleta, tipografía, maquetación y aspecto de lo nuevo. **`taste-skill`**, para que no parezca genérico.
+- **`accessible-animation`** y **`60fps-animation`**: el movimiento de los trenes y `prefers-reduced-motion`. **`micro-interaction`**: la respuesta de botones, hojas y paneles.
+- **`webapp-testing`**: e2e con Playwright.
+- **Antes de cerrar la fase:** **`web-design-guidelines`** y **`design:accessibility-review`** sobre todo lo nuevo, con el resultado en el informe.
+
 ## Entorno
 
 - JDK 25 (Eclipse Temurin 25 en `C:\Program Files\Eclipse Adoptium\jdk-25.0.5.8-hotspot`) y **Maven Wrapper** (`./mvnw`); no hay Maven instalado. El Java del `PATH` es el 8: exporta `JAVA_HOME` al JDK 25 antes de usar `./mvnw`.

@@ -3,14 +3,14 @@
     "id": 10,
     "nombre": "Madrid",
     "centro": {
-      "lat": 40.4287,
-      "lon": -3.7257
+      "lat": 40.364,
+      "lon": -3.6247
     },
-    "zoom": 8.5,
+    "zoom": 8.7,
     "limites": {
       "latMin": 40.0350257,
-      "lonMin": -4.2691255,
-      "latMax": 40.8223419,
+      "lonMin": -4.0671991,
+      "latMax": 40.6928982,
       "lonMax": -3.1822602
     },
     "estado": "EN_DIRECTO",
@@ -26,15 +26,15 @@
     "id": 20,
     "nombre": "Asturias",
     "centro": {
-      "lat": 43.3306,
-      "lon": -5.7563
+      "lat": 43.3414,
+      "lon": -5.7637
     },
-    "zoom": 9.0,
+    "zoom": 9.1,
     "limites": {
-      "latMin": 43.0715986,
-      "lonMin": -6.1519305,
-      "latMax": 43.5895359,
-      "lonMax": -5.3606414
+      "latMin": 43.096167,
+      "lonMin": -6.1433417,
+      "latMax": 43.586538,
+      "lonMax": -5.3841316
     },
     "estado": "EN_DIRECTO",
     "estadoTexto": "con directo",
@@ -49,14 +49,14 @@
     "id": 30,
     "nombre": "Sevilla",
     "centro": {
-      "lat": 37.4223,
+      "lat": 37.4284,
       "lon": -5.8689
     },
-    "zoom": 8.2,
+    "zoom": 8.5,
     "limites": {
-      "latMin": 36.9116378,
+      "latMin": 37.0194897,
       "lonMin": -6.2082011,
-      "latMax": 37.9328637,
+      "latMax": 37.8373919,
       "lonMax": -5.5295514
     },
     "estado": "EN_DIRECTO",
@@ -72,15 +72,15 @@
     "id": 31,
     "nombre": "Cádiz",
     "centro": {
-      "lat": 36.5802,
-      "lon": -6.177
+      "lat": 36.5444,
+      "lon": -6.2073
     },
-    "zoom": 9.7,
+    "zoom": 10.1,
     "limites": {
       "latMin": 36.4087561,
       "lonMin": -6.2879716,
-      "latMax": 36.7515886,
-      "lonMax": -6.0659384
+      "latMax": 36.680022,
+      "lonMax": -6.1266032
     },
     "estado": "EN_DIRECTO",
     "estadoTexto": "con directo",
@@ -233,15 +233,15 @@
     "id": 51,
     "nombre": "Rodalies de Catalunya",
     "centro": {
-      "lat": 41.5275,
-      "lon": 1.1705
+      "lat": 41.6071,
+      "lon": 1.8445
     },
-    "zoom": 6.9,
+    "zoom": 7.4,
     "limites": {
-      "latMin": 40.5959267,
-      "lonMin": -0.822204,
-      "latMax": 42.4590288,
-      "lonMax": 3.16314935
+      "latMin": 40.807333,
+      "lonMin": 0.54010012,
+      "latMax": 42.4068837,
+      "lonMax": 3.1489746
     },
     "estado": "EN_DIRECTO",
     "estadoTexto": "con directo",
@@ -256,13 +256,13 @@
     "id": 60,
     "nombre": "Bilbao",
     "centro": {
-      "lat": 42.9724,
-      "lon": -4.2242
+      "lat": 43.0688,
+      "lon": -3.8938
     },
-    "zoom": 7.5,
+    "zoom": 7.9,
     "limites": {
-      "latMin": 42.6160983,
-      "lonMin": -5.5660988,
+      "latMin": 42.808848,
+      "lonMin": -4.9052025,
       "latMax": 43.3286605,
       "lonMax": -2.8823858
     },
@@ -303,14 +303,14 @@
     "nombre": "Santander",
     "centro": {
       "lat": 43.2264,
-      "lon": -3.9676
+      "lon": -3.8326
     },
-    "zoom": 8.8,
+    "zoom": 9.2,
     "limites": {
       "latMin": 42.9944991,
-      "lonMin": -4.51434,
+      "lonMin": -4.2319437,
       "latMax": 43.4583981,
-      "lonMax": -3.420918
+      "lonMax": -3.43334
     },
     "estado": "EN_DIRECTO",
     "estadoTexto": "con directo",

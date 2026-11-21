@@ -25,7 +25,7 @@ import com.ivanchesa.trainwatch.RelojConfig;
 import com.ivanchesa.trainwatch.horario.ImportadorHorario;
 
 /**
- * Calcula los agregados de puntualidad de un día de servicio (ADR 0022 y 0023) a partir de {@code retrasos}, del
+ * Calcula los agregados de puntualidad de un día de servicio (ADR 0025 y 0026) a partir de {@code retrasos}, del
  * horario (viajes programados y orden de las paradas) y de {@code posiciones} (cancelados).
  *
  * <p>Cada día va en una transacción que borra lo que hubiera de ese día y lo vuelve a escribir: recalcular da lo
@@ -224,7 +224,7 @@ public class CalculoEstadisticas {
 
     /**
      * Las filas del día que pueden entrar: con núcleo y línea, sin autobuses. {@code valida}: vista (no inferida) y con
-     * hora programada, las únicas que entran en las cifras (ADR 0022). {@code hora}: la programada, en hora de Madrid.
+     * hora programada, las únicas que entran en las cifras (ADR 0025). {@code hora}: la programada, en hora de Madrid.
      */
     static final String BASE = """
             base AS (

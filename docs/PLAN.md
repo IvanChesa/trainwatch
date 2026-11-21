@@ -71,7 +71,7 @@ Tras la fase 4: **7 (despliegue en Azure) → 5 (mapa) → 6 (estadísticas) →
    - las líneas y los tramos con más retraso;
    - la evolución semanal.
 
-   Una página por línea, con la RL4 de Lleida destacada.
+   Una página por línea. La RL4 de Lleida es una línea más, sin destacar (Iván, 21-11).
 5. **Avisos de Renfe** sobre el mapa y en las fichas.
 6. **Estado de los datos:** cuándo llegó la última actualización. Si Renfe deja de enviar, la aplicación lo dice («datos de hace 6 min») en vez de enseñar trenes parados.
 7. **Calidad:**
@@ -147,7 +147,7 @@ Mismo ciclo que en Torno y en ivanchesa.com: especificación, rama, pruebas, rev
 | **3 · Ingesta en directo** | Lectura cada ~20 s, cruce con el horario, estado en memoria, posiciones y retrasos en base de datos, resiliencia y métricas | 24 h seguidas sin errores; reintentos probados simulando caídas del feed |
 | **4 · API y directo** | REST con OpenAPI (núcleos, trenes, estaciones) y SSE; CORS para la web y `localhost:5173` (Vite) | Pruebas de los endpoints; el SSE aguanta 200 clientes en local |
 | **5 · El mapa** | React y MapLibre: trenes moviéndose, colores, fichas, filtro de línea, vista de lista y accesibilidad | e2e con Playwright; Lighthouse ≥ 90 en móvil (el mapa pesa) |
-| **6 · Estadísticas** | Agregados, páginas por línea y RL4 destacada | Cifras comprobadas a mano contra los datos sin procesar en una muestra |
+| **6 · Estadísticas** | Agregados y páginas por línea (la RL4, sin destacar: Iván, 21-11) | Cifras comprobadas a mano contra los datos sin procesar en una muestra |
 | **7 · Despliegue y portfolio** | Servidor con Terraform, dominio, HTTPS, despliegue automático, copias de la base de datos y alertas. Después, el **hito de portfolio**: README con el esquema, vídeo de 60 s, ficha en ivanchesa.com y publicación en LinkedIn | La aplicación en marcha 7 días seguidos en producción |
 | **8 · Opcional** | AV, larga y media distancia en el mapa; repetición de un día pasado | — |
 | **Próximas versiones: vista 3D** (Iván, 20-11: «lo haremos luego, en próximas versiones») | Mapa inclinado con relieve y edificios; trenes como modelos 3D (Three.js dentro de MapLibre, mallas instanciadas) siguiendo la vía; cámara que sigue al tren; botón 2D/3D (2D en móvil y con movimiento reducido). Necesita el trazado de las vías: los `shapes` del GTFS o las vías de OpenStreetMap | Unos 60 fps con todos los trenes en un portátil normal; Lighthouse sin empeorar en 2D |
@@ -179,6 +179,6 @@ Mismo ciclo que en Torno y en ivanchesa.com: especificación, rama, pruebas, rev
 |---|---|---|
 | D1 | **Nombre y dirección** | ✅ **Decidido (Iván, 20-11): TrainWatch, en `trainwatch.ivanchesa.com`** (la API, en `trainwatch-api.ivanchesa.com`) |
 | D2 | **Dónde va el backend** (Java necesita un servidor encendido) | ✅ **Decidido (Iván, 20-11): Azure for Students**, activado con el correo de UNIR: 100 $ de crédito sin tarjeta, que caducan el **20-11-2027**. Al acabar el crédito o los estudios, se migra a Oracle Always Free o AWS con Terraform y las copias de la base de datos. Opciones que se valoraron: 1) **Azure for Students**, si tu correo de ILERNA o UNIR lo admite: unos 100 $ de crédito al año sin tarjeta, y suma Azure al CV. 2) Si no, **Oracle Cloud Always Free** (0 €; ojo, Oracle puede recuperar las máquinas que considera ociosas). 3) **AWS**, unos 12-15 €/mes con un servidor pequeño. Lo comprobamos en la fase 0 |
-| D3 | **Alcance** | Todos los núcleos de Cercanías y Rodalies desde el principio: cuesta lo mismo y la demo luce más. La RL4 y Rodalies, destacadas |
+| D3 | **Alcance** | Todos los núcleos de Cercanías y Rodalies desde el principio: cuesta lo mismo y la demo luce más. Rodalies, núcleo por defecto. La RL4, como las demás líneas (Iván, 21-11) |
 | D4 | **Modo tutor** | Que escribas tú, con la sesión como profesora, la ingesta (fase 3) y el cálculo de las estadísticas (fase 6). Es lo que más preguntarán en una entrevista de Java |
 | D5 | **Repo** | Público con licencia MIT, como los otros proyectos |

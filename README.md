@@ -4,7 +4,7 @@ Mapa con los trenes de Cercanías y Rodalies moviéndose en directo, con su retr
 
 > **Proyecto personal, no oficial.** No tiene relación con Renfe ni con Adif.
 
-> **Estado:** en desarrollo. Están hechas la prueba técnica de los datos (fase 0), los cimientos del proyecto (fase 1: backend, frontend, PostGIS, pruebas y CI), la importación nocturna del horario de Renfe (fase 2), la ingesta en directo (fase 3) y la API REST con el directo por SSE (fase 4). El frontend pasó de Angular a React (fase 4r). La fase 7 (despliegue en Azure y Cloudflare) tiene lista la infraestructura como código y el despliegue automático; falta montarla. El plan está en [`docs/PLAN.md`](docs/PLAN.md) y los informes de cada fase, en [`docs/informes/`](docs/informes/).
+> **Estado:** en desarrollo. Están hechas la prueba técnica de los datos (fase 0), los cimientos del proyecto (fase 1: backend, frontend, PostGIS, pruebas y CI), la importación nocturna del horario de Renfe (fase 2), la ingesta en directo (fase 3) y la API REST con el directo por SSE (fase 4). El frontend pasó de Angular a React (fase 4r). La fase 7 (despliegue en Azure y Cloudflare) está en producción desde el 20-11-2026, y la fase 5 trae el mapa: los trenes de cada núcleo moviéndose en directo con MapLibre, con su color por retraso, sus fichas y una vista de lista accesible. El plan está en [`docs/PLAN.md`](docs/PLAN.md) y los informes de cada fase, en [`docs/informes/`](docs/informes/).
 
 ## Arquitectura (prevista)
 
@@ -28,7 +28,7 @@ Las decisiones de arquitectura están en [`docs/adr/`](docs/adr/).
 | Carpeta | Qué hay |
 |---|---|
 | `backend/` | Java 25 y Spring Boot 4.2 (Web, Actuator, Spring Data JDBC, Flyway, Spring Batch, validación). Maven con wrapper |
-| `frontend/` | React 19 con Vite 8 y TypeScript estricto. Pruebas con Vitest y Testing Library; lint con oxlint |
+| `frontend/` | React 19 con Vite 8 y TypeScript estricto, y MapLibre GL con el mapa de OpenFreeMap. Pruebas con Vitest y Testing Library, e2e con Playwright; lint con oxlint |
 | `infra/` | Docker Compose con PostgreSQL 18 y PostGIS 3.7 para local; `terraform/` (Azure y Cloudflare), `produccion/` (compose, Caddy, despliegue y copias), `vigilancia/` y `medicion/` (fase 7) |
 | `spike/` | Prueba técnica de la fase 0 (Java sin Spring) |
 | `docs/` | Plan, ADR, informes de cada fase y guías |
@@ -58,7 +58,7 @@ Para comprobar que funciona:
 
 - `http://localhost:8080/api/estado` → `{"aplicacion":"TrainWatch","version":"0.0.1-SNAPSHOT","hora":"…"}`
 - `http://localhost:8080/actuator/health` → `"status":"UP"`, con `db` en `UP`.
-- `http://localhost:5173` → la página «en construcción» con la versión y la hora del backend, o «Backend no disponible» si no está arrancado.
+- `http://localhost:5173` → el mapa de Rodalies con los trenes en directo (necesita el backend con la ingesta en marcha). Para verlo con los datos de producción sin arrancar nada más: `VITE_API_URL=https://trainwatch-api.ivanchesa.com npm run dev` (la API admite CORS desde `localhost:5173`).
 
 Al arrancar con la base de datos vacía, el backend descarga e importa el horario de Renfe en segundo plano (unos 15 s). Después lo hace cada noche a las 04:30 y a las 06:30, hora de Madrid, solo si el fichero ha cambiado. El estado del horario:
 
@@ -87,6 +87,7 @@ cd backend && ./mvnw verify                       # unitarias + integración con
 cd frontend && npm run lint                       # oxlint
 cd frontend && npm test                           # Vitest y Testing Library
 cd frontend && npm run build                      # tsc y Vite
+cd frontend && npm run e2e                        # Playwright: build de producción con su CSP y la API simulada de e2e/
 ```
 
 Prueba manual con el ZIP real de Renfe (no corre en CI; escribe las cifras en `backend/target/importacion-real.txt`):
@@ -136,6 +137,8 @@ En Windows, el separador del classpath es `;` en vez de `:`.
 ## Datos
 
 **Datos: Renfe (CC BY 4.0)**, de [data.renfe.com](https://data.renfe.com/): feeds GTFS Realtime de Cercanías (`gtfsrt.renfe.com`) y GTFS estático de Cercanías.
+
+**Mapa:** [OpenFreeMap](https://openfreemap.org) · © [OpenMapTiles](https://www.openmaptiles.org/) · © [OpenStreetMap](https://www.openstreetmap.org/copyright), con [MapLibre GL](https://maplibre.org/).
 
 ## Licencia
 

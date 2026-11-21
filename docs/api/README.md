@@ -12,14 +12,14 @@ La documentación completa (campos, parámetros y errores) está en `GET /api/do
 
 | Fichero | Endpoint | Record |
 |---|---|---|
-| `nucleos.json` | `GET /api/nucleos` | `List<Nucleo>` |
+| `nucleos.json` | `GET /api/nucleos` | `List<Nucleo>`. `limites` es el rectángulo donde está el servicio del núcleo, para encuadrar el mapa (ADR 0023; recalculado el 21-11-2026 con el horario real) |
 | `trenesDeNucleo.json` | `GET /api/nucleos/51/trenes` | `List<TrenMapa>`: uno en marcha, uno en origen (con `salida`) y uno cancelado |
 | `fichaTren.json` | `GET /api/trenes/{id}` | `FichaTren`: un R1 con 27 min de retraso y la evolución en el viaje |
 | `fichaEstacion.json` | `GET /api/estaciones/71801` (Barcelona-Sants) | `FichaEstacion` |
 | `estacionesCercanas.json` | `GET /api/estaciones?cerca=41.3870,2.1700&radio=3000&limite=5` | `List<EstacionCercana>` |
 | `linea.json` | `GET /api/lineas/51/R4` | `Linea` (recorrido en GeoJSON) |
 | `avisos.json` | `GET /api/avisos?nucleo=51` | `List<Aviso>` |
-| `directo.json` | `GET /api/directo?nucleo=51`, evento `instantanea` | `Instantanea` |
+| `directo.json` | `GET /api/directo?nucleo=51`, evento `instantanea` | `Instantanea`. Con `nucleo=todos` (fase 5b, ADR 0024), lo mismo con los trenes de todos los núcleos y `"nucleo": null` |
 | `directo-cambios.json` | evento `cambios` | `Cambios` |
 | `directo-latido.json` | evento `latido` | `Latido` |
 | `error.json` | cualquier error (aquí, un 404) | `ProblemDetail` (RFC 9457) |
@@ -49,6 +49,7 @@ fuente.addEventListener("latido", (e) => {
 });
 ```
 
+- **Todos los núcleos a la vez** («Toda España»): `new EventSource("/api/directo?nucleo=todos")`. Los mismos eventos, con `nucleo: null` en la instantánea y los cambios (cada tren lleva el suyo). Pesa más: con los feeds del 21-11, una instantánea de ~140 KB (327 trenes) y cambios de 50-80 KB cada ~7 s. `nucleo` solo admite un código o `todos`: lo demás, 400.
 - Al reconectarse (el navegador lo hace solo), llega otra `instantanea`: se sustituye todo.
 - Si la API está llena, responde **503** con `Retry-After`; `EventSource` no reintenta un 503, así que el frontend tiene que volver a abrirlo pasado ese tiempo.
 - Las horas van en hora de Madrid con su desfase; los retrasos, en minutos enteros; lo que no se sabe, `null`.

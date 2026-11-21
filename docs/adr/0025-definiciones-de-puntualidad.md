@@ -1,4 +1,4 @@
-# ADR 0022 · Qué es una cifra de puntualidad de TrainWatch
+# ADR 0025 · Qué es una cifra de puntualidad de TrainWatch
 
 **Fecha:** 21-11-2026 · **Estado:** aceptada · **Fase:** 6 · **Se apoya en:** ADR 0012 (inferidas) y 0014 (hora programada)
 
@@ -19,7 +19,7 @@ Hay que decidir la unidad, qué entra, cómo se asigna la hora y el día, y cuá
   - **16 min o más**.
 
   Es lo que vive el viajero en su andén, cualquiera que sea su parada, y es la muestra más grande. «Puntual» en los textos es **menos de 3 min**.
-- **Además, la mediana y el percentil 90** (por parada), que salen de un histograma por minuto (ADR 0023). La media sola engaña cuando unos pocos trenes llevan 40 min: la mediana dice lo típico y el p90, lo malo.
+- **Además, la mediana y el percentil 90** (por parada), que salen de un histograma por minuto (ADR 0026). La media sola engaña cuando unos pocos trenes llevan 40 min: la mediana dice lo típico y el p90, lo malo.
 - **Por viaje, como cifra secundaria:** el retraso al **llegar a su destino** (la última parada que le da el horario), media y % de menos de 3 min, **solo de los viajes que se vieron llegar a él**. Responde «¿llegó a tiempo?». Los que dejan de verse antes se cuentan («de 1.843 viajes, 1.520 vistos en destino»), pero no entran: han hecho menos recorrido y han tenido menos ocasión de acumular retraso, así que meterlos con su última parada vista inclinaría la cifra hacia «puntual».
 - **No se mezclan:** cada número dice si es «de las paradas» o «de los viajes».
 

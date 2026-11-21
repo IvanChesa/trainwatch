@@ -1,0 +1,267 @@
+import { expect, test, type Page } from '@playwright/test';
+
+const TREN = '5123V15033R15';
+
+/** Estilo mínimo en lugar del de OpenFreeMap: fondo y letras (vacías), sin teselas. */
+const ESTILO = {
+  version: 8,
+  name: 'prueba',
+  glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+  sources: {},
+  layers: [{ id: 'fondo', type: 'background', paint: { 'background-color': '#0c0c0c' } }],
+};
+
+interface Vigilancia {
+  errores: string[];
+}
+
+/** Sustituye los mapas de OpenFreeMap y apunta los errores de la consola y las violaciones de la CSP. */
+async function preparar(page: Page): Promise<Vigilancia> {
+  const vigilancia: Vigilancia = { errores: [] };
+  await page.route('https://tiles.openfreemap.org/styles/**', (r) => r.fulfill({ json: ESTILO }));
+  await page.route('https://tiles.openfreemap.org/fonts/**', (r) =>
+    r.fulfill({ body: Buffer.alloc(0), contentType: 'application/x-protobuf' }),
+  );
+  page.on('console', (m) => {
+    if (m.type() === 'error') vigilancia.errores.push(m.text());
+  });
+  page.on('pageerror', (e) => vigilancia.errores.push(e.message));
+  await page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (e) =>
+      console.error(`CSP: ${e.violatedDirective} ${e.blockedURI}`),
+    );
+  });
+  return vigilancia;
+}
+
+/** Posición del tren en la fuente GeoJSON del mapa (la que se pinta en este fotograma). */
+async function posicion(page: Page, id: string): Promise<[number, number] | null> {
+  return page.evaluate((id) => {
+    const mapa = (window as unknown as { __twMapa?: { getSource(id: string): unknown } }).__twMapa;
+    const fuente = mapa?.getSource('tw-trenes') as
+      | { serialize(): { data: { features: { geometry: { coordinates: [number, number] }; properties: { id: string } }[] } } }
+      | undefined;
+    const f = fuente?.serialize().data.features.find((x) => x.properties.id === id);
+    return f ? f.geometry.coordinates : null;
+  }, id);
+}
+
+test('el mapa carga con los trenes en directo, sin errores ni violaciones de la CSP', async ({ page }) => {
+  const vigilancia = await preparar(page);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('TrainWatch');
+  await expect(page.getByText('Datos: Renfe (CC BY 4.0)')).toBeVisible();
+  await expect(page.getByText('no oficial').first()).toBeVisible();
+  await expect(page.locator('.mapa[data-listo="si"]')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('canvas.maplibregl-canvas')).toHaveAttribute('aria-label', /2 trenes en marcha y 1 en origen/);
+  await expect.poll(() => posicion(page, TREN)).not.toBeNull();
+  await expect(page.getByText(/En directo · dato de Renfe/)).toBeVisible();
+  expect(vigilancia.errores).toEqual([]);
+});
+
+test('los trenes se mueven de forma continua entre actualizaciones', async ({ page }) => {
+  await preparar(page);
+  await page.goto('/');
+  await expect.poll(() => posicion(page, TREN), { timeout: 15_000 }).not.toBeNull();
+  // Se toman varias posiciones en 1,5 s: el tren avanza hacia el suroeste en pasos pequeños, no a saltos de 1 s.
+  const muestras: number[] = [];
+  for (let i = 0; i < 8; i++) {
+    muestras.push((await posicion(page, TREN))![0]);
+    await page.waitForTimeout(200);
+  }
+  expect(muestras.at(-1)!).toBeLessThan(muestras[0]);
+  const distintas = new Set(muestras.map((x) => x.toFixed(6))).size;
+  expect(distintas).toBeGreaterThanOrEqual(5);
+});
+
+test('con movimiento reducido, los trenes saltan sin animación', async ({ page }) => {
+  await preparar(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await expect.poll(() => posicion(page, TREN), { timeout: 15_000 }).not.toBeNull();
+  const muestras: number[] = [];
+  for (let i = 0; i < 8; i++) {
+    muestras.push((await posicion(page, TREN))![0]);
+    await page.waitForTimeout(200);
+  }
+  // Un cambio por actualización (cada segundo), no por fotograma.
+  expect(new Set(muestras.map((x) => x.toFixed(6))).size).toBeLessThanOrEqual(3);
+});
+
+test('al pulsar un tren en el mapa se abre su ficha, y de ahí la de una estación', async ({ page }) => {
+  await preparar(page);
+  await page.goto('/');
+  // El R15 en marcha, que está solo en su zona del mapa (el R13 y el R15 en origen están a pocos píxeles).
+  await expect.poll(() => posicion(page, TREN), { timeout: 15_000 }).not.toBeNull();
+  // Que haya terminado el encuadre animado del núcleo.
+  await page.waitForFunction(() => !(window as unknown as { __twMapa: { isMoving(): boolean } }).__twMapa.isMoving());
+  await page.waitForTimeout(300);
+  const punto = await page.evaluate((id) => {
+    const mapa = (window as unknown as { __twMapa: { project(c: [number, number]): { x: number; y: number }; getSource(id: string): { serialize(): { data: { features: { geometry: { coordinates: [number, number] }; properties: { id: string } }[] } } } } }).__twMapa;
+    const f = mapa.getSource('tw-trenes').serialize().data.features.find((x) => x.properties.id === id)!;
+    return mapa.project(f.geometry.coordinates);
+  }, TREN);
+  const caja = await page.locator('canvas.maplibregl-canvas').boundingBox();
+  await page.mouse.click(caja!.x + punto.x, caja!.y + punto.y);
+  const ficha = page.getByRole('complementary', { name: 'R15 hacia Reus' });
+  await expect(ficha).toBeVisible();
+  await expect(ficha.getByRole('heading', { name: 'Paradas' })).toBeVisible();
+  await ficha.getByRole('button', { name: 'Barcelona-Sants' }).click();
+  const estacion = page.getByRole('complementary', { name: 'Barcelona-Sants' });
+  await expect(estacion.getByRole('table')).toContainText('R17 hacia Barcelona Estació de França');
+  await estacion.getByRole('button', { name: /^Cerrar/ }).click();
+  await expect(page.getByRole('complementary')).toHaveCount(0);
+});
+
+test('la vista de lista funciona entera con el teclado', async ({ page }) => {
+  await preparar(page);
+  await page.goto('/');
+  await expect(page.getByText(/En directo · dato/)).toBeVisible({ timeout: 15_000 });
+  // El primer Tab lleva al enlace para saltar a la lista.
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Ir a la lista de trenes' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Lista' })).toHaveAttribute('aria-pressed', 'true');
+  const lista = page.getByRole('region', { name: /^Trenes de Rodalies/ });
+  await expect(lista.getByRole('button')).toHaveCount(3);
+  await page.keyboard.press('Tab');
+  await expect(lista.getByRole('button').first()).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(lista.getByRole('button').nth(1)).toBeFocused();
+  await expect(lista.getByRole('button').nth(1)).toContainText('R15');
+  await page.keyboard.press('Enter');
+  const ficha = page.getByRole('complementary', { name: 'R15 hacia Reus' });
+  await expect(ficha.getByRole('heading', { name: 'R15 hacia Reus' })).toBeFocused();
+  await expect(ficha).toContainText('Torredembarra');
+  await page.keyboard.press('Escape');
+  await expect(ficha).toHaveCount(0);
+  await expect(lista.getByRole('button').nth(1)).toBeFocused();
+  // El foco se ve (WCAG 2.4.7).
+  const contorno = await lista.getByRole('button').nth(1).evaluate((b) => getComputedStyle(b).outlineStyle);
+  expect(contorno).toBe('solid');
+});
+
+test('filtra por línea, sin ninguna línea destacada', async ({ page }) => {
+  await preparar(page);
+  await page.goto('/?vista=lista');
+  const lista = page.getByRole('region', { name: /^Trenes de Rodalies/ });
+  await expect(lista.getByRole('button')).toHaveCount(3, { timeout: 15_000 });
+  await page.getByRole('combobox', { name: 'Línea' }).selectOption('R15');
+  await expect(lista.getByRole('button')).toHaveCount(2);
+  await expect(page).toHaveURL(/linea=R15/);
+  // La RL4 ya no se destaca (Iván, 21-11): ni botón ni estrella.
+  await expect(page.getByRole('button', { name: /RL4/ })).toHaveCount(0);
+  await expect(page.getByText('★')).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Línea' }).selectOption('');
+  await expect(lista.getByRole('button')).toHaveCount(3);
+});
+
+test('si el directo está lleno (503), vuelve a intentarlo solo y se recupera', async ({ page, request }) => {
+  await preparar(page);
+  await request.get('http://localhost:8091/control/rechazar?n=1');
+  await page.goto('/');
+  await expect(page.getByText(/Sin conexión con el directo: se reintenta/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/En directo · dato/)).toBeVisible({ timeout: 10_000 });
+});
+
+/** Ciudades para comprobar el encuadre: [lon, lat]. */
+const LUGARES = {
+  Barcelona: [2.17, 41.39],
+  Lleida: [0.63, 41.62],
+  Girona: [2.82, 41.98],
+  Zaragoza: [-0.88, 41.65],
+  Madrid: [-3.7, 40.42],
+  Sevilla: [-5.98, 37.39],
+  Bilbao: [-2.93, 43.26],
+  Valencia: [-0.38, 39.47],
+} as const satisfies Record<string, [number, number]>;
+type Lugar = keyof typeof LUGARES;
+
+/**
+ * Qué lugares se ven en el mapa, sin contar lo que tapa el panel: en pantallas anchas flota sobre la izquierda del
+ * mapa; en el móvil va encima, fuera del lienzo. Espera a que el mapa deje de moverse.
+ */
+async function lugaresVisibles(page: Page): Promise<Lugar[]> {
+  await page.waitForFunction(() => {
+    const m = (window as unknown as { __twMapa?: { isMoving(): boolean; loaded(): boolean } }).__twMapa;
+    return m && !m.isMoving();
+  });
+  return page.evaluate((lugares) => {
+    const mapa = (window as unknown as { __twMapa: { project(c: [number, number]): { x: number; y: number }; getCanvas(): HTMLCanvasElement } }).__twMapa;
+    const lienzo = mapa.getCanvas().getBoundingClientRect();
+    const panel = document.querySelector('.panel')!.getBoundingClientRect();
+    // El panel tapa el mapa solo si está encima del lienzo (en el móvil va antes, fuera de él).
+    const tapa = panel.bottom > lienzo.top + 1 ? panel.right - lienzo.left : 0;
+    return Object.entries(lugares)
+      .filter(([, c]) => {
+        const p = mapa.project(c as [number, number]);
+        return p.x >= tapa && p.x <= lienzo.width && p.y >= 0 && p.y <= lienzo.height;
+      })
+      .map(([nombre]) => nombre);
+  }, LUGARES) as Promise<Lugar[]>;
+}
+
+test('al abrir, el mapa encuadra Rodalies (Cataluña, sin media península) y al cambiar de núcleo, el nuevo', async ({
+  page,
+}) => {
+  await preparar(page);
+  await page.goto('/');
+  await expect(page.locator('.mapa[data-listo="si"]')).toBeVisible({ timeout: 15_000 });
+  // Fallo de la fase 5 (21-11): con los límites de todas las estaciones de Rodalies (de Aragón a Francia), el mapa
+  // abría con Zaragoza y, en el móvil, Madrid a la vista, y los trenes apiñados en una esquina.
+  const rodalies = await lugaresVisibles(page);
+  expect(rodalies).toEqual(expect.arrayContaining(['Barcelona', 'Lleida', 'Girona']));
+  expect(rodalies).not.toContain('Zaragoza');
+  expect(rodalies).not.toContain('Madrid');
+
+  await page.getByRole('combobox', { name: 'Núcleo' }).selectOption({ label: 'Madrid' });
+  await expect(page).toHaveURL(/nucleo=10/);
+  await expect.poll(() => lugaresVisibles(page)).toEqual(['Madrid']);
+});
+
+test('tras abrir y cerrar la ficha de un tren, cambiar de núcleo encuadra bien el nuevo', async ({ page }) => {
+  await preparar(page);
+  await page.goto('/?vista=lista');
+  await expect(page.locator('.mapa[data-listo="si"]')).toBeAttached({ timeout: 15_000 });
+  const lista = page.getByRole('region', { name: /^Trenes de Rodalies/ });
+  await lista.getByRole('button').nth(1).click();
+  await expect(page.getByRole('complementary', { name: 'R15 hacia Reus' })).toBeVisible();
+  // El mapa (oculto tras la lista) se ha acercado al tren con el margen de la ficha: MapLibre lo guarda.
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Mapa' }).click();
+  // Revisión de la fase 5b: fitBounds sumaba su margen al guardado y Madrid no cabía; el mapa no se movía.
+  await page.getByRole('combobox', { name: 'Núcleo' }).selectOption({ label: 'Madrid' });
+  await expect.poll(() => lugaresVisibles(page)).toEqual(['Madrid']);
+});
+
+test('«Toda España» enseña los trenes de todos los núcleos con la península encuadrada', async ({ page }) => {
+  const vigilancia = await preparar(page);
+  await page.goto('/?nucleo=todos');
+  await expect(page.locator('.mapa[data-listo="si"]')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('combobox', { name: 'Núcleo' })).toHaveValue('todos');
+  await expect(page.getByRole('combobox', { name: 'Línea' })).toBeDisabled();
+  // Los 3 de Rodalies y los de Madrid, Sevilla y Bilbao, en el mapa.
+  await expect(page.locator('canvas.maplibregl-canvas')).toHaveAttribute('aria-label', /toda España: 5 trenes en marcha y 1 en origen/);
+  await expect.poll(() => posicion(page, '6099C3')).not.toBeNull();
+  // La península entera a la vista (sin lo que tapa el panel).
+  await expect
+    .poll(() => lugaresVisibles(page))
+    .toEqual(expect.arrayContaining(['Barcelona', 'Madrid', 'Sevilla', 'Bilbao', 'Valencia', 'Lleida']));
+  // El tren de Rodalies se sigue moviendo con la interpolación.
+  const antes = (await posicion(page, TREN))![0];
+  await page.waitForTimeout(1200);
+  expect((await posicion(page, TREN))![0]).toBeLessThan(antes);
+
+  // La lista, con el núcleo de cada tren.
+  await page.getByRole('button', { name: 'Lista' }).click();
+  const lista = page.getByRole('region', { name: 'Trenes de toda España' });
+  await expect(lista.getByRole('button')).toHaveCount(6);
+  // Agrupada por núcleo, con un encabezado por grupo.
+  await expect(lista.getByRole('heading', { level: 3 })).toHaveText([
+    'Bilbao (1 tren)',
+    'Madrid (1 tren)',
+    'Rodalies de Catalunya (3 trenes)',
+    'Sevilla (1 tren)',
+  ]);
+  expect(vigilancia.errores).toEqual([]);
+});

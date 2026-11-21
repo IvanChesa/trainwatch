@@ -1,4 +1,4 @@
--- Fase 6 · Estadísticas de puntualidad: agregados por día de servicio que se guardan para siempre (ADR 0022 y 0023).
+-- Fase 6 · Estadísticas de puntualidad: agregados por día de servicio que se guardan para siempre (ADR 0025 y 0026).
 --
 -- Los calcula cada noche EstadisticasCalculo, antes de que cambie el horario (04:30) y de que se borre la partición de
 -- posiciones de ese día (48-72 h). Recalcular un día lo sustituye entero en una transacción.

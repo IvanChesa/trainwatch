@@ -163,6 +163,10 @@ class ApiIntegracionTests {
     }
 
     URI directo(int nucleo) {
+        return directo(String.valueOf(nucleo));
+    }
+
+    URI directo(String nucleo) {
         return URI.create("http://localhost:" + puerto + "/api/directo?nucleo=" + nucleo);
     }
 
@@ -428,6 +432,10 @@ class ApiIntegracionTests {
         assertThat(docs.get("openapi").asString()).startsWith("3.");
         assertThat(docs.get("info").get("title").asString()).isEqualTo("TrainWatch API");
         assertThat(docs.get("info").get("description").asString()).contains("no oficial", "Renfe (CC BY 4.0)");
+        // El directo admite un código o «todos» (fase 5b).
+        assertThat(docs.get("paths").get("/api/directo").get("get").get("parameters").valueStream()
+                .filter(p -> p.get("name").asString().equals("nucleo")).findFirst().orElseThrow().get("schema")
+                .get("pattern").asString()).isEqualTo("^([0-9]+|todos)$");
         assertThat(docs.get("paths").propertyNames()).contains("/api/nucleos", "/api/nucleos/{id}/trenes",
                 "/api/trenes/{id}", "/api/estaciones", "/api/estaciones/{id}", "/api/lineas/{nucleo}/{linea}",
                 "/api/avisos", "/api/directo", "/api/directo/estado");
@@ -531,6 +539,79 @@ class ApiIntegracionTests {
         try (ClienteSse otra = new ClienteSse(directo(40), null)) {
             assertThat(otra.estado()).isEqualTo(200);
         }
+    }
+
+    @Test
+    @Order(7)
+    void elDirectoDeTodosLosNucleosLlevaLosTrenesDeCadaUnoConSusCambios() throws Exception {
+        esperarConexiones(0);
+        // «nucleo» tiene que ser un código o «todos»: lo demás, 400 como ProblemDetail.
+        try (ClienteSse mal = new ClienteSse(directo("espana"), null)) {
+            assertThat(mal.estado()).isEqualTo(400);
+            assertThat(mal.respuesta.headers().firstValue("Content-Type").orElseThrow())
+                    .startsWith("application/problem+json");
+            JsonNode p = json.readTree(mal.respuesta.body().readAllBytes());
+            assertThat(p.get("parametro").asString()).isEqualTo("nucleo");
+            assertThat(p.get("detail").asString()).contains("todos");
+        }
+        for (String mal : List.of("-5", "+51", "%2051", "99999999999")) {
+            try (ClienteSse sse = new ClienteSse(directo(mal), null)) {
+                assertThat(sse.estado()).as(mal).isEqualTo(400);
+            }
+        }
+
+        try (ClienteSse todos = new ClienteSse(directo("todos"), null);
+                ClienteSse valencia = new ClienteSse(directo(40), null)) {
+            assertThat(todos.respuesta.headers().firstValue("Cache-Control").orElseThrow())
+                    .isEqualTo("no-cache, no-transform");
+            ClienteSse.Evento primero = todos.siguiente(Duration.ofSeconds(5));
+            assertThat(primero.nombre()).isEqualTo("instantanea");
+            assertThat(primero.reintento()).isBetween(3000L, 6000L);
+            JsonNode foto = json.readTree(primero.datos());
+            assertThat(foto.get("nucleo").isNull()).isTrue();
+            assertThat(primero.id()).isEqualTo(foto.get("secuencia").asString());
+            // Los trenes de todos los núcleos de la muestra de Renfe: la suma de los de cada uno.
+            JsonNode trenes = foto.get("trenes");
+            List<Integer> nucleos = trenes.valueStream().map(t -> t.get("nucleo").asInt()).distinct().toList();
+            assertThat(nucleos).contains(40, 51, 10).hasSizeGreaterThan(5);
+            int suma = 0;
+            for (int n : nucleos) {
+                suma += get("/api/nucleos/" + n + "/trenes").size();
+            }
+            assertThat(trenes.size()).isEqualTo(suma);
+            assertThat(tren(trenes, C1).get("destino").asString()).isEqualTo("Castelló");
+            valencia.siguiente(Duration.ofSeconds(5));
+
+            // Una muestra nueva: el directo de todos recibe los cambios de todos los núcleos, con su secuencia.
+            servir("092855", 200);
+            ingesta.ciclo();
+            ClienteSse.Evento evento = todos.siguiente("cambios", Duration.ofSeconds(5));
+            assertThat(evento).isNotNull();
+            JsonNode cambios = json.readTree(evento.datos());
+            assertThat(cambios.get("nucleo").isNull()).isTrue();
+            assertThat(cambios.get("secuencia").asLong()).isEqualTo(foto.get("secuencia").asLong() + 1);
+            JsonNode deValencia = json.readTree(valencia.siguiente("cambios", Duration.ofSeconds(5)).datos());
+            assertThat(cambios.get("cambios").size()).isGreaterThan(deValencia.get("cambios").size());
+
+            // El latido también le llega; al reconectarse con Last-Event-ID, una instantánea al día.
+            assertThat(todos.siguiente("latido", Duration.ofSeconds(4))).isNotNull();
+            try (ClienteSse otra = new ClienteSse(directo("todos"), evento.id())) {
+                ClienteSse.Evento nueva = otra.siguiente(Duration.ofSeconds(5));
+                assertThat(nueva.nombre()).isEqualTo("instantanea");
+                assertThat(json.readTree(nueva.datos()).get("secuencia").asLong())
+                        .isEqualTo(cambios.get("secuencia").asLong());
+            }
+
+            // Cuenta para el máximo de conexiones como cualquier otra: con 3 abiertas, la cuarta (de todos) recibe 503.
+            try (ClienteSse tercera = new ClienteSse(directo("todos"), null)) {
+                esperarConexiones(MAXIMO_CONEXIONES);
+                try (ClienteSse sobra = new ClienteSse(directo("todos"), null)) {
+                    assertThat(sobra.estado()).isEqualTo(503);
+                    assertThat(sobra.respuesta.headers().firstValue("Retry-After")).contains("30");
+                }
+            }
+        }
+        esperarConexiones(0);
     }
 
     void esperarConexiones(int n) throws InterruptedException {

@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
- * Configuración de las estadísticas de puntualidad ({@code trainwatch.estadisticas.*}, ADR 0022 y 0023).
+ * Configuración de las estadísticas de puntualidad ({@code trainwatch.estadisticas.*}, ADR 0025 y 0026).
  *
  * @param muestraMinima      viajes (o pasos, en los tramos) por debajo de los cuales una cifra no se enseña («datos
  *                           insuficientes»)

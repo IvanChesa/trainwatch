@@ -1,10 +1,10 @@
-# ADR 0023 · Agregados diarios con sumas, recuentos e histograma, calculados cada noche antes del horario nuevo
+# ADR 0026 · Agregados diarios con sumas, recuentos e histograma, calculados cada noche antes del horario nuevo
 
-**Fecha:** 21-11-2026 · **Estado:** aceptada · **Fase:** 6 · **Se apoya en:** ADR 0006 (horario por esquemas), 0009 (particiones) y 0022 (definiciones)
+**Fecha:** 21-11-2026 · **Estado:** aceptada · **Fase:** 6 · **Se apoya en:** ADR 0006 (horario por esquemas), 0009 (particiones) y 0025 (definiciones)
 
 ## Contexto
 
-Las cifras del ADR 0022 salen de `retrasos` (~51.000 filas al día, para siempre), pero dos cosas que hacen falta **desaparecen**:
+Las cifras del ADR 0025 salen de `retrasos` (~51.000 filas al día, para siempre), pero dos cosas que hacen falta **desaparecen**:
 
 - el **horario** se sustituye entero cada noche a las 04:30 (ADR 0006): con él se va cuántos viajes había programados (la cobertura) y qué parada va antes de cuál en cada viaje (los tramos: `stop_sequence` tiene huecos en el 1,5 % de los viajes de Renfe, así que «la anterior» no es «la secuencia menos uno»);
 - `posiciones` se borra a las 48-72 h (ADR 0009): con ella se van los `CANCELED` explícitos.
@@ -44,7 +44,7 @@ Una fila por día de servicio y clave, con **sumas y recuentos, nunca medias**: 
 - **Vistas materializadas:** `REFRESH` recalcula todo el histórico cada noche (o hace falta `CONCURRENTLY` con índices únicos) y no permite conservar lo que vino del horario y de `posiciones`.
 - **Guardar medias por día:** la media de cuatro semanas no es la media de las medias diarias (un domingo con 20 trenes pesaría como un lunes con 200). Por eso, sumas y recuentos.
 - **Histograma en filas** (una por día, clave y minuto): igual de exacto y se suma con `GROUP BY` puro, pero multiplica las filas por 5-10. El `integer[]` se suma en Java sobre unas cientos de filas por petición.
-- **Calcular en Java leyendo las filas del día:** igual de rápido con 51.000 filas, pero mueve los datos por la red y el SQL con `GROUP BY` y `LAG` se puede comprobar a mano con la misma consulta (ADR 0022, fase 6 del plan).
+- **Calcular en Java leyendo las filas del día:** igual de rápido con 51.000 filas, pero mueve los datos por la red y el SQL con `GROUP BY` y `LAG` se puede comprobar a mano con la misma consulta (ADR 0025, fase 6 del plan).
 - **Recalcular al terminar cada viaje:** cifras al minuto, pero la tarea competiría con la ingesta todo el día por la misma máquina, y la cobertura del día no se sabe hasta que acaba.
 
 ## Consecuencias

@@ -10,7 +10,7 @@ import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.Porcentajes;
 /**
  * Suma filas de agregados (días, horas, estaciones) sin perder exactitud: solo sumas y recuentos, y el histograma
  * posición a posición. De aquí salen la media, los porcentajes, la mediana y el p90 de cualquier periodo, iguales a los
- * que darían las filas originales de {@code retrasos} (ADR 0023).
+ * que darían las filas originales de {@code retrasos} (ADR 0026).
  */
 final class Acumulado {
 

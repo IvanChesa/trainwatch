@@ -8,7 +8,7 @@ Lo que tienes que saber explicar de esta fase en una entrevista: **qué signific
 
 > «La ingesta guarda el retraso final de cada tren en cada parada: unas 50.000 filas al día, en minutos enteros. Cada noche, a las 03:45, una tarea resume el día de ayer en unas 2.000 filas: por línea y hora, por estación, por tramo entre dos paradas y por línea y día. Solo guardo sumas, recuentos y un histograma por minuto, nunca medias, así que sumar cuatro semanas da exactamente lo mismo que calcular sobre las 1,4 millones de filas originales. La API suma esas filas y responde en milisegundos. Cada cifra va con su periodo, cuántos viajes y paradas la forman, lo que he quitado (las paradas que no se vieron y se rellenaron) y la cobertura: qué parte de los trenes programados vi en directo. Por debajo de 30 viajes no enseño la cifra.»
 
-## 2. Las definiciones (ADR 0022)
+## 2. Las definiciones (ADR 0025)
 
 Si te preguntan «¿qué es puntual?», contesta con esto:
 

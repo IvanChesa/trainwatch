@@ -52,7 +52,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
- * La API de estadísticas de puntualidad (ADR 0022): ranking de las líneas de un núcleo, una línea por hora, día y
+ * La API de estadísticas de puntualidad (ADR 0025): ranking de las líneas de un núcleo, una línea por hora, día y
  * semana con sus tramos, y una estación. Lee solo los agregados de la V6, que cambian una vez por noche: se puede
  * guardar 1 h y lleva {@code ETag}.
  */

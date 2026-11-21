@@ -6,7 +6,7 @@ import java.util.List;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * Lo que devuelve la API de estadísticas (ADR 0022). Cada respuesta dice de dónde sale: el periodo, los viajes y las
+ * Lo que devuelve la API de estadísticas (ADR 0025). Cada respuesta dice de dónde sale: el periodo, los viajes y las
  * paradas usados, lo que se ha quitado (inferidas, sin hora), los cancelados y la cobertura. Una cifra con menos viajes
  * que la muestra mínima va a {@code null} con {@code suficiente: false}. Antes de la fecha de publicación no hay
  * ninguna cifra: solo {@code publicacion} y el periodo.

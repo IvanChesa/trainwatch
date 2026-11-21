@@ -1,7 +1,9 @@
 # Cabeceras de seguridad de la web en Cloudflare Pages (fase 7). Vite copia este fichero tal cual a dist/.
-# connect-src: la API y el directo (trainwatch-api). La fase 5 tendrá que añadir los mapas (OpenFreeMap).
+# connect-src: la API y el directo (trainwatch-api) y el mapa de OpenFreeMap (estilo, teselas, sprite y letras, que
+# MapLibre pide con fetch). img-src blob:: las imágenes que MapLibre decodifica. worker-src: el worker de MapLibre, que
+# se sirve desde la propia web (MapLibre 6 solo usa blob: si el worker es de otro origen). ADR 0022.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://trainwatch-api.ivanchesa.com; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://trainwatch-api.ivanchesa.com https://tiles.openfreemap.org; worker-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
