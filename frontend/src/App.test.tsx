@@ -157,6 +157,41 @@ describe('App', () => {
     expect(within(hoja).getAllByRole('listitem')).toHaveLength(3);
   });
 
+  it('cambiar de línea con los avisos abiertos cambia su título sin quitarle el foco al selector', async () => {
+    prepararApi();
+    await conDirecto();
+    fireEvent.click(await screen.findByRole('button', { name: 'Avisos (3)' }));
+    await screen.findByRole('complementary', { name: 'Avisos de Rodalies de Catalunya' });
+    const selector = screen.getByRole('combobox', { name: 'Línea' });
+    selector.focus();
+    fireEvent.change(selector, { target: { value: 'R13' } });
+    expect(await screen.findByRole('complementary', { name: 'Avisos de la R13' })).toBeInTheDocument();
+    expect(selector).toHaveFocus();
+  });
+
+  it('el botón de la RL4 se queda (pulsado) y no pierde el foco', async () => {
+    prepararApi();
+    await conDirecto();
+    const boton = screen.getByRole('button', { name: /RL4 Lleida/ });
+    expect(boton).toHaveAttribute('aria-pressed', 'false');
+    boton.focus();
+    fireEvent.click(boton);
+    expect(screen.getByRole('combobox', { name: 'Línea' })).toHaveValue('RL4');
+    expect(boton).toHaveAttribute('aria-pressed', 'true');
+    expect(boton).toHaveFocus();
+    fireEvent.click(boton);
+    expect(screen.getByRole('combobox', { name: 'Línea' })).toHaveValue('');
+  });
+
+  it('un núcleo de la URL que no existe vuelve a Rodalies', async () => {
+    prepararApi();
+    window.history.replaceState(null, '', '/?nucleo=999');
+    render(<App />);
+    await screen.findByRole('option', { name: 'Madrid' });
+    expect(screen.getByRole('combobox', { name: 'Núcleo' })).toHaveValue('51');
+    await waitFor(() => expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=51'));
+  });
+
   it('avisa con «datos de hace X min» si el directo se para', async () => {
     prepararApi();
     await conDirecto();

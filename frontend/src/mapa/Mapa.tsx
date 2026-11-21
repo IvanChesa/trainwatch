@@ -31,6 +31,12 @@ const ESTILO_RESERVA = {
   layers: [{ id: 'fondo', type: 'background' as const, paint: { 'background-color': '#16181c' } }],
 };
 
+/** Cuánto del mapa tapa la hoja inferior del móvil (el 50 % de la altura de la ventana, desde abajo). */
+function hojaMovil(contenedor: HTMLElement): number {
+  const abajo = contenedor.getBoundingClientRect().bottom;
+  return Math.round(window.innerHeight * 0.5 - (window.innerHeight - abajo));
+}
+
 export interface PropsMapa {
   nucleo: Nucleo | null;
   trenes: readonly TrenMapa[];
@@ -163,7 +169,10 @@ export default function Mapa(props: PropsMapa) {
     m.easeTo({
       center: [tren.lon, tren.lat],
       zoom: Math.max(m.getZoom(), 11),
-      padding: ancho ? { top: 20, bottom: 40, left: 360, right: 410 } : { top: 20, bottom: 300, left: 20, right: 20 },
+      // En el móvil, la hoja ocupa la mitad de abajo de la pantalla (App.css): el tren va justo encima.
+      padding: ancho
+        ? { top: 20, bottom: 40, left: 360, right: 410 }
+        : { top: 20, bottom: Math.max(20, hojaMovil(m.getContainer()) + 20), left: 20, right: 20 },
       animate: !ultimas.current.reducirMovimiento,
       duration: 700,
     });

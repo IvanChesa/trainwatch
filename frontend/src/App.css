@@ -539,13 +539,13 @@
     left: 0;
     right: 0;
     bottom: 0;
-    max-height: 62vh;
+    max-height: 50vh;
     border-radius: 16px 16px 0 0;
     box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.5);
   }
   /* Que se pueda desplazar la lista por encima de la hoja. */
   .app--con-hoja .lista {
-    padding-bottom: 64vh;
+    padding-bottom: 52vh;
   }
 }
 
