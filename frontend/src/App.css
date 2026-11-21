@@ -125,6 +125,13 @@
   background: var(--fondo);
   cursor: pointer;
 }
+/* Un enlace con aspecto de botón (a la página de puntualidad). */
+.boton--enlace {
+  display: inline-flex;
+  align-items: center;
+  color: var(--texto);
+  text-decoration: none;
+}
 .boton:hover,
 .conmutador button:hover {
   border-color: var(--sec);
