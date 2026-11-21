@@ -42,7 +42,7 @@ Construye sobre lo fusionado en `main`. Si las fases 3b, 4 o 5 no están fusiona
 4. **Web (React):**
    - una página por línea con la puntualidad por hora, por día y semana a semana, y sus tramos con más retraso;
    - una página del núcleo con el ranking de líneas;
-   - la **RL4 de Lleida, destacada** en Rodalies;
+   - la RL4, como cualquier otra línea, sin destacar (decisión de Iván del 21-11);
    - la puntualidad en la ficha de la estación;
    - enlaces desde el mapa y la lista.
 
