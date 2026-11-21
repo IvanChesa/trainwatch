@@ -13,15 +13,19 @@ import { ListaTrenes } from './componentes/ListaTrenes';
 import { useAhora, useReducirMovimiento } from './componentes/ganchos';
 import { tituloTren } from './componentes/textos';
 import { useDirecto } from './directo/useDirecto';
+import { encuadreDeNucleo, encuadreDeTodos } from './mapa/encuadre';
 import { compararLineas, seVeEnElMapa } from './mapa/retraso';
 import './App.css';
 
 // MapLibre pesa (~1 MB): va en su propio trozo y se carga después de pintar la interfaz.
 const Mapa = lazy(() => import('./mapa/Mapa'));
 
-/** Rodalies de Catalunya, el núcleo por defecto; y su RL4 (Lleida), destacada. */
+/** Rodalies de Catalunya, el núcleo por defecto (plan, §6). */
 export const NUCLEO_POR_DEFECTO = 51;
-export const LINEA_DESTACADA = 'RL4';
+
+/** «Toda España»: los trenes de todos los núcleos a la vez (`?nucleo=todos`, como el directo). */
+export const TODOS = 'todos';
+export type IdNucleo = number | typeof TODOS;
 
 type Vista = 'mapa' | 'lista';
 type Seleccion =
@@ -30,23 +34,28 @@ type Seleccion =
   | { tipo: 'avisos' }
   | null;
 
-function leerUrl(): { nucleo: number; linea: string; vista: Vista } {
+function leerUrl(): { nucleo: IdNucleo; linea: string; vista: Vista } {
   const p = new URLSearchParams(window.location.search);
-  const nucleo = Number(p.get('nucleo'));
+  const valor = p.get('nucleo');
+  const numero = Number(valor);
+  const nucleo: IdNucleo =
+    valor === TODOS ? TODOS : Number.isInteger(numero) && numero > 0 ? numero : NUCLEO_POR_DEFECTO;
   return {
-    nucleo: Number.isInteger(nucleo) && nucleo > 0 ? nucleo : NUCLEO_POR_DEFECTO,
-    linea: p.get('linea') ?? '',
+    nucleo,
+    // Con toda España no se filtra por línea (los nombres se repiten entre núcleos).
+    linea: nucleo === TODOS ? '' : (p.get('linea') ?? ''),
     vista: p.get('vista') === 'lista' ? 'lista' : 'mapa',
   };
 }
 
-function nombreDe(nucleo: Nucleo | undefined, id: number): string {
+function nombreDe(nucleo: Nucleo | undefined, id: IdNucleo): string {
+  if (id === TODOS) return 'toda España';
   return nucleo?.nombre ?? (id === NUCLEO_POR_DEFECTO ? 'Rodalies de Catalunya' : 'este núcleo');
 }
 
 export default function App() {
   const [inicial] = useState(leerUrl);
-  const [nucleoPedido, setNucleoId] = useState(inicial.nucleo);
+  const [nucleoPedido, setNucleoId] = useState<IdNucleo>(inicial.nucleo);
   const [linea, setLinea] = useState(inicial.linea);
   const [vista, setVista] = useState<Vista>(inicial.vista);
   const [seleccion, setSeleccion] = useState<Seleccion>(null);
@@ -61,38 +70,43 @@ export default function App() {
     [nucleos],
   );
   // Un núcleo de la URL que no existe: en cuanto se sabe, Rodalies.
-  const nucleoId =
-    listaNucleos.length > 0 && !listaNucleos.some((n) => n.id === nucleoPedido) ? NUCLEO_POR_DEFECTO : nucleoPedido;
-  const nucleo = listaNucleos.find((n) => n.id === nucleoId);
+  const nucleoId: IdNucleo =
+    nucleoPedido !== TODOS && listaNucleos.length > 0 && !listaNucleos.some((n) => n.id === nucleoPedido)
+      ? NUCLEO_POR_DEFECTO
+      : nucleoPedido;
+  const esTodos = nucleoId === TODOS;
+  const nucleo = esTodos ? undefined : listaNucleos.find((n) => n.id === nucleoId);
+  const nombresNucleos = useMemo(() => new Map(listaNucleos.map((n) => [n.id, n.nombre])), [listaNucleos]);
   const directo = useDirecto(nucleoId);
   const avisos = useConsulta<Aviso[]>(`avisos:${nucleoId}`, (s) => consultas.avisos(nucleoId, s), 60_000);
-  const datosLinea = useConsulta<Linea>(linea ? `linea:${nucleoId}:${linea}` : null, (s) =>
-    consultas.linea(nucleoId, linea, s),
+  // Con toda España no hay filtro de línea: el recorrido solo se pide con un núcleo.
+  const lineaDeNucleo = esTodos ? '' : linea;
+  const datosLinea = useConsulta<Linea>(
+    lineaDeNucleo && typeof nucleoId === 'number' ? `linea:${nucleoId}:${lineaDeNucleo}` : null,
+    (s) => consultas.linea(nucleoId as number, lineaDeNucleo, s),
   );
-  const esRodalies = nucleoId === NUCLEO_POR_DEFECTO;
 
   // La URL guarda el núcleo, la línea y la vista (para compartir un enlace; sin cookies).
   useEffect(() => {
     const p = new URLSearchParams();
     if (nucleoId !== NUCLEO_POR_DEFECTO) p.set('nucleo', String(nucleoId));
-    if (linea) p.set('linea', linea);
+    if (lineaDeNucleo) p.set('linea', lineaDeNucleo);
     if (vista === 'lista') p.set('vista', 'lista');
     const consulta = p.toString();
     window.history.replaceState(null, '', `${window.location.pathname}${consulta ? `?${consulta}` : ''}`);
-  }, [nucleoId, linea, vista]);
+  }, [nucleoId, lineaDeNucleo, vista]);
 
   const todos = useMemo(() => [...directo.trenes.values()], [directo.trenes]);
   const lineas = useMemo(() => {
+    if (esTodos) return [];
     const conjunto = new Set(todos.map((t) => t.linea).filter((l): l is string => !!l));
     if (linea) conjunto.add(linea);
-    if (esRodalies) conjunto.add(LINEA_DESTACADA);
-    return [...conjunto].sort((a, b) => {
-      if (esRodalies && a === LINEA_DESTACADA) return -1;
-      if (esRodalies && b === LINEA_DESTACADA) return 1;
-      return compararLineas(a, b);
-    });
-  }, [todos, linea, esRodalies]);
-  const filtrados = useMemo(() => (linea ? todos.filter((t) => t.linea === linea) : todos), [todos, linea]);
+    return [...conjunto].sort(compararLineas);
+  }, [todos, linea, esTodos]);
+  const filtrados = useMemo(
+    () => (lineaDeNucleo ? todos.filter((t) => t.linea === lineaDeNucleo) : todos),
+    [todos, lineaDeNucleo],
+  );
   const enMapa = useMemo(() => filtrados.filter(seVeEnElMapa), [filtrados]);
   const enLista = useMemo(() => filtrados.filter((t) => t.estado !== 'TERMINADO'), [filtrados]);
   const enMarcha = enMapa.filter((t) => t.estado === 'EN_MARCHA').length;
@@ -121,7 +135,7 @@ export default function App() {
     [abrir],
   );
 
-  const cambiarNucleo = (id: number) => {
+  const cambiarNucleo = (id: IdNucleo) => {
     setNucleoId(id);
     setLinea('');
     setSeleccion(null);
@@ -130,18 +144,29 @@ export default function App() {
   const trenSeleccionado: TrenMapa | undefined =
     seleccion?.tipo === 'tren' ? directo.trenes.get(seleccion.id) : undefined;
   const avisosVisibles =
-    avisos.tipo === 'lista' ? avisos.datos.filter((a) => !linea || a.lineas.length === 0 || a.lineas.includes(linea)) : [];
+    avisos.tipo === 'lista'
+      ? avisos.datos.filter((a) => !lineaDeNucleo || a.lineas.length === 0 || a.lineas.includes(lineaDeNucleo))
+      : [];
 
   const nombreNucleo = nombreDe(nucleo, nucleoId);
   const resumen = !directo.cargado
     ? `Cargando los trenes de ${nombreNucleo}…`
-    : `${enMarcha} ${enMarcha === 1 ? 'tren' : 'trenes'} en marcha y ${enOrigen} en origen${linea ? ` en la ${linea}` : ''}`;
+    : `${enMarcha} ${enMarcha === 1 ? 'tren' : 'trenes'} en marcha y ${enOrigen} en origen${lineaDeNucleo ? ` en la ${lineaDeNucleo}` : ''}`;
   const descripcionMapa = `Mapa de ${nombreNucleo}: ${resumen}. Para consultarlos con el teclado, usa la vista de lista.`;
 
   let tituloHoja = '';
   if (seleccion?.tipo === 'tren') tituloHoja = tituloTren(trenSeleccionado ?? undefined);
   else if (seleccion?.tipo === 'estacion') tituloHoja = seleccion.nombre ?? 'Estación';
-  else if (seleccion?.tipo === 'avisos') tituloHoja = linea ? `Avisos de la ${linea}` : `Avisos de ${nombreNucleo}`;
+  else if (seleccion?.tipo === 'avisos')
+    tituloHoja = lineaDeNucleo ? `Avisos de la ${lineaDeNucleo}` : `Avisos de ${nombreNucleo}`;
+
+  const encuadre = esTodos
+    ? listaNucleos.length > 0
+      ? encuadreDeTodos(listaNucleos)
+      : null
+    : nucleo
+      ? encuadreDeNucleo(nucleo)
+      : null;
 
   return (
     <div className={`app app--${vista}${seleccion ? ' app--con-hoja' : ''}`}>
@@ -162,20 +187,31 @@ export default function App() {
         <div className="controles">
           <label className="campo">
             <span>Núcleo</span>
-            <select value={nucleoId} onChange={(e) => cambiarNucleo(Number(e.target.value))}>
-              {listaNucleos.length === 0 && <option value={nucleoId}>Cargando los núcleos…</option>}
-              {listaNucleos.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.nombre}
-                  {n.estado === 'EN_DIRECTO' ? '' : ` (${n.estadoTexto})`}
-                </option>
-              ))}
+            <select
+              value={String(nucleoId)}
+              aria-describedby={esTodos ? 'linea-con-todos' : undefined}
+              onChange={(e) => cambiarNucleo(e.target.value === TODOS ? TODOS : Number(e.target.value))}
+            >
+              {listaNucleos.length === 0 && !esTodos && <option value={nucleoId}>Cargando los núcleos…</option>}
+              <option value={TODOS}>Toda España</option>
+              {listaNucleos.length > 0 && (
+                <optgroup label="Núcleos">
+                  {listaNucleos.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.nombre}
+                      {n.estado === 'EN_DIRECTO' ? '' : ` (${n.estadoTexto})`}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </label>
           <label className="campo">
             <span>Línea</span>
             <select
-              value={linea}
+              value={lineaDeNucleo}
+              disabled={esTodos}
+              aria-describedby={esTodos ? 'linea-con-todos' : undefined}
               onChange={(e) => {
                 setLinea(e.target.value);
                 if (seleccion?.tipo === 'avisos') return;
@@ -185,13 +221,25 @@ export default function App() {
               <option value="">Todas las líneas</option>
               {lineas.map((l) => (
                 <option key={l} value={l}>
-                  {esRodalies && l === LINEA_DESTACADA ? `${l} (Lleida) ★` : l}
+                  {l}
                 </option>
               ))}
             </select>
           </label>
         </div>
 
+        {/* Siempre en la página (vacía si no hace falta): una región viva solo anuncia lo que cambia dentro de ella. */}
+        <p className={esTodos ? 'nota' : 'solo-lector'} id="linea-con-todos" aria-live="polite">
+          {esTodos && (
+            <>
+              Para filtrar por línea, elige un núcleo
+              <span className="nota__extra">
+                : los nombres de las líneas se repiten (hay una C1 en Madrid, otra en Valencia…)
+              </span>
+              .
+            </>
+          )}
+        </p>
         {nucleo && nucleo.estado !== 'EN_DIRECTO' && (
           <p className="aviso-nucleo">
             {nucleo.estado === 'SIN_DATOS_EN_DIRECTO'
@@ -218,17 +266,6 @@ export default function App() {
           <button type="button" className="boton" onClick={() => abrir({ tipo: 'avisos' })}>
             Avisos{avisos.tipo === 'lista' ? ` (${avisosVisibles.length})` : ''}
           </button>
-          {esRodalies && (
-            // Siempre está (si desapareciera al pulsarlo, el foco se perdería): pulsado, filtra la RL4.
-            <button
-              type="button"
-              className="destacada"
-              aria-pressed={linea === LINEA_DESTACADA}
-              onClick={() => setLinea(linea === LINEA_DESTACADA ? '' : LINEA_DESTACADA)}
-            >
-              <span aria-hidden="true">★</span> RL4 Lleida
-            </button>
-          )}
         </div>
         <p className="resumen" aria-live="off">
           {resumen}
@@ -241,12 +278,11 @@ export default function App() {
           <SinMapa alFallar={() => setVista('lista')}>
             <Suspense fallback={<p className="nota mapa-cargando">Cargando el mapa…</p>}>
             <Mapa
-              nucleo={nucleo ?? null}
+              encuadre={encuadre}
               trenes={enMapa}
               recibido={directo.recibido}
               linea={datosLinea.tipo === 'lista' ? datosLinea.datos : null}
               seleccionado={seleccion?.tipo === 'tren' ? seleccion.id : null}
-              destacada={esRodalies ? LINEA_DESTACADA : null}
               reducirMovimiento={reducirMovimiento}
               descripcion={descripcionMapa}
               alPulsarTren={abrirTren}
@@ -259,7 +295,8 @@ export default function App() {
         {vista === 'lista' && (
           <ListaTrenes
             trenes={enLista}
-            titulo={`Trenes de ${nombreNucleo}${linea ? `, ${linea}` : ''}`}
+            titulo={`Trenes de ${nombreNucleo}${lineaDeNucleo ? `, ${lineaDeNucleo}` : ''}`}
+            nucleos={esTodos ? nombresNucleos : undefined}
             seleccionado={seleccion?.tipo === 'tren' ? seleccion.id : null}
             alAbrir={abrirTren}
           />

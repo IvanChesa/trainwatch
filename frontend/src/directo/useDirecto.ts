@@ -38,9 +38,12 @@ function segundosEntre(desde: string | null, hasta: string): number | null {
   return Number.isFinite(s) ? Math.max(0, s) : null;
 }
 
-/** Abre el directo del núcleo y lo cierra al cambiar de núcleo o al desmontar. */
-export function useDirecto(nucleo: number | null): Directo {
-  const [directo, setDirecto] = useState<{ nucleo: number | null; datos: Directo }>({ nucleo: null, datos: INICIAL });
+/** Abre el directo del núcleo (o de todos, con `'todos'`) y lo cierra al cambiar de núcleo o al desmontar. */
+export function useDirecto(nucleo: number | 'todos' | null): Directo {
+  const [directo, setDirecto] = useState<{ nucleo: number | 'todos' | null; datos: Directo }>({
+    nucleo: null,
+    datos: INICIAL,
+  });
 
   useEffect(() => {
     if (nucleo === null) return;

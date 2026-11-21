@@ -1,14 +1,16 @@
 // Capturas de la web a 1440 y 375 px y medida del movimiento de los trenes con datos reales.
 //
-// Requisitos: la build servida en http://localhost:5173 contra la API de producción (CORS admite ese origen):
+// Requisitos: la build servida en http://localhost:5173 contra una API con datos reales: la de producción (CORS admite
+// ese origen) o, para lo que aún no está desplegado (como «Toda España»), el backend local leyendo los feeds de Renfe:
 //   VITE_API_URL=https://trainwatch-api.ivanchesa.com npx vite build && npx vite preview --port 5173
-//   node scripts/capturas.mjs [carpeta]   (por defecto, ../docs/capturas/fase-5)
+//   (o, con el backend en el 8080: npx vite build && npx vite preview --port 5173)
+//   node scripts/capturas.mjs [carpeta]   (por defecto, ../docs/capturas/fase-5b)
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium, devices } from '@playwright/test';
 
 const WEB = process.env.TW_WEB ?? 'http://localhost:5173';
-const carpeta = process.argv[2] ?? fileURLToPath(new URL('../../docs/capturas/fase-5/', import.meta.url));
+const carpeta = process.argv[2] ?? fileURLToPath(new URL('../../docs/capturas/fase-5b/', import.meta.url));
 mkdirSync(carpeta, { recursive: true });
 
 const navegador = await chromium.launch({ args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--ignore-gpu-blocklist'] });
@@ -92,9 +94,11 @@ await page.waitForTimeout(1500);
 await page.screenshot({ path: `${carpeta}/escritorio-ficha-tren.png` });
 await page.close();
 
-page = await abrir(escritorio, '/?linea=RL4');
-await page.waitForTimeout(1500);
-await page.screenshot({ path: `${carpeta}/escritorio-rl4.png` });
+page = await abrir(escritorio, '/?nucleo=todos');
+await page.screenshot({ path: `${carpeta}/escritorio-toda-espana.png` });
+await page.getByRole('button', { name: 'Lista' }).click();
+await page.waitForTimeout(500);
+await page.screenshot({ path: `${carpeta}/escritorio-toda-espana-lista.png` });
 await page.close();
 await escritorio.close();
 
@@ -110,6 +114,9 @@ await page.getByRole('heading', { name: 'Paradas' }).waitFor({ timeout: 10_000 }
 await page.getByRole('button', { name: 'Mapa' }).click();
 await page.waitForTimeout(1500);
 await page.screenshot({ path: `${carpeta}/movil-ficha-tren.png` });
+await page.close();
+page = await abrir(movil, '/?nucleo=todos');
+await page.screenshot({ path: `${carpeta}/movil-toda-espana.png` });
 await page.close();
 await movil.close();
 

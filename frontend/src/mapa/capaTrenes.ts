@@ -1,4 +1,4 @@
-import type { GeoJSONSource, Map as MapaLibre, MapLayerMouseEvent } from 'maplibre-gl';
+import type { FilterSpecification, GeoJSONSource, Map as MapaLibre, MapLayerMouseEvent } from 'maplibre-gl';
 import type { Feature, FeatureCollection, Point } from 'geojson';
 import type { TrenMapa } from '../api/tipos';
 import { Interpolador } from './interpolacion';
@@ -17,18 +17,19 @@ export interface CapaDeTrenes {
   actualizar(trenes: readonly TrenMapa[], nuevoDato: boolean): void;
   /** Resalta un tren (el de la ficha abierta) o ninguno. */
   seleccionar(id: string | null): void;
-  /** Resalta una línea (la RL4 en Rodalies) o ninguna. */
-  destacarLinea(linea: string | null): void;
   /** `false` con `prefers-reduced-motion`: los trenes saltan a su posición nueva. */
   animar(si: boolean): void;
   destruir(): void;
 }
 
+/** Un filtro que no deja pasar ningún tren (ninguno tiene el id vacío). */
+const NINGUNO = ['==', ['get', 'id'], ''] as FilterSpecification;
+
 const FUENTE = 'tw-trenes';
 export const CAPA_SIMBOLOS = 'tw-trenes-simbolos';
 const CAPA_HALO = 'tw-trenes-halo';
 /** La primera capa de los trenes: lo demás (la línea, las estaciones) va debajo. */
-export const CAPA_DESTACADA = 'tw-trenes-destacada';
+export const CAPA_INFERIOR = CAPA_HALO;
 /** 30 fotogramas por segundo bastan para que se vea fluido y dejan respirar al móvil. */
 const MS_POR_FOTOGRAMA = 33;
 const ESCALA = 2;
@@ -116,24 +117,12 @@ export class CapaTrenes2D implements CapaDeTrenes {
     this.interpolador = new Interpolador(opciones.animar);
     registrarIconos(mapa);
     mapa.addSource(FUENTE, { type: 'geojson', data: VACIA });
-    // Debajo, el halo del tren seleccionado y el de la línea destacada.
-    mapa.addLayer({
-      id: CAPA_DESTACADA,
-      type: 'circle',
-      source: FUENTE,
-      filter: ['==', ['get', 'linea'], ''],
-      paint: {
-        'circle-radius': 13,
-        'circle-color': 'rgba(142, 174, 255, 0.18)',
-        'circle-stroke-color': '#8eaeff',
-        'circle-stroke-width': 1.5,
-      },
-    });
+    // Debajo, el halo del tren seleccionado.
     mapa.addLayer({
       id: CAPA_HALO,
       type: 'circle',
       source: FUENTE,
-      filter: ['==', ['get', 'id'], ''],
+      filter: NINGUNO,
       paint: {
         'circle-radius': 17,
         'circle-color': 'rgba(255, 255, 255, 0.12)',
@@ -188,10 +177,6 @@ export class CapaTrenes2D implements CapaDeTrenes {
     this.mapa.setFilter(CAPA_HALO, ['==', ['get', 'id'], id ?? '']);
   }
 
-  destacarLinea(linea: string | null): void {
-    this.mapa.setFilter(CAPA_DESTACADA, ['==', ['get', 'linea'], linea ?? '']);
-  }
-
   animar(si: boolean): void {
     this.interpolador.animar = si;
     if (!si) {
@@ -206,7 +191,7 @@ export class CapaTrenes2D implements CapaDeTrenes {
     this.mapa.off('click', CAPA_SIMBOLOS, this.alPulsar);
     this.mapa.off('mouseenter', CAPA_SIMBOLOS, this.alEntrar);
     this.mapa.off('mouseleave', CAPA_SIMBOLOS, this.alSalir);
-    for (const capa of [CAPA_SIMBOLOS, CAPA_HALO, CAPA_DESTACADA]) {
+    for (const capa of [CAPA_SIMBOLOS, CAPA_HALO]) {
       if (this.mapa.getLayer(capa)) this.mapa.removeLayer(capa);
     }
     if (this.mapa.getSource(FUENTE)) this.mapa.removeSource(FUENTE);

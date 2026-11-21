@@ -12,7 +12,11 @@ import App from './App';
 // MapLibre necesita WebGL, que jsdom no tiene: el mapa se sustituye por botones (uno por tren pintado).
 vi.mock('./mapa/Mapa', () => ({
   default: (props: PropsMapa) => (
-    <div data-testid="mapa" aria-label={props.descripcion}>
+    <div
+      data-testid="mapa"
+      aria-label={props.descripcion}
+      data-encuadre={props.encuadre?.clave ?? ''}
+    >
       {props.trenes.map((t) => (
         <button key={t.id} type="button" onClick={() => props.alPulsarTren(t.id)}>
           símbolo {t.id}
@@ -47,14 +51,21 @@ function prepararApi() {
   return fetch;
 }
 
-async function conDirecto() {
+async function conDirecto(foto: unknown = instantanea) {
   render(<App />);
   await waitFor(() => expect(FuenteFalsa.creadas.length).toBeGreaterThan(0));
   act(() => {
     FuenteFalsa.ultima().abrir();
-    FuenteFalsa.ultima().enviar('instantanea', instantanea);
+    FuenteFalsa.ultima().enviar('instantanea', foto);
   });
 }
+
+/** La instantánea de toda España: los trenes de Rodalies del ejemplo y un C5 de Madrid. */
+const instantaneaDeTodos = {
+  ...instantanea,
+  nucleo: null,
+  trenes: [...instantanea.trenes, { ...instantanea.trenes[0], id: '1099C5', linea: 'C5', nucleo: 10, destino: 'Humanes' }],
+};
 
 beforeEach(() => {
   FuenteFalsa.creadas = [];
@@ -73,13 +84,19 @@ describe('App', () => {
     await screen.findByRole('option', { name: 'Madrid' });
   });
 
-  it('abre el directo de Rodalies por defecto, con la RL4 destacada', async () => {
+  it('abre el directo de Rodalies por defecto, sin ninguna línea destacada', async () => {
     prepararApi();
     await conDirecto();
     expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=51');
     expect(screen.getByRole('combobox', { name: 'Núcleo' })).toHaveValue('51');
-    expect(screen.getByRole('option', { name: 'RL4 (Lleida) ★' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /RL4 Lleida/ })).toBeInTheDocument();
+    // La RL4 ya no se destaca (Iván, 21-11): ni estrella, ni botón, ni sale en el filtro si no hay trenes suyos.
+    expect(screen.queryByText(/★/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /RL4/ })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('combobox', { name: 'Línea' })).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Todas las líneas',
+      'R13',
+      'R15',
+    ]);
     expect(screen.getByText('2 trenes en marcha y 1 en origen')).toBeInTheDocument();
     expect(screen.getByText(/^En directo · dato de Renfe hace 16 s$/)).toBeInTheDocument();
     // Los tres trenes de la instantánea, en el mapa.
@@ -169,18 +186,69 @@ describe('App', () => {
     expect(selector).toHaveFocus();
   });
 
-  it('el botón de la RL4 se queda (pulsado) y no pierde el foco', async () => {
+  it('la RL4 de la URL es una línea más: sale en el filtro, en su orden y sin estrella', async () => {
+    prepararApi();
+    window.history.replaceState(null, '', '/?linea=RL4');
+    await conDirecto();
+    const lineas = screen.getByRole('combobox', { name: 'Línea' });
+    expect(lineas).toHaveValue('RL4');
+    expect(within(lineas).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Todas las líneas',
+      'R13',
+      'R15',
+      'RL4',
+    ]);
+  });
+
+  it('con «Toda España» (por URL) abre el directo de todos, sin filtro de línea y con el núcleo en la lista', async () => {
+    const fetch = prepararApi();
+    window.history.replaceState(null, '', '/?nucleo=todos&linea=R13');
+    await conDirecto(instantaneaDeTodos);
+    expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=todos');
+    expect(screen.getByRole('combobox', { name: 'Núcleo' })).toHaveValue('todos');
+    // Sin filtro de línea (los nombres se repiten entre núcleos), y dice por qué.
+    const lineas = screen.getByRole('combobox', { name: 'Línea' });
+    expect(lineas).toBeDisabled();
+    expect(lineas).toHaveAccessibleDescription(/elige un núcleo/);
+    expect(window.location.search).toBe('?nucleo=todos');
+    // Los cuatro trenes en el mapa, encuadrando toda España.
+    const mapa = await screen.findByTestId('mapa');
+    expect(within(mapa).getAllByRole('button')).toHaveLength(4);
+    await waitFor(() => expect(mapa).toHaveAttribute('data-encuadre', expect.stringMatching(/^todos:/)));
+    expect(mapa).toHaveAccessibleName(/^Mapa de toda España: 2 trenes en marcha y 2 en origen/);
+    // Los avisos de todos los núcleos.
+    expect(fetch).toHaveBeenCalledWith('/api/avisos', expect.anything());
+
+    // El selector de núcleo también dice por qué no hay filtro de línea (el de línea, desactivado, no recibe el foco).
+    expect(screen.getByRole('combobox', { name: 'Núcleo' })).toHaveAccessibleDescription(/elige un núcleo/);
+
+    // La lista, agrupada por núcleo con un encabezado por grupo (Madrid antes que Rodalies).
+    fireEvent.click(screen.getByRole('button', { name: 'Lista' }));
+    const lista = screen.getByRole('region', { name: 'Trenes de toda España' });
+    const grupos = within(lista).getAllByRole('heading', { level: 3 });
+    expect(grupos.map((g) => g.textContent)).toEqual(['Madrid (1 tren)', 'Rodalies de Catalunya (3 trenes)']);
+    const madrid = within(lista).getByRole('region', { name: 'Madrid (1 tren)' });
+    expect(within(madrid).getByRole('button')).toHaveTextContent(/^C5, Hacia Humanes/);
+    expect(within(lista).getAllByRole('button')).toHaveLength(4);
+  });
+
+  it('«Toda España» se elige en el selector y se vuelve a un núcleo', async () => {
     prepararApi();
     await conDirecto();
-    const boton = screen.getByRole('button', { name: /RL4 Lleida/ });
-    expect(boton).toHaveAttribute('aria-pressed', 'false');
-    boton.focus();
-    fireEvent.click(boton);
-    expect(screen.getByRole('combobox', { name: 'Línea' })).toHaveValue('RL4');
-    expect(boton).toHaveAttribute('aria-pressed', 'true');
-    expect(boton).toHaveFocus();
-    fireEvent.click(boton);
-    expect(screen.getByRole('combobox', { name: 'Línea' })).toHaveValue('');
+    expect(screen.getByTestId('mapa')).toHaveAttribute('data-encuadre', '51');
+    const selector = screen.getByRole('combobox', { name: 'Núcleo' });
+    expect(within(selector).getAllByRole('option')[0]).toHaveTextContent('Toda España');
+    fireEvent.change(selector, { target: { value: 'todos' } });
+    await waitFor(() => expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=todos'));
+    expect(window.location.search).toBe('?nucleo=todos');
+
+    expect(screen.getByRole('combobox', { name: 'Línea' })).toBeDisabled();
+
+    fireEvent.change(selector, { target: { value: '10' } });
+    await waitFor(() => expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=10'));
+    expect(window.location.search).toBe('?nucleo=10');
+    expect(screen.getByRole('combobox', { name: 'Línea' })).toBeEnabled();
+    expect(screen.getByTestId('mapa')).toHaveAttribute('data-encuadre', '10');
   });
 
   it('un núcleo de la URL que no existe vuelve a Rodalies', async () => {

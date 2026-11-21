@@ -24,3 +24,5 @@ Un fichero por decisión: `NNNN-titulo-corto.md`, con contexto, decisión, alter
 - [0020 · Despliegue continuo: GHCR, OIDC con identidad administrada federada, `az vm run-command` y wrangler](0020-despliegue-con-oidc-y-run-command.md)
 - [0021 · Copias: las gestionadas de PostgreSQL (14 días) y un `pg_dump` nocturno a Blob Storage (30 días)](0021-copias-gestionadas-y-pg-dump-nocturno.md)
 - [0022 · El mapa: MapLibre GL 6.17 directamente, sin `react-map-gl` ni TanStack Query, con OpenFreeMap](0022-maplibre-sin-adaptador-y-sin-libreria-de-datos.md)
+- [0023 · El encuadre de cada núcleo es el rectángulo donde está su servicio, no el de todas sus estaciones](0023-encuadre-por-el-servicio-de-cada-nucleo.md)
+- [0024 · «Toda España»: el directo de todos los núcleos es un canal más del difusor (`nucleo=todos`)](0024-directo-de-todos-los-nucleos.md)

@@ -45,7 +45,9 @@ import io.micrometer.core.instrument.MeterRegistry;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * El directo por SSE ({@code GET /api/directo?nucleo=51}, ADR 0015).
+ * El directo por SSE ({@code GET /api/directo?nucleo=51}, ADR 0015), también el de todos los núcleos a la vez
+ * ({@code nucleo=todos}, fase 5b): es un canal más, con la misma instantánea, cambios, latido, límites y control de
+ * los clientes lentos.
  *
  * <p><b>Qué manda.</b> Al conectarse, un evento {@code instantanea} con todos los trenes del núcleo. Después, al final
  * de cada ciclo de la ingesta ({@link CicloDirectoTerminado}, cada ~7 s), un evento {@code cambios} con las altas,
@@ -81,6 +83,8 @@ public class DifusorDirecto implements SmartLifecycle {
     private final MeterRegistry metricas;
 
     private final Map<Integer, Canal> canales = new ConcurrentHashMap<>();
+    /** Todos los núcleos juntos («Toda España»). Va aparte para que no cuente como un núcleo más. */
+    private final Canal todos = new Canal(null);
     private final Set<Suscriptor> suscriptores = ConcurrentHashMap.newKeySet();
     private final AtomicInteger conexiones = new AtomicInteger();
     private final AtomicLong numeroHilo = new AtomicLong();
@@ -91,9 +95,12 @@ public class DifusorDirecto implements SmartLifecycle {
     /** Crea el emisor de cada conexión (las pruebas ponen uno que simula un cliente que no lee). */
     java.util.function.LongFunction<SseEmitter> fabricaEmisores = SseEmitter::new;
 
-    /** Un núcleo: la última foto de sus trenes, su secuencia y quién lo escucha. Se usa con su propio cerrojo. */
+    /**
+     * Un núcleo (o todos, con {@code nucleo} nulo): la última foto de sus trenes, su secuencia y quién lo escucha. Se
+     * usa con su propio cerrojo.
+     */
     private static final class Canal {
-        final int nucleo;
+        final Integer nucleo;
         long secuencia;
         Map<String, TrenMapa> trenes = Map.of();
         Instant generado;
@@ -102,8 +109,13 @@ public class DifusorDirecto implements SmartLifecycle {
         byte[] instantanea;
         final Set<Suscriptor> suscriptores = ConcurrentHashMap.newKeySet();
 
-        Canal(int nucleo) {
+        Canal(Integer nucleo) {
             this.nucleo = nucleo;
+        }
+
+        /** Para los registros y los nombres de los hilos. */
+        String nombre() {
+            return nucleo == null ? "todos" : nucleo.toString();
         }
     }
 
@@ -131,7 +143,7 @@ public class DifusorDirecto implements SmartLifecycle {
             if (cola.size() >= config.colaMaxima() || !cola.offer(evento)) {
                 metricas.counter("trainwatch.api.directo.desconectados", "motivo", "lento").increment();
                 log.info("Directo: cliente lento en el núcleo {} ({} eventos esperando); se le desconecta",
-                        canal.nucleo, cola.size());
+                        canal.nombre(), cola.size());
                 cerrar();
             }
         }
@@ -149,7 +161,7 @@ public class DifusorDirecto implements SmartLifecycle {
                 Thread.currentThread().interrupt();
             } catch (IOException | RuntimeException e) {
                 // El cliente se ha ido (o la conexión se ha cerrado por tiempo): no es un error de la aplicación.
-                log.debug("Directo: no se pudo enviar al núcleo {}: {}", canal.nucleo, e.toString());
+                log.debug("Directo: no se pudo enviar al núcleo {}: {}", canal.nombre(), e.toString());
             } finally {
                 cerrar();
                 // Solo este hilo cierra la respuesta: complete() espera al mismo cerrojo que un send() en curso, y si
@@ -202,6 +214,15 @@ public class DifusorDirecto implements SmartLifecycle {
      *                                                        aplicación se está apagando
      */
     public SseEmitter suscribir(int nucleo, String ultimoId) {
+        return suscribir(canales.computeIfAbsent(nucleo, Canal::new), ultimoId);
+    }
+
+    /** Abre una conexión al directo de todos los núcleos a la vez. Lo demás, como {@link #suscribir(int, String)}. */
+    public SseEmitter suscribirTodos(String ultimoId) {
+        return suscribir(todos, ultimoId);
+    }
+
+    private SseEmitter suscribir(Canal canal, String ultimoId) {
         if (apagando) {
             throw Problemas.noDisponible("El directo se está apagando. Vuelve a probar en unos segundos.", 5);
         }
@@ -213,7 +234,6 @@ public class DifusorDirecto implements SmartLifecycle {
         if (ultimoId != null) {
             metricas.counter("trainwatch.api.directo.reconexiones").increment();
         }
-        Canal canal = canales.computeIfAbsent(nucleo, Canal::new);
         SseEmitter emitter;
         Suscriptor s;
         try {
@@ -233,7 +253,8 @@ public class DifusorDirecto implements SmartLifecycle {
         }
         // Después de la instantánea: así un latido no puede llegar antes que ella.
         suscriptores.add(s);
-        Thread.ofVirtual().name("sse-" + nucleo + "-" + numeroHilo.incrementAndGet()).start(s::enviarHastaCerrar);
+        Thread.ofVirtual().name("sse-" + canal.nombre() + "-" + numeroHilo.incrementAndGet())
+                .start(s::enviarHastaCerrar);
         return emitter;
     }
 
@@ -271,52 +292,61 @@ public class DifusorDirecto implements SmartLifecycle {
      */
     void publicar(List<Tren> trenes, Instant ahora, Instant ultimoDato) {
         Map<Integer, Map<String, TrenMapa>> porNucleo = new HashMap<>();
+        Map<String, TrenMapa> deTodos = new TreeMap<>();
         for (Tren t : trenes) {
             if (t.nucleo() != null) {
-                porNucleo.computeIfAbsent(t.nucleo(), k -> new TreeMap<>()).put(t.id(), VistaTrenes.mapa(t));
+                TrenMapa tren = VistaTrenes.mapa(t);
+                porNucleo.computeIfAbsent(t.nucleo(), k -> new TreeMap<>()).put(t.id(), tren);
+                deTodos.put(t.id(), tren);
             }
         }
         Set<Integer> nucleos = new HashSet<>(canales.keySet());
         nucleos.addAll(porNucleo.keySet());
         for (Integer n : nucleos) {
-            Canal canal = canales.computeIfAbsent(n, Canal::new);
-            Map<String, TrenMapa> nuevo = porNucleo.getOrDefault(n, Map.of());
-            synchronized (canal) {
-                List<TrenMapa> altas = new ArrayList<>();
-                List<TrenMapa> cambios = new ArrayList<>();
-                List<String> bajas = new ArrayList<>();
-                for (TrenMapa t : nuevo.values()) {
-                    TrenMapa antes = canal.trenes.get(t.id());
-                    if (antes == null) {
-                        altas.add(t);
-                    } else if (!antes.equals(t)) {
-                        cambios.add(t);
-                    }
+            difundir(canales.computeIfAbsent(n, Canal::new), porNucleo.getOrDefault(n, Map.of()), ahora, ultimoDato);
+        }
+        // Todos los núcleos: los mismos objetos de cada tren en otra foto. Sus cambios se serializan una vez más (un
+        // evento por ciclo para todos sus clientes), no una por cliente.
+        difundir(todos, deTodos, ahora, ultimoDato);
+    }
+
+    /** Compara la foto nueva de un canal con la anterior, la guarda y encola los cambios a sus suscriptores. */
+    private void difundir(Canal canal, Map<String, TrenMapa> nuevo, Instant ahora, Instant ultimoDato) {
+        synchronized (canal) {
+            List<TrenMapa> altas = new ArrayList<>();
+            List<TrenMapa> cambios = new ArrayList<>();
+            List<String> bajas = new ArrayList<>();
+            for (TrenMapa t : nuevo.values()) {
+                TrenMapa antes = canal.trenes.get(t.id());
+                if (antes == null) {
+                    altas.add(t);
+                } else if (!antes.equals(t)) {
+                    cambios.add(t);
                 }
-                for (String id : canal.trenes.keySet()) {
-                    if (!nuevo.containsKey(id)) {
-                        bajas.add(id);
-                    }
+            }
+            for (String id : canal.trenes.keySet()) {
+                if (!nuevo.containsKey(id)) {
+                    bajas.add(id);
                 }
-                canal.trenes = nuevo;
-                canal.generado = ahora;
-                boolean datoNuevo = !Objects.equals(canal.ultimoDato, ultimoDato);
-                canal.ultimoDato = ultimoDato;
-                if (altas.isEmpty() && cambios.isEmpty() && bajas.isEmpty() && !datoNuevo) {
-                    continue; // nada que contar: ni secuencia nueva ni evento
-                }
-                canal.secuencia++;
-                canal.instantanea = null;
-                if (canal.suscriptores.isEmpty()) {
-                    continue;
-                }
-                Cambios c = new Cambios(canal.secuencia, n, VistaTrenes.hora(ahora), VistaTrenes.hora(ultimoDato), altas,
-                        cambios, bajas);
-                Set<DataWithMediaType> evento = SseEmitter.event().id(String.valueOf(canal.secuencia)).name("cambios")
-                        .data(json.writeValueAsBytes(c), JSON).build();
-                for (Suscriptor s : canal.suscriptores) {
-                    s.encolar(evento);
-                }
+            }
+            canal.trenes = nuevo;
+            canal.generado = ahora;
+            boolean datoNuevo = !Objects.equals(canal.ultimoDato, ultimoDato);
+            canal.ultimoDato = ultimoDato;
+            if (altas.isEmpty() && cambios.isEmpty() && bajas.isEmpty() && !datoNuevo) {
+                return; // nada que contar: ni secuencia nueva ni evento
+            }
+            canal.secuencia++;
+            canal.instantanea = null;
+            if (canal.suscriptores.isEmpty()) {
+                return;
+            }
+            Cambios c = new Cambios(canal.secuencia, canal.nucleo, VistaTrenes.hora(ahora), VistaTrenes.hora(ultimoDato),
+                    altas, cambios, bajas);
+            Set<DataWithMediaType> evento = SseEmitter.event().id(String.valueOf(canal.secuencia)).name("cambios")
+                    .data(json.writeValueAsBytes(c), JSON).build();
+            for (Suscriptor s : canal.suscriptores) {
+                s.encolar(evento);
             }
         }
     }

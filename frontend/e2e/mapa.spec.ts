@@ -141,7 +141,7 @@ test('la vista de lista funciona entera con el teclado', async ({ page }) => {
   expect(contorno).toBe('solid');
 });
 
-test('filtra por línea y destaca la RL4 en Rodalies', async ({ page }) => {
+test('filtra por línea, sin ninguna línea destacada', async ({ page }) => {
   await preparar(page);
   await page.goto('/?vista=lista');
   const lista = page.getByRole('region', { name: /^Trenes de Rodalies/ });
@@ -149,9 +149,11 @@ test('filtra por línea y destaca la RL4 en Rodalies', async ({ page }) => {
   await page.getByRole('combobox', { name: 'Línea' }).selectOption('R15');
   await expect(lista.getByRole('button')).toHaveCount(2);
   await expect(page).toHaveURL(/linea=R15/);
-  await page.getByRole('button', { name: /RL4 Lleida/ }).click();
-  await expect(page.getByRole('combobox', { name: 'Línea' })).toHaveValue('RL4');
-  await expect(lista).toContainText('No hay trenes');
+  // La RL4 ya no se destaca (Iván, 21-11): ni botón ni estrella.
+  await expect(page.getByRole('button', { name: /RL4/ })).toHaveCount(0);
+  await expect(page.getByText('★')).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Línea' }).selectOption('');
+  await expect(lista.getByRole('button')).toHaveCount(3);
 });
 
 test('si el directo está lleno (503), vuelve a intentarlo solo y se recupera', async ({ page, request }) => {
@@ -160,4 +162,106 @@ test('si el directo está lleno (503), vuelve a intentarlo solo y se recupera', 
   await page.goto('/');
   await expect(page.getByText(/Sin conexión con el directo: se reintenta/)).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText(/En directo · dato/)).toBeVisible({ timeout: 10_000 });
+});
+
+/** Ciudades para comprobar el encuadre: [lon, lat]. */
+const LUGARES = {
+  Barcelona: [2.17, 41.39],
+  Lleida: [0.63, 41.62],
+  Girona: [2.82, 41.98],
+  Zaragoza: [-0.88, 41.65],
+  Madrid: [-3.7, 40.42],
+  Sevilla: [-5.98, 37.39],
+  Bilbao: [-2.93, 43.26],
+  Valencia: [-0.38, 39.47],
+} as const satisfies Record<string, [number, number]>;
+type Lugar = keyof typeof LUGARES;
+
+/**
+ * Qué lugares se ven en el mapa, sin contar lo que tapa el panel: en pantallas anchas flota sobre la izquierda del
+ * mapa; en el móvil va encima, fuera del lienzo. Espera a que el mapa deje de moverse.
+ */
+async function lugaresVisibles(page: Page): Promise<Lugar[]> {
+  await page.waitForFunction(() => {
+    const m = (window as unknown as { __twMapa?: { isMoving(): boolean; loaded(): boolean } }).__twMapa;
+    return m && !m.isMoving();
+  });
+  return page.evaluate((lugares) => {
+    const mapa = (window as unknown as { __twMapa: { project(c: [number, number]): { x: number; y: number }; getCanvas(): HTMLCanvasElement } }).__twMapa;
+    const lienzo = mapa.getCanvas().getBoundingClientRect();
+    const panel = document.querySelector('.panel')!.getBoundingClientRect();
+    // El panel tapa el mapa solo si está encima del lienzo (en el móvil va antes, fuera de él).
+    const tapa = panel.bottom > lienzo.top + 1 ? panel.right - lienzo.left : 0;
+    return Object.entries(lugares)
+      .filter(([, c]) => {
+        const p = mapa.project(c as [number, number]);
+        return p.x >= tapa && p.x <= lienzo.width && p.y >= 0 && p.y <= lienzo.height;
+      })
+      .map(([nombre]) => nombre);
+  }, LUGARES) as Promise<Lugar[]>;
+}
+
+test('al abrir, el mapa encuadra Rodalies (Cataluña, sin media península) y al cambiar de núcleo, el nuevo', async ({
+  page,
+}) => {
+  await preparar(page);
+  await page.goto('/');
+  await expect(page.locator('.mapa[data-listo="si"]')).toBeVisible({ timeout: 15_000 });
+  // Fallo de la fase 5 (21-11): con los límites de todas las estaciones de Rodalies (de Aragón a Francia), el mapa
+  // abría con Zaragoza y, en el móvil, Madrid a la vista, y los trenes apiñados en una esquina.
+  const rodalies = await lugaresVisibles(page);
+  expect(rodalies).toEqual(expect.arrayContaining(['Barcelona', 'Lleida', 'Girona']));
+  expect(rodalies).not.toContain('Zaragoza');
+  expect(rodalies).not.toContain('Madrid');
+
+  await page.getByRole('combobox', { name: 'Núcleo' }).selectOption({ label: 'Madrid' });
+  await expect(page).toHaveURL(/nucleo=10/);
+  await expect.poll(() => lugaresVisibles(page)).toEqual(['Madrid']);
+});
+
+test('tras abrir y cerrar la ficha de un tren, cambiar de núcleo encuadra bien el nuevo', async ({ page }) => {
+  await preparar(page);
+  await page.goto('/?vista=lista');
+  await expect(page.locator('.mapa[data-listo="si"]')).toBeAttached({ timeout: 15_000 });
+  const lista = page.getByRole('region', { name: /^Trenes de Rodalies/ });
+  await lista.getByRole('button').nth(1).click();
+  await expect(page.getByRole('complementary', { name: 'R15 hacia Reus' })).toBeVisible();
+  // El mapa (oculto tras la lista) se ha acercado al tren con el margen de la ficha: MapLibre lo guarda.
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Mapa' }).click();
+  // Revisión de la fase 5b: fitBounds sumaba su margen al guardado y Madrid no cabía; el mapa no se movía.
+  await page.getByRole('combobox', { name: 'Núcleo' }).selectOption({ label: 'Madrid' });
+  await expect.poll(() => lugaresVisibles(page)).toEqual(['Madrid']);
+});
+
+test('«Toda España» enseña los trenes de todos los núcleos con la península encuadrada', async ({ page }) => {
+  const vigilancia = await preparar(page);
+  await page.goto('/?nucleo=todos');
+  await expect(page.locator('.mapa[data-listo="si"]')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('combobox', { name: 'Núcleo' })).toHaveValue('todos');
+  await expect(page.getByRole('combobox', { name: 'Línea' })).toBeDisabled();
+  // Los 3 de Rodalies y los de Madrid, Sevilla y Bilbao, en el mapa.
+  await expect(page.locator('canvas.maplibregl-canvas')).toHaveAttribute('aria-label', /toda España: 5 trenes en marcha y 1 en origen/);
+  await expect.poll(() => posicion(page, '6099C3')).not.toBeNull();
+  // La península entera a la vista (sin lo que tapa el panel).
+  await expect
+    .poll(() => lugaresVisibles(page))
+    .toEqual(expect.arrayContaining(['Barcelona', 'Madrid', 'Sevilla', 'Bilbao', 'Valencia', 'Lleida']));
+  // El tren de Rodalies se sigue moviendo con la interpolación.
+  const antes = (await posicion(page, TREN))![0];
+  await page.waitForTimeout(1200);
+  expect((await posicion(page, TREN))![0]).toBeLessThan(antes);
+
+  // La lista, con el núcleo de cada tren.
+  await page.getByRole('button', { name: 'Lista' }).click();
+  const lista = page.getByRole('region', { name: 'Trenes de toda España' });
+  await expect(lista.getByRole('button')).toHaveCount(6);
+  // Agrupada por núcleo, con un encabezado por grupo.
+  await expect(lista.getByRole('heading', { level: 3 })).toHaveText([
+    'Bilbao (1 tren)',
+    'Madrid (1 tren)',
+    'Rodalies de Catalunya (3 trenes)',
+    'Sevilla (1 tren)',
+  ]);
+  expect(vigilancia.errores).toEqual([]);
 });

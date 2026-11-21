@@ -117,3 +117,39 @@ React es **declarativo** (describes qué se ve y React cambia el DOM); MapLibre 
 - **Las estadísticas** (fase 6).
 - **Los trenes del mapa no se recorren con el teclado** (sección 7: la lista es la alternativa).
 - **Las fichas de las estaciones** se abren desde las paradas de un tren, los próximos trenes o las estaciones de la línea elegida en el filtro; no hay un buscador de estaciones.
+
+## 10. Fase 5b: el encuadre y «Toda España» (21-11)
+
+Iván vio el mapa en producción y pidió dos cosas: que Rodalies no abriera con media península a la vista y poder ver todos los núcleos a la vez. Ficheros: `backend/.../api/ExtensionDelServicio.java`, `DifusorDirecto.java`, `DirectoSseController.java`; `frontend/src/mapa/encuadre.ts`, `Mapa.tsx`, `App.tsx`. ADR [0023](../adr/0023-encuadre-por-el-servicio-de-cada-nucleo.md) y [0024](../adr/0024-directo-de-todos-los-nucleos.md).
+
+### El fallo del encuadre: síntoma y causa
+
+> «El mapa de Rodalies abría casi con toda la península. Lo primero que sospeché fue el `fitBounds`: que se lanzara antes de cargar el mapa o con el contenedor sin tamaño. Instrumenté el mapa contra la API de producción y no: el `fitBounds` se aplicaba bien. El problema eran los datos: los límites eran el rectángulo de **todas** las estaciones del núcleo, y Rodalies tiene la R15 que llega a Aragón, la R16 a Ulldecona y la R11 a Francia, con muy pocos trenes. El rectángulo iba de Zaragoza a Cerbère. Lo arreglé en el backend: cada estación pesa sus horas de paso y, en cada eje, recorto por cada lado lo que suma menos del 0,5 %. Queda el rectángulo donde pasa el 99 % del servicio.»
+
+- **Por qué en el backend y no en la web:** el síntoma estaba en la web, pero la causa era el dato. Ajustar el zoom en la web lo habría tapado en una pantalla y no en otra, y Bilbao (la C4 hasta León) tenía lo mismo.
+- **Por qué pesar por horas de paso:** con percentiles sobre estaciones sin peso, una estación con dos trenes al día pesa lo mismo que Sants, y la R15 tiene nueve estaciones en Aragón: no se irían.
+- **Por qué el 0,5 % y no el 1 %:** con el 1 %, Lleida-Pirineus quedaba fuera por 0,02°, y es de donde salen las líneas RL. Lo comprobé con los datos reales.
+- **Por qué cada eje por separado:** es un rectángulo; recortar en dos dimensiones a la vez (por ejemplo, una elipse o un casco convexo) no cambia lo que hace `fitBounds`, que solo entiende rectángulos.
+- **La prueba que falla sin el arreglo:** `ExtensionDelServicioTests` con las horas de paso reales de Rodalies y Bilbao (un CSV sacado del horario): es la que protege la causa. El e2e `al abrir, el mapa encuadra Rodalies` mira qué ciudades se ven **sin contar lo que tapa el panel** (con los límites de antes, Zaragoza se veía) y `Mapa.test.tsx` prueba el efecto de encuadre con un MapLibre simulado.
+- **En la web:** el primer encuadre va sin animación (aparece ya encuadrado), y si el contenedor no tiene tamaño todavía, se espera al primer `resize` de MapLibre. El cálculo es una función pura (`movimientoEncuadre`) para probarla sin WebGL.
+
+**Preguntas típicas:** «¿Cómo depuraste un fallo que solo se veía en producción?» Reproduciéndolo en local contra la API de producción (admite CORS desde `localhost:5173`) y midiendo en vez de suponer: centro y zoom del mapa tras el `fitBounds`, comparados con los que salen de los límites. «¿Y si Renfe añade servicio en una línea larga?» El rectángulo crece solo, porque sale del horario de cada día.
+
+### «Toda España»: un canal más
+
+> «El directo es un canal por núcleo con su foto, su secuencia y sus suscriptores. Para toda España añadí un canal más con la foto de todos los trenes. En cada ciclo de la ingesta calculo la de cada núcleo y la de todos con los mismos objetos, y el canal de todos pasa por el mismo método que los demás: calcula los cambios y los serializa una vez por ciclo. Las conexiones usan la misma cola, el mismo hilo virtual y el mismo máximo de conexiones, así que el arreglo del cliente lento de la fase 4 vale igual.»
+
+- **`nucleo=todos` y no `/api/directo` sin parámetro:** un cliente que se olvide del parámetro sigue recibiendo un 400, no el flujo más pesado.
+- **Por qué no 15 conexiones desde la web:** 15 veces el máximo de conexiones por persona y el navegador solo abre 6 conexiones HTTP/1.1 por dominio.
+- **El filtro de línea, desactivado:** los nombres se repiten entre núcleos (hay una C1 en cinco núcleos). Agruparlo exigía llevar el núcleo en el filtro, en la URL y en la consulta del recorrido; para ver una línea basta con elegir su núcleo. La nota lo explica y el selector la enlaza con `aria-describedby`.
+- **La lista se agrupa por núcleo** con un encabezado por grupo: con ~330 trenes, el lector de pantalla salta de núcleo en núcleo en vez de oír el nombre del núcleo en cada tren.
+- **La RL4 ya no se destaca:** lo decidió Iván a mitad de la fase. Si preguntan por qué estaba: era una preferencia personal del plan, no una necesidad del producto.
+
+### Lo que encontró la revisión
+
+> «Tras abrir la ficha de un tren y cambiar de núcleo, el mapa no se movía. MapLibre 6 guarda el margen del último `easeTo` y `fitBounds` le suma el suyo: 370 + 360 + 410 + 30 px no caben en 1280. Se arregla con `absolutePadding`, que hace que el margen sustituya al guardado; en MapLibre 7 será lo normal.»
+
+Es un buen ejemplo de **estado oculto en una librería imperativa**: React no sabe nada de ese margen, y por eso la prueba del efecto usa un MapLibre simulado que comprueba qué se le pide, y el e2e repite el recorrido del usuario.
+**Cifras (21-11, feeds reales, 327 trenes):** instantánea de 140 KB (un núcleo: 31 KB) y cambios de 50-83 KB cada ~7 s. 100 clientes de «Toda España» durante 60 s: 0 errores, 0 huecos, latencia p99 50 ms, heap 57-75 MB, CPU < 7 %, ~14 KB/s por cliente. En el navegador, sin tareas largas y el mismo ritmo de fotogramas que con Rodalies.
+
+**Preguntas típicas:** «¿Qué se rompe primero con muchos usuarios de toda España?» La salida de red: 100 clientes son ~1,4 MB/s. Lo primero sería un máximo aparte para `todos` o mandar solo los campos que cambian. «¿No duplicas memoria con dos fotos?» Son referencias a los mismos `TrenMapa`; lo que se duplica es un mapa de ~330 entradas.

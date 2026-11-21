@@ -29,7 +29,6 @@ El mapa está en producción desde el 21-11 en `trainwatch.ivanchesa.com`. Iván
      - el filtro de línea se desactiva o se agrupa por núcleo (elige y explícalo);
      - la lista enseña el núcleo de cada tren;
      - el rendimiento sigue fluido con todos los trenes y la interpolación;
-     - la RL4 sigue destacada.
    - Actualiza el contrato de `docs/api/` y OpenAPI.
 
 ## Cómo trabajar
