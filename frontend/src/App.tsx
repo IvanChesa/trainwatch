@@ -13,6 +13,7 @@ import { ListaTrenes } from './componentes/ListaTrenes';
 import { useAhora, useReducirMovimiento } from './componentes/ganchos';
 import { tituloTren } from './componentes/textos';
 import { useDirecto } from './directo/useDirecto';
+import { encuadreDeNucleo } from './mapa/encuadre';
 import { compararLineas, seVeEnElMapa } from './mapa/retraso';
 import './App.css';
 
@@ -241,7 +242,7 @@ export default function App() {
           <SinMapa alFallar={() => setVista('lista')}>
             <Suspense fallback={<p className="nota mapa-cargando">Cargando el mapa…</p>}>
             <Mapa
-              nucleo={nucleo ?? null}
+              encuadre={nucleo ? encuadreDeNucleo(nucleo) : null}
               trenes={enMapa}
               recibido={directo.recibido}
               linea={datosLinea.tipo === 'lista' ? datosLinea.datos : null}

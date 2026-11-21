@@ -3,8 +3,9 @@ import { Map as MapaLibre, NavigationControl, setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 // El worker de MapLibre 6 es un módulo aparte: Vite lo publica como un fichero más del mismo origen (CSP `worker-src`).
 import urlWorker from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
-import type { Linea, Nucleo, TrenMapa } from '../api/tipos';
+import type { Linea, TrenMapa } from '../api/tipos';
 import { CapaLinea } from './capaLinea';
+import { movimientoEncuadre, type Encuadre } from './encuadre';
 import { aligerarEstilo } from './estiloBase';
 import { CAPA_DESTACADA, CapaTrenes2D, type CapaDeTrenes } from './capaTrenes';
 
@@ -38,7 +39,8 @@ function hojaMovil(contenedor: HTMLElement): number {
 }
 
 export interface PropsMapa {
-  nucleo: Nucleo | null;
+  /** Lo que hay que encuadrar (un núcleo o toda España); `null` mientras no se sabe. */
+  encuadre: Encuadre | null;
   trenes: readonly TrenMapa[];
   /** Cuándo llegó el último evento del directo: solo entonces cuenta para el ritmo del movimiento (no al filtrar). */
   recibido: number | null;
@@ -62,6 +64,8 @@ export default function Mapa(props: PropsMapa) {
   const mapa = useRef<MapaLibre | null>(null);
   const capaTrenes = useRef<CapaDeTrenes | null>(null);
   const capaLinea = useRef<CapaLinea | null>(null);
+  /** Si el mapa ya se ha encuadrado una vez (el primer encuadre va sin animación). */
+  const encuadrado = useRef(false);
   const [listo, setListo] = useState(false);
   const [sinFondo, setSinFondo] = useState(false);
   const ultimas = useRef(props);
@@ -70,11 +74,12 @@ export default function Mapa(props: PropsMapa) {
   // Crear el mapa una vez (y destruirlo al desmontar).
   useEffect(() => {
     if (!contenedor.current) return;
-    const { nucleo, reducirMovimiento } = ultimas.current;
+    const { encuadre, reducirMovimiento } = ultimas.current;
     const m = new MapaLibre({
       container: contenedor.current,
-      center: nucleo?.centro ? [nucleo.centro.lon, nucleo.centro.lat] : [2.17, 41.39],
-      zoom: nucleo?.zoom ?? 8,
+      // Un primer sitio cualquiera: el efecto del encuadre lo corrige enseguida, sin animación.
+      center: encuadre?.centro ? [encuadre.centro.lon, encuadre.centro.lat] : [2.17, 41.39],
+      zoom: encuadre?.zoom ?? 8,
       attributionControl: false,
       locale: TEXTOS,
       dragRotate: false,
@@ -118,35 +123,38 @@ export default function Mapa(props: PropsMapa) {
       capaLinea.current = null;
       m.remove();
       mapa.current = null;
+      encuadrado.current = false;
       setListo(false);
     };
   }, []);
 
-  // Encuadrar el núcleo cuando cambia.
-  const { nucleo, reducirMovimiento } = props;
+  // Encuadrar el núcleo (o toda España) cuando cambia: el primero, sin animación; los demás, con un vuelo corto.
+  const { encuadre, reducirMovimiento } = props;
   useEffect(() => {
     const m = mapa.current;
-    if (!m || !nucleo) return;
-    if (nucleo.limites) {
-      const { lonMin, latMin, lonMax, latMax } = nucleo.limites;
-      m.fitBounds(
-        [
-          [lonMin, latMin],
-          [lonMax, latMax],
-        ],
-        // En pantallas anchas, el panel de control tapa la izquierda del mapa.
-        {
-          padding: m.getContainer().clientWidth >= 768 ? { top: 30, bottom: 50, left: 370, right: 30 } : 24,
-          animate: !reducirMovimiento,
-          duration: 800,
-        },
-      );
-    } else if (nucleo.centro) {
-      m.jumpTo({ center: [nucleo.centro.lon, nucleo.centro.lat], zoom: nucleo.zoom ?? 9 });
+    if (!m || !encuadre) return;
+    const encuadrar = () => {
+      const movimiento = movimientoEncuadre(encuadre, m.getContainer().clientWidth, {
+        reducirMovimiento: ultimas.current.reducirMovimiento,
+        primero: !encuadrado.current,
+      });
+      encuadrado.current = true;
+      if (movimiento?.tipo === 'limites') m.fitBounds(movimiento.limites, movimiento.opciones);
+      else if (movimiento?.tipo === 'centro') m.jumpTo({ center: movimiento.centro, zoom: movimiento.zoom });
+    };
+    // Con el contenedor sin tamaño todavía, MapLibre no sabría calcular el zoom: se espera a que lo tenga.
+    const { clientWidth, clientHeight } = m.getContainer();
+    if (clientWidth > 0 && clientHeight > 0) {
+      encuadrar();
+      return;
     }
-    // Solo al cambiar de núcleo, no si cambia el movimiento reducido.
+    m.once('resize', encuadrar);
+    return () => {
+      m.off('resize', encuadrar);
+    };
+    // Solo al cambiar lo que hay que encuadrar, no al refrescar los núcleos ni si cambia el movimiento reducido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nucleo?.id]);
+  }, [encuadre?.clave]);
 
   const ultimoRecibido = useRef<number | null>(null);
   useEffect(() => {

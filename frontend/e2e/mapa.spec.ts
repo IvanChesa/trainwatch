@@ -161,3 +161,58 @@ test('si el directo está lleno (503), vuelve a intentarlo solo y se recupera', 
   await expect(page.getByText(/Sin conexión con el directo: se reintenta/)).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText(/En directo · dato/)).toBeVisible({ timeout: 10_000 });
 });
+
+/** Ciudades para comprobar el encuadre: [lon, lat]. */
+const LUGARES = {
+  Barcelona: [2.17, 41.39],
+  Lleida: [0.63, 41.62],
+  Girona: [2.82, 41.98],
+  Zaragoza: [-0.88, 41.65],
+  Madrid: [-3.7, 40.42],
+  Sevilla: [-5.98, 37.39],
+  Bilbao: [-2.93, 43.26],
+  Valencia: [-0.38, 39.47],
+} as const satisfies Record<string, [number, number]>;
+type Lugar = keyof typeof LUGARES;
+
+/**
+ * Qué lugares se ven en el mapa, sin contar lo que tapa el panel: en pantallas anchas flota sobre la izquierda del
+ * mapa; en el móvil va encima, fuera del lienzo. Espera a que el mapa deje de moverse.
+ */
+async function lugaresVisibles(page: Page): Promise<Lugar[]> {
+  await page.waitForFunction(() => {
+    const m = (window as unknown as { __twMapa?: { isMoving(): boolean; loaded(): boolean } }).__twMapa;
+    return m && !m.isMoving();
+  });
+  return page.evaluate((lugares) => {
+    const mapa = (window as unknown as { __twMapa: { project(c: [number, number]): { x: number; y: number }; getCanvas(): HTMLCanvasElement } }).__twMapa;
+    const lienzo = mapa.getCanvas().getBoundingClientRect();
+    const panel = document.querySelector('.panel')!.getBoundingClientRect();
+    // El panel tapa el mapa solo si está encima del lienzo (en el móvil va antes, fuera de él).
+    const tapa = panel.bottom > lienzo.top + 1 ? panel.right - lienzo.left : 0;
+    return Object.entries(lugares)
+      .filter(([, c]) => {
+        const p = mapa.project(c as [number, number]);
+        return p.x >= tapa && p.x <= lienzo.width && p.y >= 0 && p.y <= lienzo.height;
+      })
+      .map(([nombre]) => nombre);
+  }, LUGARES) as Promise<Lugar[]>;
+}
+
+test('al abrir, el mapa encuadra Rodalies (Cataluña, sin media península) y al cambiar de núcleo, el nuevo', async ({
+  page,
+}) => {
+  await preparar(page);
+  await page.goto('/');
+  await expect(page.locator('.mapa[data-listo="si"]')).toBeVisible({ timeout: 15_000 });
+  // Fallo de la fase 5 (21-11): con los límites de todas las estaciones de Rodalies (de Aragón a Francia), el mapa
+  // abría con Zaragoza y, en el móvil, Madrid a la vista, y los trenes apiñados en una esquina.
+  const rodalies = await lugaresVisibles(page);
+  expect(rodalies).toEqual(expect.arrayContaining(['Barcelona', 'Lleida', 'Girona']));
+  expect(rodalies).not.toContain('Zaragoza');
+  expect(rodalies).not.toContain('Madrid');
+
+  await page.getByRole('combobox', { name: 'Núcleo' }).selectOption({ label: 'Madrid' });
+  await expect(page).toHaveURL(/nucleo=10/);
+  await expect.poll(() => lugaresVisibles(page)).toEqual(['Madrid']);
+});

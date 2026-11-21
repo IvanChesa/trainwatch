@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -82,24 +83,33 @@ public class ConsultasApi {
 
     // ---------------------------------------------------------------- núcleos
 
-    /** Por núcleo, el rectángulo de sus estaciones de tren (sin autobuses). Recorre las horas de paso: se guarda. */
+    /**
+     * Por núcleo, el rectángulo donde está su servicio: el de sus estaciones de tren (sin autobuses), sin las más
+     * apartadas que casi no tienen trenes ({@link ExtensionDelServicio}, ADR 0023). Recorre las horas de paso: se
+     * guarda.
+     */
     public List<Extension> extensiones() {
         alDia();
         List<Extension> e = extensiones;
         if (e == null) {
-            e = jdbc.sql("""
-                    WITH paradas AS (
-                        SELECT DISTINCT r.nucleo, st.stop_id
+            Map<Integer, List<ExtensionDelServicio.Parada>> porNucleo = new TreeMap<>();
+            jdbc.sql("""
+                    WITH pasos AS (
+                        SELECT r.nucleo, st.stop_id, count(*) AS pasos
                         FROM horario.routes r
                         JOIN horario.trips t ON t.route_id = r.route_id
                         JOIN horario.stop_times st ON st.trip_id = t.trip_id
-                        WHERE NOT r.es_autobus AND r.nucleo IS NOT NULL)
-                    SELECT p.nucleo, min(s.stop_lon), min(s.stop_lat), max(s.stop_lon), max(s.stop_lat)
-                    FROM paradas p JOIN horario.stops s ON s.stop_id = p.stop_id
-                    GROUP BY p.nucleo ORDER BY p.nucleo""")
-                    .query((rs, n) -> new Extension(rs.getInt(1), rs.getDouble(2), rs.getDouble(3), rs.getDouble(4),
-                            rs.getDouble(5)))
-                    .list();
+                        WHERE NOT r.es_autobus AND r.nucleo IS NOT NULL
+                        GROUP BY r.nucleo, st.stop_id)
+                    SELECT p.nucleo, s.stop_lon, s.stop_lat, p.pasos
+                    FROM pasos p JOIN horario.stops s ON s.stop_id = p.stop_id""")
+                    .query(rs -> {
+                        porNucleo.computeIfAbsent(rs.getInt(1), k -> new ArrayList<>()).add(
+                                new ExtensionDelServicio.Parada(rs.getDouble(2), rs.getDouble(3), rs.getLong(4)));
+                    });
+            List<Extension> nuevas = new ArrayList<>();
+            porNucleo.forEach((nucleo, paradas) -> nuevas.add(ExtensionDelServicio.de(nucleo, paradas)));
+            e = List.copyOf(nuevas);
             extensiones = e;
         }
         return e;

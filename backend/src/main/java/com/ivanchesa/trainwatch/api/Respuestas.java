@@ -25,9 +25,9 @@ public final class Respuestas {
     public record Nucleo(
             @Schema(description = "Código del núcleo: las dos cifras con que empiezan sus líneas y viajes", example = "51") int id,
             @Schema(example = "Rodalies de Catalunya") String nombre,
-            @Schema(description = "Centro del rectángulo que contiene sus estaciones; null si el horario no tiene ninguna") Punto centro,
-            @Schema(description = "Zoom de MapLibre para ver todas sus estaciones en un mapa de unos 800 × 600 px", example = "7.6") Double zoom,
-            @Schema(description = "Rectángulo que contiene sus estaciones") Limites limites,
+            @Schema(description = "Centro de «limites»; null si el horario no tiene ninguna estación del núcleo") Punto centro,
+            @Schema(description = "Zoom de MapLibre para ver «limites» en un mapa de unos 800 × 600 px", example = "7.6") Double zoom,
+            @Schema(description = "Rectángulo donde está el servicio del núcleo, para encuadrar el mapa: el de sus estaciones sin las más apartadas que casi no tienen trenes (en cada eje, se quita por cada lado el 0,5 % de las horas de paso del horario); null si el horario no tiene ninguna") Limites limites,
             @Schema(description = "EN_DIRECTO, SIN_DATOS_EN_DIRECTO (el horario da trenes en marcha y el feed ninguno) o SIN_SERVICIO (el horario no da ninguno ahora)", example = "EN_DIRECTO") String estado,
             @Schema(description = "El estado para enseñarlo", example = "con directo") String estadoTexto,
             @Schema(description = "Trenes del núcleo en el feed, en cualquier estado salvo cancelado", example = "111") int trenesEnDirecto,
