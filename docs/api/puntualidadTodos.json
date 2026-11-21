@@ -1,0 +1,138 @@
+{
+  "publicacion": {
+    "publicado": true,
+    "recogiendoDesde": "2026-11-21",
+    "cifrasDesde": "2026-01-01",
+    "texto": "Datos recogidos desde el 21-11-2026."
+  },
+  "periodo": {
+    "desde": "2026-11-21",
+    "hasta": "2026-11-21",
+    "diasConDatos": 1
+  },
+  "muestra": {
+    "viajes": 306,
+    "paradas": 1889,
+    "paradasInferidasQuitadas": 120,
+    "paradasSinHoraQuitadas": 0,
+    "cancelados": 4
+  },
+  "cobertura": {
+    "viajesProgramados": 3173,
+    "viajesVistos": 307,
+    "porcentaje": 9.7,
+    "paradasProgramadas": 48970,
+    "paradasVistas": 2009,
+    "porcentajeParadas": 4.1
+  },
+  "nucleos": [
+    {
+      "puesto": 1,
+      "nucleo": 51,
+      "nombre": "Rodalies de Catalunya",
+      "cifras": {
+        "viajes": 84,
+        "paradas": 472,
+        "suficiente": true,
+        "mediaMinutos": 6.3,
+        "medianaMinutos": 3,
+        "p90Minutos": 20,
+        "porcentajes": {
+          "menosDe3": 39.8,
+          "de3a5": 25.6,
+          "de6a15": 22.0,
+          "de16OMas": 12.5
+        }
+      },
+      "cancelados": 4,
+      "cobertura": {
+        "viajesProgramados": 694,
+        "viajesVistos": 85,
+        "porcentaje": 12.2,
+        "paradasProgramadas": 11402,
+        "paradasVistas": 505,
+        "porcentajeParadas": 4.4
+      }
+    },
+    {
+      "puesto": 2,
+      "nucleo": 20,
+      "nombre": "Asturias",
+      "cifras": {
+        "viajes": 31,
+        "paradas": 161,
+        "suficiente": true,
+        "mediaMinutos": 3.7,
+        "medianaMinutos": 3,
+        "p90Minutos": 7,
+        "porcentajes": {
+          "menosDe3": 37.9,
+          "de3a5": 41.0,
+          "de6a15": 21.1,
+          "de16OMas": 0.0
+        }
+      },
+      "cancelados": 0,
+      "cobertura": {
+        "viajesProgramados": 334,
+        "viajesVistos": 31,
+        "porcentaje": 9.3,
+        "paradasProgramadas": 4924,
+        "paradasVistas": 181,
+        "porcentajeParadas": 3.7
+      }
+    },
+    {
+      "puesto": 3,
+      "nucleo": 10,
+      "nombre": "Madrid",
+      "cifras": {
+        "viajes": 89,
+        "paradas": 593,
+        "suficiente": true,
+        "mediaMinutos": 6.7,
+        "medianaMinutos": 4,
+        "p90Minutos": 16,
+        "porcentajes": {
+          "menosDe3": 27.5,
+          "de3a5": 37.8,
+          "de6a15": 24.6,
+          "de16OMas": 10.1
+        }
+      },
+      "cancelados": 0,
+      "cobertura": {
+        "viajesProgramados": 1050,
+        "viajesVistos": 89,
+        "porcentaje": 8.5,
+        "paradasProgramadas": 15880,
+        "paradasVistas": 610,
+        "porcentajeParadas": 3.8
+      }
+    },
+    {
+      "puesto": null,
+      "nucleo": 60,
+      "nombre": "Bilbao",
+      "cifras": {
+        "viajes": 24,
+        "paradas": 197,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      },
+      "cancelados": 0,
+      "cobertura": {
+        "viajesProgramados": 258,
+        "viajesVistos": 24,
+        "porcentaje": 9.3,
+        "paradasProgramadas": 4783,
+        "paradasVistas": 211,
+        "porcentajeParadas": 4.4
+      }
+    }
+  ],
+  "fuente": "Datos: Renfe (CC BY 4.0). Cifras propias de TrainWatch, proyecto no oficial: solo trenes vistos en directo; las paradas inferidas no cuentan."
+}

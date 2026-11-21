@@ -99,6 +99,49 @@ public class ConsultasEstadisticas {
                 .list();
     }
 
+    /** Las filas por día y línea de todos los núcleos (para toda España). */
+    List<LineaDia> lineaDiaTodos(LocalDate desde, LocalDate hasta) {
+        return jdbc.sql("""
+                SELECT fecha_servicio, nucleo, linea, viajes, viajes_con_datos, paradas_con_datos, paradas_inferidas,
+                       paradas_sin_hora, viajes_programados, paradas_programadas, cancelados
+                FROM estad_linea_dia WHERE fecha_servicio BETWEEN :d AND :h""")
+                .param("d", desde).param("h", hasta)
+                .query(ConsultasEstadisticas::lineaDia)
+                .list();
+    }
+
+    /**
+     * Las filas por hora sumadas por núcleo en la base de datos (para toda España: con todas las líneas, en Java serían
+     * decenas de miles de filas). El histograma se suma posición a posición con {@code unnest … WITH ORDINALITY}.
+     */
+    java.util.Map<Integer, Fila> porNucleo(LocalDate desde, LocalDate hasta) {
+        java.util.Map<Integer, Fila> filas = new java.util.TreeMap<>();
+        jdbc.sql("""
+                WITH periodo AS (
+                    SELECT * FROM estad_linea_hora WHERE fecha_servicio BETWEEN :d AND :h),
+                sumas AS (
+                    SELECT nucleo, sum(paradas) AS paradas, sum(suma_minutos) AS suma, sum(menos_de_3) AS a,
+                           sum(de_3_a_5) AS b, sum(de_6_a_15) AS c, sum(de_16_o_mas) AS e, sum(finales) AS finales,
+                           sum(destinos) AS destinos, sum(suma_destinos) AS suma_destinos,
+                           sum(destinos_menos_de_3) AS destinos_a
+                    FROM periodo GROUP BY nucleo),
+                posiciones AS (
+                    SELECT p.nucleo, u.i, sum(u.n) AS n
+                    FROM periodo p, unnest(p.histograma) WITH ORDINALITY AS u(n, i)
+                    GROUP BY p.nucleo, u.i),
+                histogramas AS (
+                    SELECT nucleo, array_agg(n::int ORDER BY i) AS histograma FROM posiciones GROUP BY nucleo)
+                SELECT s.nucleo, s.paradas, s.suma, s.a, s.b, s.c, s.e, h.histograma, s.finales, s.destinos,
+                       s.suma_destinos, s.destinos_a
+                FROM sumas s JOIN histogramas h USING (nucleo)""")
+                .param("d", desde).param("h", hasta)
+                .query((rs, i) -> filas.put(rs.getInt(1), new Fila(0, rs.getInt(2), rs.getLong(3), rs.getInt(4),
+                        rs.getInt(5), rs.getInt(6), rs.getInt(7), histograma(rs, 8), rs.getInt(9), rs.getInt(10),
+                        rs.getLong(11), rs.getInt(12))))
+                .list();
+        return filas;
+    }
+
     /** Las filas de los núcleos dados, para la cobertura. */
     List<LineaDia> lineaDiaDeNucleos(List<Integer> nucleos, LocalDate desde, LocalDate hasta) {
         if (nucleos.isEmpty()) {

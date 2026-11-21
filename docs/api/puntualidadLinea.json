@@ -2,7 +2,6 @@
   "nucleo": 51,
   "nombreNucleo": "Rodalies de Catalunya",
   "linea": "R1",
-  "destacada": false,
   "publicacion": {
     "publicado": true,
     "recogiendoDesde": "2026-11-21",
@@ -15,31 +14,31 @@
     "diasConDatos": 1
   },
   "muestra": {
-    "viajes": 12,
-    "paradas": 35,
+    "viajes": 15,
+    "paradas": 126,
     "paradasInferidasQuitadas": 0,
     "paradasSinHoraQuitadas": 0,
     "cancelados": 3
   },
   "coberturaNucleo": {
     "viajesProgramados": 694,
-    "viajesVistos": 57,
-    "porcentaje": 8.2,
+    "viajesVistos": 85,
+    "porcentaje": 12.2,
     "paradasProgramadas": 11402,
-    "paradasVistas": 131,
-    "porcentajeParadas": 1.1
+    "paradasVistas": 505,
+    "porcentajeParadas": 4.4
   },
   "coberturaLinea": {
     "viajesProgramados": 130,
-    "viajesVistos": 12,
-    "porcentaje": 9.2,
+    "viajesVistos": 15,
+    "porcentaje": 11.5,
     "paradasProgramadas": 2690,
-    "paradasVistas": 35,
-    "porcentajeParadas": 1.3
+    "paradasVistas": 126,
+    "porcentajeParadas": 4.7
   },
   "resumen": {
-    "viajes": 12,
-    "paradas": 35,
+    "viajes": 15,
+    "paradas": 126,
     "suficiente": false,
     "mediaMinutos": null,
     "medianaMinutos": null,
@@ -47,8 +46,8 @@
     "porcentajes": null
   },
   "llegadaDestino": {
-    "viajes": 12,
-    "viajesEnDestino": 3,
+    "viajes": 15,
+    "viajesEnDestino": 6,
     "suficiente": false,
     "mediaMinutos": null,
     "menosDe3": null
@@ -58,7 +57,7 @@
       "hora": 12,
       "cifras": {
         "viajes": 12,
-        "paradas": 33,
+        "paradas": 40,
         "suficiente": false,
         "mediaMinutos": null,
         "medianaMinutos": null,
@@ -69,8 +68,8 @@
     {
       "hora": 13,
       "cifras": {
-        "viajes": 2,
-        "paradas": 2,
+        "viajes": 11,
+        "paradas": 86,
         "suficiente": false,
         "mediaMinutos": null,
         "medianaMinutos": null,
@@ -85,8 +84,8 @@
       "nombre": "sábado",
       "dias": 1,
       "cifras": {
-        "viajes": 12,
-        "paradas": 35,
+        "viajes": 15,
+        "paradas": 126,
         "suficiente": false,
         "mediaMinutos": null,
         "medianaMinutos": null,
@@ -100,8 +99,8 @@
       "lunes": "2026-11-16",
       "dias": 1,
       "cifras": {
-        "viajes": 12,
-        "paradas": 35,
+        "viajes": 15,
+        "paradas": 126,
         "suficiente": false,
         "mediaMinutos": null,
         "medianaMinutos": null,

@@ -13,23 +13,23 @@
     "diasConDatos": 1
   },
   "muestra": {
-    "viajes": 6,
-    "paradas": 6,
-    "paradasInferidasQuitadas": 0,
+    "viajes": 21,
+    "paradas": 21,
+    "paradasInferidasQuitadas": 4,
     "paradasSinHoraQuitadas": 0,
     "cancelados": null
   },
   "coberturaNucleo": {
     "viajesProgramados": 694,
-    "viajesVistos": 57,
-    "porcentaje": 8.2,
+    "viajesVistos": 85,
+    "porcentaje": 12.2,
     "paradasProgramadas": 11402,
-    "paradasVistas": 131,
-    "porcentajeParadas": 1.1
+    "paradasVistas": 505,
+    "porcentajeParadas": 4.4
   },
   "resumen": {
-    "viajes": 6,
-    "paradas": 6,
+    "viajes": 21,
+    "paradas": 21,
     "suficiente": false,
     "mediaMinutos": null,
     "medianaMinutos": null,
@@ -41,8 +41,8 @@
       "nucleo": 51,
       "linea": "R1",
       "cifras": {
-        "viajes": 2,
-        "paradas": 2,
+        "viajes": 6,
+        "paradas": 6,
         "suficiente": false,
         "mediaMinutos": null,
         "medianaMinutos": null,
@@ -52,23 +52,23 @@
     },
     {
       "nucleo": 51,
-      "linea": "R2N",
+      "linea": "R15",
+      "cifras": {
+        "viajes": 0,
+        "paradas": 0,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      }
+    },
+    {
+      "nucleo": 51,
+      "linea": "R16",
       "cifras": {
         "viajes": 1,
         "paradas": 1,
-        "suficiente": false,
-        "mediaMinutos": null,
-        "medianaMinutos": null,
-        "p90Minutos": null,
-        "porcentajes": null
-      }
-    },
-    {
-      "nucleo": 51,
-      "linea": "R2S",
-      "cifras": {
-        "viajes": 2,
-        "paradas": 2,
         "suficiente": false,
         "mediaMinutos": null,
         "medianaMinutos": null,

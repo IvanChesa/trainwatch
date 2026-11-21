@@ -518,7 +518,8 @@ class EstadisticasIntegracionTests {
         assertThat(lineas.get(0).at("/cifras/porcentajes/menosDe3").asDouble()).isEqualTo(100.0);
         assertThat(lineas.get(1).get("linea").asString()).isEqualTo("RL4");
         assertThat(lineas.get(1).get("puesto").asInt()).isEqualTo(2);
-        assertThat(lineas.get(1).get("destacada").asBoolean()).isTrue();
+        // La RL4 es una línea más (Iván, 21-11): no hay «destacada».
+        assertThat(lineas.get(1).has("destacada")).isFalse();
         assertThat(lineas.get(1).at("/cifras/porcentajes/menosDe3").asDouble()).isEqualTo(38.5);
         assertThat(lineas.get(1).get("cancelados").asInt()).isEqualTo(2);
         assertThat(lineas.get(1).at("/cobertura/porcentaje").asDouble()).isEqualTo(71.4);
@@ -530,7 +531,6 @@ class EstadisticasIntegracionTests {
     void unaLineaPorHoraDiaSemanaYTramos() {
         JsonNode l = get("/api/estadisticas/lineas/51/rl4" + PERIODO);
         assertThat(l.get("linea").asString()).isEqualTo("RL4");
-        assertThat(l.get("destacada").asBoolean()).isTrue();
         // 13 paradas: 0, 0(-1), 2, 4, 5, 6, 10, 18, 20 del 23 y 1, 3, 4, 0 del 25. Suma 72 → 5,5.
         JsonNode r = l.get("resumen");
         assertThat(r.get("viajes").asInt()).isEqualTo(5);
@@ -596,6 +596,29 @@ class EstadisticasIntegracionTests {
 
     @Test
     @Order(22)
+    void todaEspanaEsElRankingDeLosNucleos() {
+        JsonNode t = get("/api/estadisticas/nucleos/todos" + PERIODO);
+        assertThat(t.at("/periodo/diasConDatos").asInt()).isEqualTo(2);
+        assertThat(t.at("/muestra/viajes").asInt()).isEqualTo(7);
+        assertThat(t.at("/cobertura/porcentaje").asDouble()).isEqualTo(77.8);
+        JsonNode nucleos = t.get("nucleos");
+        assertThat(nucleos).hasSize(1);
+        JsonNode n = nucleos.get(0);
+        assertThat(n.get("puesto").asInt()).isEqualTo(1);
+        assertThat(n.get("nombre").asString()).isEqualTo("Rodalies de Catalunya");
+        // Las 17 paradas del núcleo (las 13 de la RL4 y las 4 de la R3), sumadas en SQL con su histograma:
+        // suma 74 → 4,4; menos de 3: 9 → 52,9 %; ordenadas, 0 0 0 0 0 1 1 1 [2] 3 4 4 5 6 10 [18] 20.
+        JsonNode c = n.get("cifras");
+        assertThat(c.get("paradas").asInt()).isEqualTo(17);
+        assertThat(c.get("mediaMinutos").asDouble()).isEqualTo(4.4);
+        assertThat(c.at("/porcentajes/menosDe3").asDouble()).isEqualTo(52.9);
+        assertThat(c.get("medianaMinutos").asInt()).isEqualTo(2);
+        assertThat(c.get("p90Minutos").asInt()).isEqualTo(18);
+        assertThat(n.get("cancelados").asInt()).isEqualTo(2);
+    }
+
+    @Test
+    @Order(23)
     void unaEstacionEnTotalYPorLinea() {
         JsonNode e = get("/api/estadisticas/estaciones/90001" + PERIODO);
         assertThat(e.get("nombre").asString()).isEqualTo("Lleida-Pirineus");
@@ -615,7 +638,7 @@ class EstadisticasIntegracionTests {
     }
 
     @Test
-    @Order(23)
+    @Order(24)
     void sinDatosEnElPeriodoYPeriodoPorDefecto() {
         JsonNode l = get("/api/estadisticas/lineas/51/R3?desde=2026-09-01&hasta=2026-09-07");
         assertThat(l.at("/periodo/diasConDatos").asInt()).isZero();
@@ -636,7 +659,7 @@ class EstadisticasIntegracionTests {
     }
 
     @Test
-    @Order(24)
+    @Order(25)
     void errores() {
         problema("/api/estadisticas/nucleos/98", 404);
         problema("/api/estadisticas/lineas/51/R99", 404);
@@ -650,7 +673,7 @@ class EstadisticasIntegracionTests {
     }
 
     @Test
-    @Order(25)
+    @Order(26)
     void antesDeLaFechaDePublicacionNoHayNingunaCifra() {
         reloj.ahora = Instant.parse("2026-10-25T12:00:00Z");
         try {
@@ -665,13 +688,16 @@ class EstadisticasIntegracionTests {
             assertThat(l.get("resumen").isNull()).isTrue();
             assertThat(l.get("tramos")).isEmpty();
             assertThat(get("/api/estadisticas/estaciones/90001" + PERIODO).get("porLinea")).isEmpty();
+            JsonNode t = get("/api/estadisticas/nucleos/todos" + PERIODO);
+            assertThat(t.get("muestra").isNull()).isTrue();
+            assertThat(t.get("nucleos")).isEmpty();
         } finally {
             reloj.ahora = Instant.parse("2026-10-26T09:00:00Z");
         }
     }
 
     @Test
-    @Order(26)
+    @Order(27)
     void recalcularPorActuatorYOpenApi() {
         String cuerpo = http().post().uri("/actuator/estadisticas").contentType(MediaType.APPLICATION_JSON)
                 .body("{\"desde\": \"2026-10-23\", \"hasta\": \"2026-10-25\"}").exchange().expectStatus().isOk()
@@ -689,7 +715,7 @@ class EstadisticasIntegracionTests {
 
         JsonNode docs = json.readTree(http().get().uri("/api/docs").exchange().expectStatus().isOk()
                 .expectBody(String.class).returnResult().getResponseBody());
-        for (String ruta : List.of("/api/estadisticas/nucleos/{nucleo}", "/api/estadisticas/lineas/{nucleo}/{linea}",
+        for (String ruta : List.of("/api/estadisticas/nucleos/todos", "/api/estadisticas/nucleos/{nucleo}", "/api/estadisticas/lineas/{nucleo}/{linea}",
                 "/api/estadisticas/estaciones/{stopId}")) {
             JsonNode op = docs.get("paths").get(ruta).get("get");
             assertThat(op).as(ruta).isNotNull();

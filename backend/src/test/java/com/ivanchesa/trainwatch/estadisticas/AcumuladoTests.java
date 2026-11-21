@@ -121,6 +121,6 @@ class AcumuladoTests {
     static LineaRanking linea(String nombre, boolean suficiente, Double menosDe3, Double media) {
         Cifras c = suficiente ? new Cifras(40, 400, true, media, 1, 5, new Porcentajes(menosDe3, 0.0, 0.0, 0.0))
                 : new Cifras(3, 20, false, null, null, null, null);
-        return new LineaRanking(null, nombre, false, c, null, null);
+        return new LineaRanking(null, nombre, c, null, null);
     }
 }

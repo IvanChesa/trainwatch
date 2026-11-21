@@ -2,7 +2,6 @@ package com.ivanchesa.trainwatch.estadisticas;
 
 import java.time.Duration;
 import java.time.LocalDate;
-import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -18,7 +17,6 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param periodoMaximoDias  días como mucho entre {@code desde} y {@code hasta}, en la API y al recalcular a mano
  * @param diasARecuperar     además de ayer, cuántos días anteriores sin calcular recupera la tarea nocturna (por si la
  *                           aplicación estuvo parada a esa hora)
- * @param destacadas         líneas destacadas, como {@code núcleo:línea} (la RL4 de Lleida)
  * @param plazoSentencia     {@code statement_timeout} del cálculo de un día (el de la aplicación es 15 s)
  * @param esperaCerrojo      {@code lock_timeout} del cálculo: si algo retiene sus tablas, falla en vez de hacer cola
  * @param maximoTramos       tramos con más retraso en la respuesta de una línea
@@ -30,13 +28,7 @@ public record EstadisticasProperties(
         @DefaultValue("28") int ventanaDias,
         @DefaultValue("400") int periodoMaximoDias,
         @DefaultValue("2") int diasARecuperar,
-        @DefaultValue("51:RL4") List<String> destacadas,
         @DefaultValue("2m") Duration plazoSentencia,
         @DefaultValue("5s") Duration esperaCerrojo,
         @DefaultValue("10") int maximoTramos) {
-
-    /** {@code true} si la línea está destacada (sin distinguir mayúsculas). */
-    public boolean destacada(int nucleo, String linea) {
-        return destacadas.stream().anyMatch(d -> d.equalsIgnoreCase(nucleo + ":" + linea));
-    }
 }

@@ -32,18 +32,21 @@ import com.ivanchesa.trainwatch.directo.Nucleos;
 import com.ivanchesa.trainwatch.estadisticas.ConsultasEstadisticas.EstacionDia;
 import com.ivanchesa.trainwatch.estadisticas.ConsultasEstadisticas.LineaDia;
 import com.ivanchesa.trainwatch.estadisticas.ConsultasEstadisticas.LineaHora;
+import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.Cifras;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.Cobertura;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.DiaSemana;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.Franja;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.LineaEnEstacion;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.LineaRanking;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.Muestra;
+import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.NucleoRanking;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.Parada;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.Periodo;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.Publicacion;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.PuntualidadEstacion;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.PuntualidadLinea;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.PuntualidadNucleo;
+import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.PuntualidadTodos;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.Semana;
 import com.ivanchesa.trainwatch.estadisticas.RespuestasEstadisticas.Tramo;
 
@@ -112,8 +115,8 @@ public class EstadisticasController {
         for (Map.Entry<String, Acumulado> e : porLinea.entrySet()) {
             List<LineaDia> suyas = diasPorLinea.getOrDefault(e.getKey(), List.of());
             int viajes = suyas.stream().mapToInt(LineaDia::viajes).sum();
-            lineas.add(new LineaRanking(null, e.getKey(), propiedades.destacada(nucleo, e.getKey()),
-                    e.getValue().cifras(viajes, propiedades.muestraMinima()), cancelados(suyas), cobertura(suyas)));
+            lineas.add(new LineaRanking(null, e.getKey(), e.getValue().cifras(viajes, propiedades.muestraMinima()),
+                    cancelados(suyas), cobertura(suyas)));
         }
         return ok(new PuntualidadNucleo(nucleo, Nucleos.nombre(nucleo), publicacion, periodo, muestra(dias, horas),
                 cobertura(dias), ranking(lineas), RespuestasEstadisticas.FUENTE));
@@ -121,19 +124,77 @@ public class EstadisticasController {
 
     /** Por % de menos de 3 min (mayor primero), luego por media (menor primero) y por nombre; las insuficientes, al final. */
     static List<LineaRanking> ranking(List<LineaRanking> lineas) {
-        List<LineaRanking> suficientes = new ArrayList<>(lineas.stream().filter(l -> l.cifras().suficiente()).toList());
+        return ordenar(lineas, LineaRanking::cifras, LineaRanking::linea,
+                (l, puesto) -> new LineaRanking(puesto, l.linea(), l.cifras(), l.cancelados(), l.cobertura()));
+    }
+
+    /**
+     * El orden de todos los rankings: los que tienen muestra suficiente, por % de paradas con menos de 3 min (mayor
+     * primero), luego por media (menor primero) y por nombre, con su puesto; después los insuficientes, por nombre y sin
+     * puesto.
+     */
+    static <T> List<T> ordenar(List<T> elementos, Function<T, Cifras> cifras, Function<T, String> nombre,
+            java.util.function.BiFunction<T, Integer, T> conPuesto) {
+        Comparator<String> natural = java.text.Collator.getInstance(java.util.Locale.forLanguageTag("es"))::compare;
+        List<T> suficientes = new ArrayList<>(elementos.stream().filter(e -> cifras.apply(e).suficiente()).toList());
         suficientes.sort(Comparator
-                .comparing((LineaRanking l) -> l.cifras().porcentajes().menosDe3(), Comparator.reverseOrder())
-                .thenComparing(l -> l.cifras().mediaMinutos())
-                .thenComparing(LineaRanking::linea));
-        List<LineaRanking> resultado = new ArrayList<>();
+                .comparing((T e) -> cifras.apply(e).porcentajes().menosDe3(), Comparator.reverseOrder())
+                .thenComparing(e -> cifras.apply(e).mediaMinutos())
+                .thenComparing(nombre, natural));
+        List<T> resultado = new ArrayList<>();
         for (int i = 0; i < suficientes.size(); i++) {
-            LineaRanking l = suficientes.get(i);
-            resultado.add(new LineaRanking(i + 1, l.linea(), l.destacada(), l.cifras(), l.cancelados(), l.cobertura()));
+            resultado.add(conPuesto.apply(suficientes.get(i), i + 1));
         }
-        lineas.stream().filter(l -> !l.cifras().suficiente()).sorted(Comparator.comparing(LineaRanking::linea))
+        elementos.stream().filter(e -> !cifras.apply(e).suficiente()).sorted(Comparator.comparing(nombre, natural))
                 .forEach(resultado::add);
         return resultado;
+    }
+
+    // ---------------------------------------------------------------- toda España
+
+    @GetMapping("/nucleos/todos")
+    @Operation(operationId = "puntualidadTodos", summary = "Toda España: ranking de los núcleos",
+            description = "Los núcleos ordenados por el % de paradas con menos de 3 min y luego por la media, cada uno"
+                    + " con su cobertura (con poca, la cifra es solo de los trenes que se ven). No hay ranking de todas"
+                    + " las líneas de España: los nombres se repiten entre núcleos (ADR 0024)." + DESCRIPCION_PERIODO)
+    @RespuestasDeError
+    public ResponseEntity<PuntualidadTodos> todos(
+            @Parameter(description = "Primer día de servicio", example = "2026-11-21") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @Parameter(description = "Último día de servicio", example = "2026-12-18") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+        Periodo periodo = periodo(desde, hasta);
+        Publicacion publicacion = publicacion();
+        if (!publicacion.publicado()) {
+            return ok(new PuntualidadTodos(publicacion, periodo, null, null, List.of(), RespuestasEstadisticas.FUENTE));
+        }
+        List<LineaDia> dias = consultas.lineaDiaTodos(periodo.desde(), periodo.hasta());
+        Map<Integer, Acumulado.Fila> filas = consultas.porNucleo(periodo.desde(), periodo.hasta());
+        Map<Integer, List<LineaDia>> diasPorNucleo = new TreeMap<>();
+        for (LineaDia d : dias) {
+            diasPorNucleo.computeIfAbsent(d.nucleo(), k -> new ArrayList<>()).add(d);
+        }
+        Set<Integer> claves = new TreeSet<>(diasPorNucleo.keySet());
+        claves.addAll(filas.keySet());
+        List<NucleoRanking> nucleos = new ArrayList<>();
+        int paradas = 0;
+        for (Integer n : claves) {
+            Acumulado a = new Acumulado();
+            if (filas.containsKey(n)) {
+                a.sumar(filas.get(n));
+            }
+            paradas += a.paradas;
+            List<LineaDia> suyas = diasPorNucleo.getOrDefault(n, List.of());
+            int viajes = suyas.stream().mapToInt(LineaDia::viajes).sum();
+            nucleos.add(new NucleoRanking(null, n, Nucleos.nombre(n), a.cifras(viajes, propiedades.muestraMinima()),
+                    cancelados(suyas), cobertura(suyas)));
+        }
+        List<NucleoRanking> ordenados = ordenar(nucleos, NucleoRanking::cifras, NucleoRanking::nombre,
+                (x, puesto) -> new NucleoRanking(puesto, x.nucleo(), x.nombre(), x.cifras(), x.cancelados(),
+                        x.cobertura()));
+        Muestra muestra = new Muestra(dias.stream().mapToInt(LineaDia::viajes).sum(), paradas,
+                dias.stream().mapToInt(LineaDia::inferidas).sum(), dias.stream().mapToInt(LineaDia::sinHora).sum(),
+                cancelados(dias));
+        return ok(new PuntualidadTodos(publicacion, periodo, muestra, cobertura(dias), ordenados,
+                RespuestasEstadisticas.FUENTE));
     }
 
     // ---------------------------------------------------------------- línea
@@ -152,10 +213,9 @@ public class EstadisticasController {
         Periodo periodo = periodo(desde, hasta);
         String nombre = consultas.linea(nucleo, linea).orElseThrow(() -> Problemas.noEncontrado(
                 "No hay ninguna línea «" + linea + "» en el núcleo " + nucleo + "."));
-        boolean destacada = propiedades.destacada(nucleo, nombre);
         Publicacion publicacion = publicacion();
         if (!publicacion.publicado()) {
-            return ok(new PuntualidadLinea(nucleo, Nucleos.nombre(nucleo), nombre, destacada, publicacion, periodo,
+            return ok(new PuntualidadLinea(nucleo, Nucleos.nombre(nucleo), nombre, publicacion, periodo,
                     null, null, null, null, null, List.of(), List.of(), List.of(), List.of(),
                     RespuestasEstadisticas.FUENTE));
         }
@@ -193,7 +253,7 @@ public class EstadisticasController {
                         Acumulado.porcentaje(t.pierden(), t.pasos()), Acumulado.porcentaje(t.ganan(), t.pasos())))
                 .toList();
 
-        return ok(new PuntualidadLinea(nucleo, Nucleos.nombre(nucleo), nombre, destacada, publicacion, periodo,
+        return ok(new PuntualidadLinea(nucleo, Nucleos.nombre(nucleo), nombre, publicacion, periodo,
                 muestra(dias, horas), cobertura(delNucleo), cobertura(dias), total.cifras(viajes, minimo),
                 total.llegadaDestino(minimo), franjas, porDia, porSemana, tramos, RespuestasEstadisticas.FUENTE));
     }

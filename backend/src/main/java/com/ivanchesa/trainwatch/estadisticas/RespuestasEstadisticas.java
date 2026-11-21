@@ -120,10 +120,28 @@ public final class RespuestasEstadisticas {
     public record LineaRanking(
             @Schema(description = "Puesto por % de paradas con menos de 3 min (y luego por media); null con datos insuficientes", example = "1") Integer puesto,
             @Schema(example = "RL4") String linea,
-            @Schema(description = "Línea destacada (la RL4 de Lleida)", example = "true") boolean destacada,
             Cifras cifras,
             @Schema(description = "Cancelados explícitos en el periodo; null si no se sabe", example = "0") Integer cancelados,
             Cobertura cobertura) {
+    }
+
+    @Schema(description = "Un núcleo en el ranking de toda España")
+    public record NucleoRanking(
+            @Schema(description = "Puesto por % de paradas con menos de 3 min (y luego por media); null con datos insuficientes", example = "1") Integer puesto,
+            @Schema(example = "51") int nucleo,
+            @Schema(example = "Rodalies de Catalunya") String nombre,
+            Cifras cifras,
+            @Schema(description = "Cancelados explícitos en el periodo; null si no se sabe", example = "4") Integer cancelados,
+            @Schema(description = "Cobertura del núcleo: con poca, la cifra es solo de los trenes que se ven") Cobertura cobertura) {
+    }
+
+    @Schema(description = "Toda España: el ranking de los núcleos (no de las líneas: sus nombres se repiten entre núcleos)")
+    public record PuntualidadTodos(
+            Publicacion publicacion, Periodo periodo,
+            @Schema(description = "null antes de la publicación") Muestra muestra,
+            @Schema(description = "Cobertura de todos los núcleos juntos; null antes de la publicación") Cobertura cobertura,
+            List<NucleoRanking> nucleos,
+            @Schema(example = FUENTE) String fuente) {
     }
 
     @Schema(description = "Puntualidad de un núcleo: ranking de sus líneas")
@@ -142,7 +160,6 @@ public final class RespuestasEstadisticas {
             @Schema(example = "51") int nucleo,
             @Schema(example = "Rodalies de Catalunya") String nombreNucleo,
             @Schema(example = "RL4") String linea,
-            @Schema(example = "true") boolean destacada,
             Publicacion publicacion, Periodo periodo, Muestra muestra,
             @Schema(description = "Cobertura de su núcleo en el periodo") Cobertura coberturaNucleo,
             @Schema(description = "Cobertura de la línea en el periodo") Cobertura coberturaLinea,
