@@ -17,17 +17,9 @@ export interface CapaDeTrenes {
   actualizar(trenes: readonly TrenMapa[], nuevoDato: boolean): void;
   /** Resalta un tren (el de la ficha abierta) o ninguno. */
   seleccionar(id: string | null): void;
-  /** Resalta una línea de un núcleo (la RL4 de Rodalies, también con toda España) o ninguna. */
-  destacarLinea(linea: LineaDestacada | null): void;
   /** `false` con `prefers-reduced-motion`: los trenes saltan a su posición nueva. */
   animar(si: boolean): void;
   destruir(): void;
-}
-
-/** Una línea de un núcleo: los nombres se repiten entre núcleos (hay una C1 en Madrid y otra en Valencia). */
-export interface LineaDestacada {
-  nucleo: number;
-  linea: string;
 }
 
 /** Un filtro que no deja pasar ningún tren (ninguno tiene el id vacío). */
@@ -37,7 +29,7 @@ const FUENTE = 'tw-trenes';
 export const CAPA_SIMBOLOS = 'tw-trenes-simbolos';
 const CAPA_HALO = 'tw-trenes-halo';
 /** La primera capa de los trenes: lo demás (la línea, las estaciones) va debajo. */
-export const CAPA_DESTACADA = 'tw-trenes-destacada';
+export const CAPA_INFERIOR = CAPA_HALO;
 /** 30 fotogramas por segundo bastan para que se vea fluido y dejan respirar al móvil. */
 const MS_POR_FOTOGRAMA = 33;
 const ESCALA = 2;
@@ -125,19 +117,7 @@ export class CapaTrenes2D implements CapaDeTrenes {
     this.interpolador = new Interpolador(opciones.animar);
     registrarIconos(mapa);
     mapa.addSource(FUENTE, { type: 'geojson', data: VACIA });
-    // Debajo, el halo del tren seleccionado y el de la línea destacada.
-    mapa.addLayer({
-      id: CAPA_DESTACADA,
-      type: 'circle',
-      source: FUENTE,
-      filter: NINGUNO,
-      paint: {
-        'circle-radius': 13,
-        'circle-color': 'rgba(142, 174, 255, 0.18)',
-        'circle-stroke-color': '#8eaeff',
-        'circle-stroke-width': 1.5,
-      },
-    });
+    // Debajo, el halo del tren seleccionado.
     mapa.addLayer({
       id: CAPA_HALO,
       type: 'circle',
@@ -197,15 +177,6 @@ export class CapaTrenes2D implements CapaDeTrenes {
     this.mapa.setFilter(CAPA_HALO, ['==', ['get', 'id'], id ?? '']);
   }
 
-  destacarLinea(destacada: LineaDestacada | null): void {
-    this.mapa.setFilter(
-      CAPA_DESTACADA,
-      destacada
-        ? ['all', ['==', ['get', 'linea'], destacada.linea], ['==', ['get', 'nucleo'], destacada.nucleo]]
-        : NINGUNO,
-    );
-  }
-
   animar(si: boolean): void {
     this.interpolador.animar = si;
     if (!si) {
@@ -220,7 +191,7 @@ export class CapaTrenes2D implements CapaDeTrenes {
     this.mapa.off('click', CAPA_SIMBOLOS, this.alPulsar);
     this.mapa.off('mouseenter', CAPA_SIMBOLOS, this.alEntrar);
     this.mapa.off('mouseleave', CAPA_SIMBOLOS, this.alSalir);
-    for (const capa of [CAPA_SIMBOLOS, CAPA_HALO, CAPA_DESTACADA]) {
+    for (const capa of [CAPA_SIMBOLOS, CAPA_HALO]) {
       if (this.mapa.getLayer(capa)) this.mapa.removeLayer(capa);
     }
     if (this.mapa.getSource(FUENTE)) this.mapa.removeSource(FUENTE);
@@ -242,7 +213,6 @@ export class CapaTrenes2D implements CapaDeTrenes {
         properties: {
           id: tren.id,
           linea: tren.linea ?? '',
-          nucleo: tren.nucleo,
           icono: icono(tren, categoria),
           rumbo: tren.estado === 'EN_ORIGEN' ? 0 : (tren.rumbo ?? 0),
           // «+7» si va con retraso y «?» si no se sabe: el color nunca va solo.

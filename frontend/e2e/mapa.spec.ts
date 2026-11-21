@@ -141,7 +141,7 @@ test('la vista de lista funciona entera con el teclado', async ({ page }) => {
   expect(contorno).toBe('solid');
 });
 
-test('filtra por línea y destaca la RL4 en Rodalies', async ({ page }) => {
+test('filtra por línea, sin ninguna línea destacada', async ({ page }) => {
   await preparar(page);
   await page.goto('/?vista=lista');
   const lista = page.getByRole('region', { name: /^Trenes de Rodalies/ });
@@ -149,9 +149,11 @@ test('filtra por línea y destaca la RL4 en Rodalies', async ({ page }) => {
   await page.getByRole('combobox', { name: 'Línea' }).selectOption('R15');
   await expect(lista.getByRole('button')).toHaveCount(2);
   await expect(page).toHaveURL(/linea=R15/);
-  await page.getByRole('button', { name: /RL4 Lleida/ }).click();
-  await expect(page.getByRole('combobox', { name: 'Línea' })).toHaveValue('RL4');
-  await expect(lista).toContainText('No hay trenes');
+  // La RL4 ya no se destaca (Iván, 21-11): ni botón ni estrella.
+  await expect(page.getByRole('button', { name: /RL4/ })).toHaveCount(0);
+  await expect(page.getByText('★')).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Línea' }).selectOption('');
+  await expect(lista.getByRole('button')).toHaveCount(3);
 });
 
 test('si el directo está lleno (503), vuelve a intentarlo solo y se recupera', async ({ page, request }) => {

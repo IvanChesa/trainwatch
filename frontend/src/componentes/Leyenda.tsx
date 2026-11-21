@@ -26,7 +26,7 @@ export function Leyenda() {
         </ul>
         <p className="leyenda__nota">
           La punta señala hacia dónde va el tren; «+7», los minutos de retraso, y «?», que no se sabe. Anillo blanco: el
-          tren de la ficha abierta. Anillo azul: la RL4 de Lleida.
+          tren de la ficha abierta.
         </p>
       </div>
     </section>

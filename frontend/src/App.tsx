@@ -20,10 +20,8 @@ import './App.css';
 // MapLibre pesa (~1 MB): va en su propio trozo y se carga después de pintar la interfaz.
 const Mapa = lazy(() => import('./mapa/Mapa'));
 
-/** Rodalies de Catalunya, el núcleo por defecto; y su RL4 (Lleida), destacada. */
+/** Rodalies de Catalunya, el núcleo por defecto (plan, §6). */
 export const NUCLEO_POR_DEFECTO = 51;
-export const LINEA_DESTACADA = 'RL4';
-const DESTACADA = { nucleo: NUCLEO_POR_DEFECTO, linea: LINEA_DESTACADA } as const;
 
 /** «Toda España»: los trenes de todos los núcleos a la vez (`?nucleo=todos`, como el directo). */
 export const TODOS = 'todos';
@@ -87,7 +85,6 @@ export default function App() {
     lineaDeNucleo && typeof nucleoId === 'number' ? `linea:${nucleoId}:${lineaDeNucleo}` : null,
     (s) => consultas.linea(nucleoId as number, lineaDeNucleo, s),
   );
-  const esRodalies = nucleoId === NUCLEO_POR_DEFECTO;
 
   // La URL guarda el núcleo, la línea y la vista (para compartir un enlace; sin cookies).
   useEffect(() => {
@@ -104,13 +101,8 @@ export default function App() {
     if (esTodos) return [];
     const conjunto = new Set(todos.map((t) => t.linea).filter((l): l is string => !!l));
     if (linea) conjunto.add(linea);
-    if (esRodalies) conjunto.add(LINEA_DESTACADA);
-    return [...conjunto].sort((a, b) => {
-      if (esRodalies && a === LINEA_DESTACADA) return -1;
-      if (esRodalies && b === LINEA_DESTACADA) return 1;
-      return compararLineas(a, b);
-    });
-  }, [todos, linea, esRodalies, esTodos]);
+    return [...conjunto].sort(compararLineas);
+  }, [todos, linea, esTodos]);
   const filtrados = useMemo(
     () => (lineaDeNucleo ? todos.filter((t) => t.linea === lineaDeNucleo) : todos),
     [todos, lineaDeNucleo],
@@ -224,7 +216,7 @@ export default function App() {
               <option value="">{esTodos ? 'Todas (elige un núcleo para filtrar)' : 'Todas las líneas'}</option>
               {lineas.map((l) => (
                 <option key={l} value={l}>
-                  {esRodalies && l === LINEA_DESTACADA ? `${l} (Lleida) ★` : l}
+                  {l}
                 </option>
               ))}
             </select>
@@ -263,23 +255,6 @@ export default function App() {
           <button type="button" className="boton" onClick={() => abrir({ tipo: 'avisos' })}>
             Avisos{avisos.tipo === 'lista' ? ` (${avisosVisibles.length})` : ''}
           </button>
-          {(esRodalies || esTodos) && (
-            // Siempre está en Rodalies (si desapareciera al pulsarlo, el foco se perdería): pulsado, filtra la RL4.
-            // Con toda España, lleva a Rodalies con la RL4 filtrada.
-            <button
-              type="button"
-              className="destacada"
-              aria-pressed={esRodalies && linea === LINEA_DESTACADA}
-              onClick={() => {
-                if (esTodos) {
-                  cambiarNucleo(NUCLEO_POR_DEFECTO);
-                  setLinea(LINEA_DESTACADA);
-                } else setLinea(linea === LINEA_DESTACADA ? '' : LINEA_DESTACADA);
-              }}
-            >
-              <span aria-hidden="true">★</span> RL4 Lleida
-            </button>
-          )}
         </div>
         <p className="resumen" aria-live="off">
           {resumen}
@@ -297,7 +272,6 @@ export default function App() {
               recibido={directo.recibido}
               linea={datosLinea.tipo === 'lista' ? datosLinea.datos : null}
               seleccionado={seleccion?.tipo === 'tren' ? seleccion.id : null}
-              destacada={esRodalies || esTodos ? DESTACADA : null}
               reducirMovimiento={reducirMovimiento}
               descripcion={descripcionMapa}
               alPulsarTren={abrirTren}

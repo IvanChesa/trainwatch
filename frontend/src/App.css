@@ -108,7 +108,6 @@
 }
 
 .boton,
-.destacada,
 .conmutador button {
   min-height: 40px;
   padding: 6px 12px;
@@ -120,15 +119,6 @@
 .boton:hover,
 .conmutador button:hover {
   border-color: var(--sec);
-}
-.destacada {
-  border-color: var(--acento);
-  color: var(--acento);
-  font-weight: 600;
-}
-.destacada[aria-pressed='true'] {
-  background: var(--acento);
-  color: #0b0d12;
 }
 
 .conmutador {
@@ -535,7 +525,6 @@
     gap: 6px;
   }
   .acciones .boton,
-  .destacada,
   .conmutador button {
     padding: 6px 10px;
     font-size: 0.9rem;

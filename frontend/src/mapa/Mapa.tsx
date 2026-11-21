@@ -7,7 +7,7 @@ import type { Linea, TrenMapa } from '../api/tipos';
 import { CapaLinea } from './capaLinea';
 import { movimientoEncuadre, type Encuadre } from './encuadre';
 import { aligerarEstilo } from './estiloBase';
-import { CAPA_DESTACADA, CapaTrenes2D, type CapaDeTrenes, type LineaDestacada } from './capaTrenes';
+import { CAPA_INFERIOR, CapaTrenes2D, type CapaDeTrenes } from './capaTrenes';
 
 setWorkerUrl(urlWorker);
 
@@ -46,8 +46,6 @@ export interface PropsMapa {
   recibido: number | null;
   linea: Linea | null;
   seleccionado: string | null;
-  /** La línea que se resalta (la RL4 de Rodalies) o ninguna. */
-  destacada: LineaDestacada | null;
   reducirMovimiento: boolean;
   /** Texto del mapa para los lectores de pantalla (cuántos trenes hay y dónde está la lista). */
   descripcion: string;
@@ -114,7 +112,7 @@ export default function Mapa(props: PropsMapa) {
         animar: !ultimas.current.reducirMovimiento,
         alPulsarTren: (id) => ultimas.current.alPulsarTren(id),
       });
-      capaLinea.current = new CapaLinea(m, CAPA_DESTACADA, (id, nombre) => ultimas.current.alPulsarEstacion(id, nombre));
+      capaLinea.current = new CapaLinea(m, CAPA_INFERIOR, (id, nombre) => ultimas.current.alPulsarEstacion(id, nombre));
       setListo(true);
     });
     return () => {
@@ -186,15 +184,6 @@ export default function Mapa(props: PropsMapa) {
       duration: 700,
     });
   }, [listo, props.seleccionado]);
-
-  const destacadaNucleo = props.destacada?.nucleo ?? null;
-  const destacadaLinea = props.destacada?.linea ?? null;
-  useEffect(() => {
-    if (!listo) return;
-    capaTrenes.current?.destacarLinea(
-      destacadaNucleo !== null && destacadaLinea !== null ? { nucleo: destacadaNucleo, linea: destacadaLinea } : null,
-    );
-  }, [listo, destacadaNucleo, destacadaLinea]);
 
   useEffect(() => {
     if (listo) capaTrenes.current?.animar(!reducirMovimiento);

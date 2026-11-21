@@ -16,7 +16,6 @@ vi.mock('./mapa/Mapa', () => ({
       data-testid="mapa"
       aria-label={props.descripcion}
       data-encuadre={props.encuadre?.clave ?? ''}
-      data-destacada={props.destacada ? `${props.destacada.nucleo}:${props.destacada.linea}` : ''}
     >
       {props.trenes.map((t) => (
         <button key={t.id} type="button" onClick={() => props.alPulsarTren(t.id)}>
@@ -85,13 +84,19 @@ describe('App', () => {
     await screen.findByRole('option', { name: 'Madrid' });
   });
 
-  it('abre el directo de Rodalies por defecto, con la RL4 destacada', async () => {
+  it('abre el directo de Rodalies por defecto, sin ninguna línea destacada', async () => {
     prepararApi();
     await conDirecto();
     expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=51');
     expect(screen.getByRole('combobox', { name: 'Núcleo' })).toHaveValue('51');
-    expect(screen.getByRole('option', { name: 'RL4 (Lleida) ★' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /RL4 Lleida/ })).toBeInTheDocument();
+    // La RL4 ya no se destaca (Iván, 21-11): ni estrella, ni botón, ni sale en el filtro si no hay trenes suyos.
+    expect(screen.queryByText(/★/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /RL4/ })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('combobox', { name: 'Línea' })).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Todas las líneas',
+      'R13',
+      'R15',
+    ]);
     expect(screen.getByText('2 trenes en marcha y 1 en origen')).toBeInTheDocument();
     expect(screen.getByText(/^En directo · dato de Renfe hace 16 s$/)).toBeInTheDocument();
     // Los tres trenes de la instantánea, en el mapa.
@@ -181,18 +186,18 @@ describe('App', () => {
     expect(selector).toHaveFocus();
   });
 
-  it('el botón de la RL4 se queda (pulsado) y no pierde el foco', async () => {
+  it('la RL4 de la URL es una línea más: sale en el filtro, en su orden y sin estrella', async () => {
     prepararApi();
+    window.history.replaceState(null, '', '/?linea=RL4');
     await conDirecto();
-    const boton = screen.getByRole('button', { name: /RL4 Lleida/ });
-    expect(boton).toHaveAttribute('aria-pressed', 'false');
-    boton.focus();
-    fireEvent.click(boton);
-    expect(screen.getByRole('combobox', { name: 'Línea' })).toHaveValue('RL4');
-    expect(boton).toHaveAttribute('aria-pressed', 'true');
-    expect(boton).toHaveFocus();
-    fireEvent.click(boton);
-    expect(screen.getByRole('combobox', { name: 'Línea' })).toHaveValue('');
+    const lineas = screen.getByRole('combobox', { name: 'Línea' });
+    expect(lineas).toHaveValue('RL4');
+    expect(within(lineas).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Todas las líneas',
+      'R13',
+      'R15',
+      'RL4',
+    ]);
   });
 
   it('con «Toda España» (por URL) abre el directo de todos, sin filtro de línea y con el núcleo en la lista', async () => {
@@ -206,11 +211,10 @@ describe('App', () => {
     expect(lineas).toBeDisabled();
     expect(lineas).toHaveAccessibleDescription(/elige un núcleo/);
     expect(window.location.search).toBe('?nucleo=todos');
-    // Los cuatro trenes en el mapa, encuadrando toda España, con la RL4 de Rodalies destacada.
+    // Los cuatro trenes en el mapa, encuadrando toda España.
     const mapa = await screen.findByTestId('mapa');
     expect(within(mapa).getAllByRole('button')).toHaveLength(4);
     await waitFor(() => expect(mapa).toHaveAttribute('data-encuadre', 'todos'));
-    expect(mapa).toHaveAttribute('data-destacada', '51:RL4');
     expect(mapa).toHaveAccessibleName(/^Mapa de toda España: 2 trenes en marcha y 2 en origen/);
     // Los avisos de todos los núcleos.
     expect(fetch).toHaveBeenCalledWith('/api/avisos', expect.anything());
@@ -224,7 +228,7 @@ describe('App', () => {
     expect(botones[1]).toHaveTextContent('Rodalies de Catalunya');
   });
 
-  it('«Toda España» se elige en el selector y el botón de la RL4 lleva a Rodalies con la RL4', async () => {
+  it('«Toda España» se elige en el selector y se vuelve a un núcleo', async () => {
     prepararApi();
     await conDirecto();
     expect(screen.getByTestId('mapa')).toHaveAttribute('data-encuadre', '51');
@@ -234,14 +238,13 @@ describe('App', () => {
     await waitFor(() => expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=todos'));
     expect(window.location.search).toBe('?nucleo=todos');
 
-    const rl4 = screen.getByRole('button', { name: /RL4 Lleida/ });
-    expect(rl4).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(rl4);
-    await waitFor(() => expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=51'));
-    expect(selector).toHaveValue('51');
-    expect(screen.getByRole('combobox', { name: 'Línea' })).toHaveValue('RL4');
-    expect(rl4).toHaveAttribute('aria-pressed', 'true');
-    expect(window.location.search).toBe('?linea=RL4');
+    expect(screen.getByRole('combobox', { name: 'Línea' })).toBeDisabled();
+
+    fireEvent.change(selector, { target: { value: '10' } });
+    await waitFor(() => expect(FuenteFalsa.ultima().url).toBe('/api/directo?nucleo=10'));
+    expect(window.location.search).toBe('?nucleo=10');
+    expect(screen.getByRole('combobox', { name: 'Línea' })).toBeEnabled();
+    expect(screen.getByTestId('mapa')).toHaveAttribute('data-encuadre', '10');
   });
 
   it('un núcleo de la URL que no existe vuelve a Rodalies', async () => {
