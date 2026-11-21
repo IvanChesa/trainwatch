@@ -3,6 +3,8 @@ import type { Cifras, Cobertura, Periodo, Porcentajes } from './tipos';
 
 /** Textos y números de las páginas de estadísticas, fuera de los componentes para probarlos solos. */
 
+/** Espacio de no separación: «32,7 %» no se parte entre dos líneas. */
+const NBSP = '\u00a0';
 const NUMERO = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 });
 const ENTERO = new Intl.NumberFormat('es-ES');
 const FECHA = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -20,12 +22,12 @@ export function entero(x: number | null | undefined): string {
 
 /** «2,4 min»; «—». */
 export function minutos(x: number | null | undefined): string {
-  return x === null || x === undefined ? '—' : `${NUMERO.format(x)} min`;
+  return x === null || x === undefined ? '—' : `${NUMERO.format(x)}${NBSP}min`;
 }
 
 /** «78,4 %»; «—». */
 export function porcentaje(x: number | null | undefined): string {
-  return x === null || x === undefined ? '—' : `${NUMERO.format(x)} %`;
+  return x === null || x === undefined ? '—' : `${NUMERO.format(x)}${NBSP}%`;
 }
 
 /** «21 de noviembre de 2026», de una fecha ISO (día de servicio, sin hora). */

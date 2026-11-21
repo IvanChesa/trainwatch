@@ -28,3 +28,4 @@ Un fichero por decisión: `NNNN-titulo-corto.md`, con contexto, decisión, alter
 - [0024 · «Toda España»: el directo de todos los núcleos es un canal más del difusor (`nucleo=todos`)](0024-directo-de-todos-los-nucleos.md)
 - [0025 · Qué es una cifra de puntualidad de TrainWatch](0025-definiciones-de-puntualidad.md)
 - [0026 · Agregados diarios con sumas, recuentos e histograma, calculados cada noche antes del horario nuevo](0026-agregados-diarios-y-tarea-nocturna.md)
+- [0027 · Las páginas de puntualidad: rutas propias, gráficos en SVG propio con su tabla, y un ranking de núcleos para toda España](0027-paginas-de-puntualidad-con-svg-propio.md)

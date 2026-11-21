@@ -60,14 +60,14 @@ describe('rutas', () => {
 describe('textos', () => {
   it('números en español y «—» si no hay dato', () => {
     expect(numero(2.4)).toBe('2,4');
-    expect(porcentaje(78.4)).toBe('78,4 %');
+    expect(porcentaje(78.4)).toBe('78,4\u00a0%');
     expect(porcentaje(null)).toBe('—');
     expect(fecha('2026-11-21')).toBe('21 de noviembre de 2026');
     expect(textoPeriodo({ desde: '2026-11-21', hasta: '2026-12-18', diasConDatos: 1 })).toBe(
       'Del 21 de noviembre de 2026 al 18 de diciembre de 2026 (1 día con datos)',
     );
     expect(textoCobertura({ ...LINEA.coberturaNucleo! })).toBe(
-      '89,2 % de los trenes programados y el 81,6 % de sus paradas',
+      '89,2\u00a0% de los trenes programados y el 81,6\u00a0% de sus paradas',
     );
     expect(frase(INSUFICIENTE)).toBeNull();
   });
