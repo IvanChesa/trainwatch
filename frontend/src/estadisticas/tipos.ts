@@ -43,6 +43,8 @@ export interface Porcentajes {
   de3a5: number | null;
   de6a15: number | null;
   de16OMas: number | null;
+  /** 5 min o menos (el umbral que suele usar Renfe en Cercanías), calculado sobre las paradas. */
+  hasta5: number | null;
 }
 
 export interface Cifras {

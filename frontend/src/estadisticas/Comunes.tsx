@@ -94,6 +94,10 @@ export function Cifrado({ cifras, minimo }: { cifras: Cifras; minimo: number }) 
         <dd>{porcentaje(cifras.porcentajes.menosDe3)}</dd>
       </div>
       <div>
+        <dt>Con 5 min o menos</dt>
+        <dd>{porcentaje(cifras.porcentajes.hasta5)}</dd>
+      </div>
+      <div>
         <dt>Mediana</dt>
         <dd>{minutosTope(cifras.medianaMinutos)}</dd>
       </div>
@@ -148,11 +152,11 @@ export function Bloque({
   );
 }
 
-/** Las celdas de una fila con cifras (media, % de menos de 3, viajes), o «datos insuficientes» si no llega. */
+/** Las celdas de una fila con cifras (media, % de menos de 3 y de 5 o menos, viajes), o «datos insuficientes». */
 export function CeldasCifras({ cifras, minimo }: { cifras: Cifras; minimo: number }) {
   if (!cifras.suficiente || !cifras.porcentajes) {
     return (
-      <td colSpan={3} className="nota">
+      <td colSpan={4} className="nota">
         {textoInsuficiente(cifras, minimo)}
       </td>
     );
@@ -161,6 +165,7 @@ export function CeldasCifras({ cifras, minimo }: { cifras: Cifras; minimo: numbe
     <>
       <td className="cifra">{minutos(cifras.mediaMinutos)}</td>
       <td className="cifra">{porcentaje(cifras.porcentajes.menosDe3)}</td>
+      <td className="cifra">{porcentaje(cifras.porcentajes.hasta5)}</td>
       <td className="cifra">{entero(cifras.viajes)}</td>
     </>
   );

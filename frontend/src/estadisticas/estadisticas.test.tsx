@@ -121,7 +121,12 @@ describe('página de una línea', () => {
     api({ '/api/estadisticas/lineas/51/R2N': LINEA });
     render(<PaginaEstadisticas ruta={{ tipo: 'linea', nucleo: 51, linea: 'R2N', desde: null, hasta: null }} />);
     expect(await screen.findByRole('heading', { level: 1, name: 'Puntualidad de la R2N (Rodalies de Catalunya)' }));
-    expect(screen.getByText(/2,4 min de retraso medio por parada; el 78,4 %/)).toBeInTheDocument();
+    expect(screen.getByText(/2,4 min de retraso medio por parada; el 78,4 %.*y el 89,2 %, con 5 o menos/)).toBeInTheDocument();
+    // El umbral de 5 min, junto al de 3.
+    expect(screen.getByText('Con 5 min o menos')).toBeInTheDocument();
+    // Los cancelados, en la línea y como cota inferior.
+    expect(screen.getByText(/3 viajes cancelados/)).toBeInTheDocument();
+    expect(screen.getByText(/Son una cota inferior/)).toBeInTheDocument();
     // Siempre a la vista: el periodo, «solo trenes vistos en directo», la cobertura, la fuente y el aviso.
     expect(screen.getByText(/Del 21 de noviembre de 2026 al 18 de diciembre de 2026/)).toBeInTheDocument();
     expect(screen.getByText(/Solo trenes vistos en directo/)).toBeInTheDocument();
@@ -139,6 +144,7 @@ describe('página de una línea', () => {
     const filas = within(porHora).getAllByRole('row').slice(1);
     expect(filas.map((f) => within(f).getByRole('rowheader').textContent)).toEqual(['07:00', '08:00', '23:00']);
     expect(within(filas[1]).getByText('4,1 min')).toBeInTheDocument();
+    expect(within(porHora).getByRole('columnheader', { name: '5 min o menos' })).toBeInTheDocument();
     expect(within(filas[2]).getByText(/Datos insuficientes: 12 viajes \(hacen falta 30\)/)).toBeInTheDocument();
     // Su gráfico, al lado, con el valor escrito en cada columna y «—» en la que no llega.
     const grafico = porHora.closest('section')!.querySelector('svg')!;

@@ -10,6 +10,7 @@ import {
   franja,
   hallazgoRanking,
   minutos,
+  NOTA_CANCELADOS,
   numero,
   ordenHora,
   porcentaje,
@@ -174,6 +175,7 @@ function VistaTodos({ datos, alCambiarPeriodo }: { datos: PuntualidadTodos; alCa
               <th scope="col" className="cifra">Puesto</th>
               <th scope="col">Núcleo</th>
               <th scope="col" className="cifra">Menos de 3 min</th>
+              <th scope="col" className="cifra">5 min o menos</th>
               <th scope="col" className="cifra">Media</th>
               <th scope="col" className="cifra">Viajes</th>
               <th scope="col" className="cifra">Cobertura</th>
@@ -192,10 +194,11 @@ function VistaTodos({ datos, alCambiarPeriodo }: { datos: PuntualidadTodos; alCa
                       <BarraCelda valor={n.cifras.porcentajes.menosDe3} />
                       {porcentaje(n.cifras.porcentajes.menosDe3)}
                     </td>
+                    <td className="cifra">{porcentaje(n.cifras.porcentajes.hasta5)}</td>
                     <td className="cifra">{minutos(n.cifras.mediaMinutos)}</td>
                   </>
                 ) : (
-                  <td colSpan={2} className="nota">
+                  <td colSpan={3} className="nota">
                     {textoInsuficiente(n.cifras, minimo)}
                   </td>
                 )}
@@ -225,7 +228,7 @@ function VistaNucleo({ datos, alCambiarPeriodo }: { datos: PuntualidadNucleo; al
       <Bloque
         id="ranking-lineas"
         titulo="Las líneas, de la más puntual a la que menos"
-        explicacion={`Por el porcentaje de paradas a las que llegan con menos de 3 minutos de retraso, y luego por la media. Las que no llegan a ${minimo} viajes van al final, sin puesto.`}
+        explicacion={`Por el porcentaje de paradas a las que llegan con menos de 3 minutos de retraso, y luego por la media. Las que no llegan a ${minimo} viajes van al final, sin puesto. Cancelados: ${NOTA_CANCELADOS.charAt(0).toLowerCase()}${NOTA_CANCELADOS.slice(1)}`}
       >
         <table className="tabla">
           <caption className="solo-lector">Ranking de puntualidad de las líneas de {datos.nombre}</caption>
@@ -234,6 +237,7 @@ function VistaNucleo({ datos, alCambiarPeriodo }: { datos: PuntualidadNucleo; al
               <th scope="col" className="cifra">Puesto</th>
               <th scope="col">Línea</th>
               <th scope="col" className="cifra">Menos de 3 min</th>
+              <th scope="col" className="cifra">5 min o menos</th>
               <th scope="col" className="cifra">Media</th>
               <th scope="col" className="cifra">Viajes</th>
               <th scope="col" className="cifra">Cancelados</th>
@@ -253,10 +257,11 @@ function VistaNucleo({ datos, alCambiarPeriodo }: { datos: PuntualidadNucleo; al
                       <BarraCelda valor={l.cifras.porcentajes.menosDe3} />
                       {porcentaje(l.cifras.porcentajes.menosDe3)}
                     </td>
+                    <td className="cifra">{porcentaje(l.cifras.porcentajes.hasta5)}</td>
                     <td className="cifra">{minutos(l.cifras.mediaMinutos)}</td>
                   </>
                 ) : (
-                  <td colSpan={2} className="nota">
+                  <td colSpan={3} className="nota">
                     {textoInsuficiente(l.cifras, minimo)}
                   </td>
                 )}
@@ -299,6 +304,7 @@ function TablaSerie({
           <th scope="col">{cabecera}</th>
           <th scope="col" className="cifra">Media</th>
           <th scope="col" className="cifra">Menos de 3 min</th>
+          <th scope="col" className="cifra">5 min o menos</th>
           <th scope="col" className="cifra">Viajes</th>
         </tr>
       </thead>
@@ -339,6 +345,14 @@ function VistaLinea({ datos, alCambiarPeriodo }: { datos: PuntualidadLinea; alCa
           <h2 id="resumen-titulo">Todo el periodo</h2>
           <Cifrado cifras={r} minimo={minimo} />
           {r.suficiente && r.porcentajes && <Reparto porcentajes={r.porcentajes} titulo="Paradas por retraso al llegar" />}
+          {datos.muestra && datos.muestra.cancelados !== null && (
+            <p className="bloque__explicacion">
+              <strong>
+                {entero(datos.muestra.cancelados)} {datos.muestra.cancelados === 1 ? 'viaje cancelado' : 'viajes cancelados'}
+              </strong>{' '}
+              en el periodo (no cuentan como retraso). {NOTA_CANCELADOS}
+            </p>
+          )}
           {destino && (
             <p className="bloque__explicacion">
               {destino.suficiente

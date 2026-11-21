@@ -51,6 +51,9 @@ function Contenido({ datos }: { datos: Datos }) {
                 Menos de 3 min
               </th>
               <th scope="col" className="cifra">
+                5 min o menos
+              </th>
+              <th scope="col" className="cifra">
                 Viajes
               </th>
             </tr>

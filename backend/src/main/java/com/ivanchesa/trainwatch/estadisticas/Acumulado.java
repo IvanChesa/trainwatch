@@ -61,7 +61,8 @@ final class Acumulado {
         }
         return new Cifras(viajes, paradas, true, decimal(sumaMinutos, paradas), percentil(50),
                 percentil(90), new Porcentajes(porcentaje(menosDe3, paradas), porcentaje(de3a5, paradas),
-                        porcentaje(de6a15, paradas), porcentaje(de16OMas, paradas)));
+                        porcentaje(de6a15, paradas), porcentaje(de16OMas, paradas),
+                        porcentaje((long) menosDe3 + de3a5, paradas)));
     }
 
     /**

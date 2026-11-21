@@ -12,47 +12,48 @@
     "diasConDatos": 1
   },
   "muestra": {
-    "viajes": 348,
-    "paradas": 2281,
-    "paradasInferidasQuitadas": 129,
+    "viajes": 398,
+    "paradas": 3111,
+    "paradasInferidasQuitadas": 174,
     "paradasSinHoraQuitadas": 0,
     "cancelados": 6
   },
   "cobertura": {
     "viajesProgramados": 3173,
-    "viajesVistos": 349,
-    "porcentaje": 11.0,
+    "viajesVistos": 404,
+    "porcentaje": 12.7,
     "paradasProgramadas": 48970,
-    "paradasVistas": 2410,
-    "porcentajeParadas": 4.9
+    "paradasVistas": 3285,
+    "porcentajeParadas": 6.7
   },
   "nucleos": [
     {
       "puesto": 1,
-      "nucleo": 20,
-      "nombre": "Asturias",
+      "nucleo": 60,
+      "nombre": "Bilbao",
       "cifras": {
-        "viajes": 37,
-        "paradas": 201,
+        "viajes": 32,
+        "paradas": 326,
         "suficiente": true,
-        "mediaMinutos": 3.7,
-        "medianaMinutos": 3,
-        "p90Minutos": 7,
+        "mediaMinutos": 2.5,
+        "medianaMinutos": 2,
+        "p90Minutos": 5,
         "porcentajes": {
-          "menosDe3": 39.3,
-          "de3a5": 40.8,
-          "de6a15": 19.4,
-          "de16OMas": 0.5
+          "menosDe3": 54.9,
+          "de3a5": 39.9,
+          "de6a15": 5.2,
+          "de16OMas": 0.0,
+          "hasta5": 94.8
         }
       },
       "cancelados": 0,
       "cobertura": {
-        "viajesProgramados": 334,
-        "viajesVistos": 37,
-        "porcentaje": 11.1,
-        "paradasProgramadas": 4924,
-        "paradasVistas": 223,
-        "porcentajeParadas": 4.5
+        "viajesProgramados": 258,
+        "viajesVistos": 32,
+        "porcentaje": 12.4,
+        "paradasProgramadas": 4783,
+        "paradasVistas": 335,
+        "porcentajeParadas": 7.0
       }
     },
     {
@@ -60,64 +61,66 @@
       "nucleo": 51,
       "nombre": "Rodalies de Catalunya",
       "cifras": {
-        "viajes": 88,
-        "paradas": 556,
+        "viajes": 99,
+        "paradas": 733,
         "suficiente": true,
-        "mediaMinutos": 6.1,
+        "mediaMinutos": 6.2,
         "medianaMinutos": 3,
-        "p90Minutos": 20,
+        "p90Minutos": 18,
         "porcentajes": {
-          "menosDe3": 39.2,
-          "de3a5": 26.8,
-          "de6a15": 22.1,
-          "de16OMas": 11.9
+          "menosDe3": 38.9,
+          "de3a5": 26.9,
+          "de6a15": 21.8,
+          "de16OMas": 12.4,
+          "hasta5": 65.8
         }
       },
       "cancelados": 6,
       "cobertura": {
         "viajesProgramados": 694,
-        "viajesVistos": 89,
-        "porcentaje": 12.8,
+        "viajesVistos": 100,
+        "porcentaje": 14.4,
         "paradasProgramadas": 11402,
-        "paradasVistas": 591,
-        "porcentajeParadas": 5.2
+        "paradasVistas": 769,
+        "porcentajeParadas": 6.7
       }
     },
     {
       "puesto": 3,
-      "nucleo": 10,
-      "nombre": "Madrid",
+      "nucleo": 20,
+      "nombre": "Asturias",
       "cifras": {
-        "viajes": 105,
-        "paradas": 722,
+        "viajes": 39,
+        "paradas": 285,
         "suficiente": true,
-        "mediaMinutos": 6.9,
-        "medianaMinutos": 4,
-        "p90Minutos": 16,
+        "mediaMinutos": 3.7,
+        "medianaMinutos": 3,
+        "p90Minutos": 7,
         "porcentajes": {
-          "menosDe3": 27.8,
-          "de3a5": 36.8,
-          "de6a15": 24.5,
-          "de16OMas": 10.8
+          "menosDe3": 36.5,
+          "de3a5": 44.9,
+          "de6a15": 18.2,
+          "de16OMas": 0.4,
+          "hasta5": 81.4
         }
       },
       "cancelados": 0,
       "cobertura": {
-        "viajesProgramados": 1050,
-        "viajesVistos": 105,
-        "porcentaje": 10.0,
-        "paradasProgramadas": 15880,
-        "paradasVistas": 743,
-        "porcentajeParadas": 4.7
+        "viajesProgramados": 334,
+        "viajesVistos": 41,
+        "porcentaje": 12.3,
+        "paradasProgramadas": 4924,
+        "paradasVistas": 320,
+        "porcentajeParadas": 6.5
       }
     },
     {
       "puesto": null,
-      "nucleo": 60,
-      "nombre": "Bilbao",
+      "nucleo": 31,
+      "nombre": "Cádiz",
       "cifras": {
-        "viajes": 26,
-        "paradas": 233,
+        "viajes": 9,
+        "paradas": 76,
         "suficiente": false,
         "mediaMinutos": null,
         "medianaMinutos": null,
@@ -126,12 +129,12 @@
       },
       "cancelados": 0,
       "cobertura": {
-        "viajesProgramados": 258,
-        "viajesVistos": 26,
-        "porcentaje": 10.1,
-        "paradasProgramadas": 4783,
-        "paradasVistas": 241,
-        "porcentajeParadas": 5.0
+        "viajesProgramados": 70,
+        "viajesVistos": 9,
+        "porcentaje": 12.9,
+        "paradasProgramadas": 1134,
+        "paradasVistas": 83,
+        "porcentajeParadas": 7.3
       }
     }
   ],

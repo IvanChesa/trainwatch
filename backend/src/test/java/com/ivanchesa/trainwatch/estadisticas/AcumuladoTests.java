@@ -62,7 +62,8 @@ class AcumuladoTests {
         assertThat(c.mediaMinutos()).isEqualTo(3.7);
         assertThat(c.medianaMinutos()).isEqualTo(4);
         assertThat(c.p90Minutos()).isEqualTo(10);
-        assertThat(c.porcentajes()).isEqualTo(new Porcentajes(42.9, 28.6, 28.6, 0.0));
+        // 5 min o menos: 0, 2, 5, 4, -1 → 5 de 7 = 71,4 (y no 42,9 + 28,6 = 71,5: se calcula sobre las paradas).
+        assertThat(c.porcentajes()).isEqualTo(new Porcentajes(42.9, 28.6, 28.6, 0.0, 71.4));
     }
 
     @Test
@@ -119,7 +120,7 @@ class AcumuladoTests {
     }
 
     static LineaRanking linea(String nombre, boolean suficiente, Double menosDe3, Double media) {
-        Cifras c = suficiente ? new Cifras(40, 400, true, media, 1, 5, new Porcentajes(menosDe3, 0.0, 0.0, 0.0))
+        Cifras c = suficiente ? new Cifras(40, 400, true, media, 1, 5, new Porcentajes(menosDe3, 0.0, 0.0, 0.0, menosDe3))
                 : new Cifras(3, 20, false, null, null, null, null);
         return new LineaRanking(null, nombre, c, null, null);
     }

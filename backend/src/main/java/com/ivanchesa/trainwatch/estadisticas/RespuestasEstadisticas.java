@@ -60,7 +60,8 @@ public final class RespuestasEstadisticas {
             @Schema(description = "Menos de 3 min (incluye los adelantos): «puntual»", example = "78.4") Double menosDe3,
             @Schema(example = "12.1") Double de3a5,
             @Schema(example = "7.9") Double de6a15,
-            @Schema(example = "1.6") Double de16OMas) {
+            @Schema(example = "1.6") Double de16OMas,
+            @Schema(description = "5 min o menos (el umbral que suele usar Renfe en Cercanías): menos de 3 más de 3 a 5, calculado sobre las paradas, no sumando los dos redondeos", example = "90.5") Double hasta5) {
     }
 
     @Schema(description = "Puntualidad por parada. Con menos viajes que la muestra mínima, suficiente es false y las cifras van a null")

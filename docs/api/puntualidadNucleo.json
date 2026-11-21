@@ -14,27 +14,27 @@
     "diasConDatos": 1
   },
   "muestra": {
-    "viajes": 88,
-    "paradas": 556,
-    "paradasInferidasQuitadas": 35,
+    "viajes": 99,
+    "paradas": 733,
+    "paradasInferidasQuitadas": 36,
     "paradasSinHoraQuitadas": 0,
     "cancelados": 6
   },
   "cobertura": {
     "viajesProgramados": 694,
-    "viajesVistos": 89,
-    "porcentaje": 12.8,
+    "viajesVistos": 100,
+    "porcentaje": 14.4,
     "paradasProgramadas": 11402,
-    "paradasVistas": 591,
-    "porcentajeParadas": 5.2
+    "paradasVistas": 769,
+    "porcentajeParadas": 6.7
   },
   "lineas": [
     {
       "puesto": null,
       "linea": "R1",
       "cifras": {
-        "viajes": 16,
-        "paradas": 148,
+        "viajes": 19,
+        "paradas": 189,
         "suficiente": false,
         "mediaMinutos": null,
         "medianaMinutos": null,
@@ -44,11 +44,11 @@
       "cancelados": 3,
       "cobertura": {
         "viajesProgramados": 130,
-        "viajesVistos": 16,
-        "porcentaje": 12.3,
+        "viajesVistos": 19,
+        "porcentaje": 14.6,
         "paradasProgramadas": 2690,
-        "paradasVistas": 148,
-        "porcentajeParadas": 5.5
+        "paradasVistas": 189,
+        "porcentajeParadas": 7.0
       }
     }
   ],

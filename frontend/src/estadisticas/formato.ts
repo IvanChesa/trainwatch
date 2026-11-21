@@ -72,18 +72,26 @@ export function textoInsuficiente(c: Pick<Cifras, 'viajes'>, minimo = 30): strin
  * Los cuatro tramos de las estadísticas (ADR 0025) con el color de la franja del mapa más cercana. No coinciden del
  * todo con los del mapa (allí 1-2 min ya es amarillo; aquí cuenta como puntual) y por eso cada uno lleva su texto.
  */
-export const TRAMOS: readonly { clave: keyof Porcentajes; texto: string; corto: string; color: string }[] = [
+export const TRAMOS: readonly { clave: Exclude<keyof Porcentajes, 'hasta5'>; texto: string; corto: string; color: string }[] = [
   { clave: 'menosDe3', texto: 'Menos de 3 min', corto: '< 3', color: FRANJAS[0].color },
   { clave: 'de3a5', texto: 'De 3 a 5 min', corto: '3-5', color: FRANJAS[1].color },
   { clave: 'de6a15', texto: 'De 6 a 15 min', corto: '6-15', color: FRANJAS[2].color },
   { clave: 'de16OMas', texto: '16 min o más', corto: '≥ 16', color: FRANJAS[3].color },
 ];
 
-/** La frase que resume una cifra: «Llega con 2,4 min de media; el 78,4 % de las paradas, con menos de 3 min». */
+/**
+ * La frase que resume una cifra: «2,4 min de retraso medio por parada; el 78,4 % de las paradas, con menos de 3 min, y
+ * el 90,5 %, con 5 o menos».
+ */
 export function frase(c: Cifras | null | undefined): string | null {
   if (!c || !c.suficiente || c.mediaMinutos === null || !c.porcentajes) return null;
-  return `${minutos(c.mediaMinutos)} de retraso medio por parada; el ${porcentaje(c.porcentajes.menosDe3)} de las paradas, con menos de 3 min`;
+  const cinco = c.porcentajes.hasta5 === null ? '' : `, y el ${porcentaje(c.porcentajes.hasta5)}, con 5 o menos`;
+  return `${minutos(c.mediaMinutos)} de retraso medio por parada; el ${porcentaje(c.porcentajes.menosDe3)} de las paradas, con menos de 3 min${cinco}`;
 }
+
+/** Los cancelados, siempre como lo que son: una cota inferior. */
+export const NOTA_CANCELADOS =
+  'Son una cota inferior: solo los trenes que Renfe marca como cancelados (CANCELED) en sus posiciones; uno que solo se anuncia en los retrasos no se cuenta, y un tren que no aparece no cuenta como cancelado.';
 
 /**
  * Diferencia en puntos por debajo de la cual dos puestos de un ranking no se distinguen: con ~30 viajes, el error típico

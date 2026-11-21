@@ -545,6 +545,8 @@ class EstadisticasIntegracionTests {
         assertThat(r.at("/porcentajes/de3a5").asDouble()).isEqualTo(30.8);
         assertThat(r.at("/porcentajes/de6a15").asDouble()).isEqualTo(15.4);
         assertThat(r.at("/porcentajes/de16OMas").asDouble()).isEqualTo(15.4);
+        // 5 min o menos: las 5 de menos de 3 y las 4 de 3 a 5 → 9 de 13 = 69,2 %.
+        assertThat(r.at("/porcentajes/hasta5").asDouble()).isEqualTo(69.2);
         // Por viaje, solo los que se vieron en su destino (D): T1 con 6 y T2 con -1 → 2,5; menos de 3: 1 de 2. T3, T9 y
         // T10 dejaron de verse antes: cuentan en viajes, no en la cifra.
         assertThat(l.at("/llegadaDestino/viajes").asInt()).isEqualTo(5);

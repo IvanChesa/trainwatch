@@ -15,31 +15,31 @@
     "diasConDatos": 1
   },
   "muestra": {
-    "viajes": 24,
-    "paradas": 190,
+    "viajes": 26,
+    "paradas": 252,
     "paradasInferidasQuitadas": 3,
     "paradasSinHoraQuitadas": 0,
     "cancelados": 1
   },
   "coberturaNucleo": {
     "viajesProgramados": 694,
-    "viajesVistos": 89,
-    "porcentaje": 12.8,
+    "viajesVistos": 100,
+    "porcentaje": 14.4,
     "paradasProgramadas": 11402,
-    "paradasVistas": 591,
-    "porcentajeParadas": 5.2
+    "paradasVistas": 769,
+    "porcentajeParadas": 6.7
   },
   "coberturaLinea": {
     "viajesProgramados": 132,
-    "viajesVistos": 24,
-    "porcentaje": 18.2,
+    "viajesVistos": 26,
+    "porcentaje": 19.7,
     "paradasProgramadas": 3385,
-    "paradasVistas": 193,
-    "porcentajeParadas": 5.7
+    "paradasVistas": 255,
+    "porcentajeParadas": 7.5
   },
   "resumen": {
-    "viajes": 24,
-    "paradas": 190,
+    "viajes": 26,
+    "paradas": 252,
     "suficiente": false,
     "mediaMinutos": null,
     "medianaMinutos": null,
@@ -47,8 +47,8 @@
     "porcentajes": null
   },
   "llegadaDestino": {
-    "viajes": 24,
-    "viajesEnDestino": 9,
+    "viajes": 26,
+    "viajesEnDestino": 11,
     "suficiente": false,
     "mediaMinutos": null,
     "menosDe3": null
@@ -69,8 +69,20 @@
     {
       "hora": 13,
       "cifras": {
-        "viajes": 20,
-        "paradas": 128,
+        "viajes": 21,
+        "paradas": 170,
+        "suficiente": false,
+        "mediaMinutos": null,
+        "medianaMinutos": null,
+        "p90Minutos": null,
+        "porcentajes": null
+      }
+    },
+    {
+      "hora": 14,
+      "cifras": {
+        "viajes": 8,
+        "paradas": 20,
         "suficiente": false,
         "mediaMinutos": null,
         "medianaMinutos": null,
@@ -85,8 +97,8 @@
       "nombre": "sábado",
       "dias": 1,
       "cifras": {
-        "viajes": 24,
-        "paradas": 190,
+        "viajes": 26,
+        "paradas": 252,
         "suficiente": false,
         "mediaMinutos": null,
         "medianaMinutos": null,
@@ -100,8 +112,8 @@
       "lunes": "2026-11-16",
       "dias": 1,
       "cifras": {
-        "viajes": 24,
-        "paradas": 190,
+        "viajes": 26,
+        "paradas": 252,
         "suficiente": false,
         "mediaMinutos": null,
         "medianaMinutos": null,

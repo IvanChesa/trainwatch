@@ -14,7 +14,7 @@ export function cifras(media: number, menosDe3: number, viajes = 120): Cifras {
     mediaMinutos: media,
     medianaMinutos: Math.round(media),
     p90Minutos: Math.round(media * 3),
-    porcentajes: { menosDe3, de3a5: resto / 2, de6a15: resto / 4, de16OMas: resto / 4 },
+    porcentajes: { menosDe3, de3a5: resto / 2, de6a15: resto / 4, de16OMas: resto / 4, hasta5: menosDe3 + resto / 2 },
   };
 }
 
