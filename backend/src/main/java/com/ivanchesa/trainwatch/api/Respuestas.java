@@ -214,10 +214,10 @@ public final class Respuestas {
 
     // ---------------------------------------------------------------- directo (SSE)
 
-    @Schema(description = "Evento «instantanea» del directo: todos los trenes del núcleo. El primero de cada conexión")
+    @Schema(description = "Evento «instantanea» del directo: todos los trenes del núcleo (o de todos los núcleos). El primero de cada conexión")
     public record Instantanea(
             @Schema(description = "Número de la última actualización incluida (también es el id del evento)", example = "1532") long secuencia,
-            @Schema(example = "51") int nucleo,
+            @Schema(description = "Código del núcleo; null en el directo de todos los núcleos (nucleo=todos)", example = "51", nullable = true) Integer nucleo,
             @Schema(description = "Cuándo se calculó") OffsetDateTime generado,
             @Schema(description = "Marca de la última muestra del feed de posiciones; null si aún no ha llegado") OffsetDateTime ultimoDato,
             List<TrenMapa> trenes) {
@@ -226,7 +226,7 @@ public final class Respuestas {
     @Schema(description = "Evento «cambios» del directo: lo que ha cambiado desde la secuencia anterior")
     public record Cambios(
             @Schema(example = "1533") long secuencia,
-            @Schema(example = "51") int nucleo,
+            @Schema(description = "Código del núcleo; null en el directo de todos los núcleos (nucleo=todos)", example = "51", nullable = true) Integer nucleo,
             OffsetDateTime generado,
             OffsetDateTime ultimoDato,
             @Schema(description = "Trenes nuevos en el núcleo") List<TrenMapa> altas,
